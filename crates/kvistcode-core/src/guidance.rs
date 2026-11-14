@@ -5,7 +5,7 @@
 use crate::model::ResponseStyle;
 
 /// Bump when any text in this file changes, so resumed sessions are briefed again, once.
-const GUIDANCE_VERSION: u32 = 1;
+const GUIDANCE_VERSION: u32 = 2;
 
 /// Added to the agent's own instructions (Claude: `systemPrompt` append; Codex:
 /// `developerInstructions`). Keep it short and factual: every session pays for it.
@@ -16,6 +16,11 @@ To show a picture, put ![short description](path) in your reply. The path can be
 - an image file you saved in the system temp folder, as long as you write its full path in your reply, or
 - a small png/jpeg/gif/webp as a data URI: ![description](data:image/png;base64,...) (under about 3 MB).
 Kvistcode loads the file and shows it inline in the conversation, on the phone app too. Pictures from web addresses (http/https) are never loaded: download them into your working folder first, then reference the file. Don't tell the user you can't show images; screenshots, charts and generated images you save as files can be shown this way.";
+
+/// Kvistcode folds the agent's thinking away with its steps, so an answer given only there is missed.
+const ANSWERS: &str = "\
+The user reads your messages; your thinking is folded away with your steps. Answer what the user asks in a message, \
+also when they write to you while you are working: reply in a short message, then carry on. Never answer only in your thinking.";
 
 const CONCISE: &str = "\
 How to write replies (Kvistcode response style: concise).
@@ -119,7 +124,10 @@ pub fn guidance(style: ResponseStyle, language: &str) -> String {
     } else {
         format!("\n\n{lang}")
     };
-    format!("{PICTURES}\n\n{}{lang}", response_style_note(style))
+    format!(
+        "{PICTURES}\n\n{ANSWERS}\n\n{}{lang}",
+        response_style_note(style)
+    )
 }
 
 /// Identifies the text an agent was given (the text version and the style). An agent briefed
@@ -261,5 +269,16 @@ mod tests {
         );
         let mut seen = std::collections::HashSet::new();
         assert!(LANGUAGES.iter().all(|l| seen.insert(*l)));
+    }
+
+    #[test]
+    fn asks_for_answers_in_a_message_not_only_in_thinking() {
+        for style in ALL {
+            let g = guidance(style, "");
+            assert_eq!(g.matches(ANSWERS).count(), 1);
+            assert!(g.contains("Never answer only in your thinking"));
+            assert!(note(style, "", true).contains(ANSWERS));
+        }
+        assert!(ANSWERS.len() < 400, "every session pays for this text");
     }
 }

@@ -260,12 +260,15 @@ export const ThoughtBlock = memo(function ThoughtBlock({
   item,
   live,
   agentId,
+  reply = false,
 }: {
   item: Item<"thought">;
   live: boolean;
   agentId?: string;
+  /** It answers a message you sent while the agent worked: open, and set as plainly as a reply. */
+  reply?: boolean;
 }) {
-  const [open, setOpen] = useState(live);
+  const [open, setOpen] = useState(live || reply);
   useEffect(() => {
     if (live) setOpen(true);
   }, [live]);
@@ -299,7 +302,7 @@ export const ThoughtBlock = memo(function ThoughtBlock({
               text={item.text || "…"}
               streaming={live}
               agentId={agentId}
-              className="!text-small italic !leading-[20px] text-muted [&_*]:!text-muted"
+              className={reply ? "prose-chat" : "!text-small italic !leading-[20px] text-muted [&_*]:!text-muted"}
             />
           </m.div>
         )}

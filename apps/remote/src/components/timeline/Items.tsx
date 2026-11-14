@@ -173,8 +173,9 @@ export function TypingDots({ label = "Agent is working", quiet = false }: { labe
   );
 }
 
-export const ThoughtRow = memo(function ThoughtRow({ item, streaming }: { item: Of<"thought">; streaming: boolean }) {
-  const [open, setOpen] = useState(EXPAND_ALL);
+/** `reply`: it answers a message you sent while the agent worked, so it starts open and reads like a reply. */
+export const ThoughtRow = memo(function ThoughtRow({ item, streaming, reply = false }: { item: Of<"thought">; streaming: boolean; reply?: boolean }) {
+  const [open, setOpen] = useState(EXPAND_ALL || reply);
   const words = wordCount(item.text);
   return (
     <div className="-mx-1">
@@ -190,7 +191,7 @@ export const ThoughtRow = memo(function ThoughtRow({ item, streaming }: { item: 
         <Icon name="chevronDown" size={16} className={cn("ml-auto shrink-0 transition-transform duration-150", !open && "-rotate-90")} />
       </button>
       {open && (
-        <div className="animate-fade mt-0.5 mb-1 ml-[11px] border-l-2 border-line pl-4 text-[14px] leading-[1.6] whitespace-pre-wrap text-muted italic">
+        <div className={cn("animate-fade mt-0.5 mb-1 ml-[11px] border-l-2 border-line pl-4 whitespace-pre-wrap", reply ? "text-[15px] leading-[24px] text-fg" : "text-[14px] leading-[1.6] text-muted italic")}>
           {item.text}
         </div>
       )}

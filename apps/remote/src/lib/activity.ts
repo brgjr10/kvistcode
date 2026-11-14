@@ -21,18 +21,20 @@ const NO_KEYS: ReadonlySet<string> = new Set();
 
 /**
  * Collapse runs of consecutive plain tool calls and thoughts into single group rows. Agent messages
- * are never folded: what the agent says stays where it is, so nothing the reader is looking at moves
+ * (and thoughts that answer you, see `replyThoughts`) are never folded: what the agent says stays where it is, so nothing the reader is looking at moves
  * or disappears when the next step starts. Depends only on the items' kinds (never on what is on screen
  * or whether the agent is still working), so a row never flips between standalone and folded: a run only
  * ever grows. `top` are the top-level row indices, in order.
  */
 export function groupActivity(items: TimelineItem[], top: number[]): ActivityGrouping {
+  const replies = replyThoughts(items, top);
   const isActivity = (i: number): boolean => {
     const it = items[i];
     if (!it) return false;
     // Sub-agent launchers are cards of their own; Codex wait/close calls are plain tool calls.
     if (it.kind === "tool_call") return !it.subagent || !!it.subagent.control;
-    return it.kind === "thought";
+    // A thought that answers you stays in view.
+    return it.kind === "thought" && !replies.has(i);
   };
 
   const rows: number[] = [];
@@ -119,4 +121,26 @@ export function summarizeActivity(items: TimelineItem[]): { text: string; failed
     text = text.charAt(0).toUpperCase() + text.slice(1);
   }
   return { text, failed };
+}
+
+/**
+ * Thoughts that answer you: the first thought after a message you sent while the agent was working, when it
+ * has said nothing in a message since. Some agents answer such a message only in their thinking and carry on;
+ * folded in with the steps, the answer would be buried. Depends only on the items before each thought, so a
+ * thought never flips in or out. `order` are the row indices, in order.
+ */
+export function replyThoughts(items: readonly TimelineItem[], order: readonly number[]): Set<number> {
+  const replies = new Set<number>();
+  let waiting = false;
+  for (const i of order) {
+    const it = items[i];
+    if (!it) continue;
+    if (it.kind === "user_message") waiting = !!it.midTurn;
+    else if (it.kind === "agent_message") waiting = false;
+    else if (it.kind === "thought" && waiting) {
+      replies.add(i);
+      waiting = false;
+    }
+  }
+  return replies;
 }

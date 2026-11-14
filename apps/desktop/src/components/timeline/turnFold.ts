@@ -1,11 +1,13 @@
 import { startsTurn } from "@/lib/agents";
 import { pluralize } from "@/lib/format";
 import type { TimelineItem } from "@/lib/types";
+import { replyThoughts } from "./activityGroups";
 
 /**
  * Minimal look: a finished turn folds its steps (tool calls, thoughts, working notes, answered approvals,
  * plan updates) into one "Worked for 4m 02s" line, which opens to show them as they are. What you asked,
- * what the agent answered, questions and notices always stay in view.
+ * what the agent answered (a thought that answers you too, see `replyThoughts`), questions and notices always
+ * stay in view.
  */
 export interface TurnFold {
   /** Item index of the run's first row: the row that carries the line, and the fold's id. */
@@ -46,6 +48,7 @@ export function turnFolds(
   rows: readonly number[],
   finals: ReadonlySet<number>,
 ): TurnFold[] {
+  const replies = replyThoughts(items, rows);
   const folds: TurnFold[] = [];
   let turn: TurnFold[] = [];
   let turnMs: number | null = null;
@@ -78,7 +81,7 @@ export function turnFolds(
     if (finals.has(i)) {
       endRun();
       answered = true;
-    } else if (!answered && isStep(it, false)) run.push(i);
+    } else if (!answered && isStep(it, false) && !replies.has(i)) run.push(i);
     else endRun();
   }
   endTurn(true);

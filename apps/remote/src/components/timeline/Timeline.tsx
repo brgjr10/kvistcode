@@ -73,7 +73,7 @@ const TimelineRow = memo(
       case "agent_message":
         return <AgentMessage item={it} streaming={streaming} role={role} />;
       case "thought":
-        return <ThoughtRow item={it} streaming={streaming} />;
+        return <ThoughtRow item={it} streaming={streaming} reply={row.reply} />;
       case "permission":
         return isPlanApproval(it) ? <PlanApprovalCard item={it} readOnly={readOnly} /> : <PermissionCard item={it} readOnly={readOnly} />;
       case "question":

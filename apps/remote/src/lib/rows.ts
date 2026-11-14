@@ -3,7 +3,7 @@
  * sub-agent are nested under the call that launched it (recursively), instead of interleaving
  * with the main flow.
  */
-import { groupActivity } from "./activity";
+import { groupActivity, replyThoughts } from "./activity";
 import { runText, stitchMessages } from "./messageFlow";
 import { estimateQuestion, summarize } from "./question";
 import type { TimelineItem, ToolCallItem } from "./types";
@@ -17,7 +17,8 @@ export interface SubagentNode {
 }
 
 export type Row =
-  | { kind: "item"; key: string; item: TimelineItem }
+  /** `reply`: a thought that answers a message sent while the agent worked, shown open (see `replyThoughts`). */
+  | { kind: "item"; key: string; item: TimelineItem; reply?: true }
   | { kind: "tools"; key: string; tools: ToolCallItem[] }
   /** A run of tool calls and thoughts folded into one line. */
   | { kind: "group"; key: string; items: TimelineItem[] }
@@ -77,6 +78,7 @@ export function buildRows(items: TimelineItem[]): Row[] {
     if (!(it.kind === "tool_call" && nested.has(it.id))) top.push(i);
   });
   const grouped = groupActivity(items, top);
+  const replies = replyThoughts(items, top);
 
   const rows: Row[] = [];
   const stitched = stitchMessages(items, grouped.rows);
@@ -91,7 +93,7 @@ export function buildRows(items: TimelineItem[]): Row[] {
     } else if (item.kind === "tool_call") {
       if (isLauncher(item) && launchers.has(item.toolCallId)) rows.push({ kind: "subagent", key: item.id, node: build(item, new Set()) });
       else rows.push({ kind: "tools", key: item.id, tools: [item] });
-    } else rows.push({ kind: "item", key: item.id, item });
+    } else rows.push(replies.has(i) ? { kind: "item", key: item.id, item, reply: true } : { kind: "item", key: item.id, item });
   }
   return rows;
 }
@@ -169,7 +171,7 @@ function sameNode(a: SubagentNode, b: SubagentNode): boolean {
 export function sameRow(a: Row, b: Row): boolean {
   if (a === b) return true;
   if (a.kind !== b.kind || a.key !== b.key) return false;
-  if (a.kind === "item") return a.item === (b as typeof a).item;
+  if (a.kind === "item") return a.item === (b as typeof a).item && a.reply === (b as typeof a).reply;
   if (a.kind === "tools") {
     const t = (b as typeof a).tools;
     return a.tools.length === t.length && a.tools.every((x, i) => x === t[i]);
@@ -197,7 +199,8 @@ export function estimateRow(r: Row): number {
       // Pictures in a reply show at their own size (up to 18rem tall), above any text.
       return 16 + (it.text ? 25 * lines(it.text, 42) + 40 * (it.text.split("```").length - 1) : 0) + (it.images?.length ? 8 + 200 : 0);
     case "thought":
-      return 16 + 44;
+      // One that answers you is shown open.
+      return 16 + 44 + (r.kind === "item" && r.reply ? 24 * lines(it.text, 42) : 0);
     case "permission":
       return 16 + (it.resolution === null ? (it.plan ? 560 : 330) : 52);
     case "question":

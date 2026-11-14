@@ -24,7 +24,7 @@ import {
   UserBubble,
 } from "./items";
 import { ActivityGroup } from "./ActivityGroup";
-import { finalAnswers, groupActivity } from "./activityGroups";
+import { finalAnswers, groupActivity, replyThoughts } from "./activityGroups";
 import { messageRole } from "./collapse";
 import { stitchMessages } from "./messageFlow";
 import { UNFOLLOW_EVENT } from "./MessageFold";
@@ -789,6 +789,8 @@ interface TimelineView {
   runs: Map<string, number[]>;
   /** Item ids of each turn's closing agent message (others are interim narration). */
   finalIds: Set<string>;
+  /** Thoughts that answer a message sent while the agent worked: shown open (see `replyThoughts`). */
+  replyIds: Set<string>;
   /** The closing message of the latest turn that has one. */
   lastFinalId: string | null;
   /** Tool calls, thoughts or approvals follow `lastFinalId` in its turn (so, while the turn runs, it is a working note). */
@@ -901,6 +903,7 @@ function buildView(items: TimelineItem[], hold: ReadonlySet<string> = new Set())
   const finalIds = new Set<string>();
   let lastFinalId: string | null = null;
   const finals = finalAnswers(items, stitched.rows);
+  const replyIds = new Set([...replyThoughts(items, stitched.rows)].map((i) => items[i].id));
   const folds = turnFolds(items, stitched.rows, finals);
   const foldMembers = new Map<string, number[]>();
   for (const f of folds)
@@ -932,6 +935,7 @@ function buildView(items: TimelineItem[], hold: ReadonlySet<string> = new Set())
     parentIdx,
     runs,
     finalIds,
+    replyIds,
     lastFinalId,
     trailingActivity,
     lastSummaryId,
@@ -1058,7 +1062,7 @@ function renderItem(
       );
     }
     case "thought":
-      return <ThoughtBlock item={it} live={liveTail} agentId={agent.id} />;
+      return <ThoughtBlock item={it} live={liveTail} agentId={agent.id} reply={view.replyIds.has(it.id)} />;
     case "tool_call":
       if (it.subagent?.workflow) return <WorkflowCard item={it} agentId={agent.id} />;
       if (it.subagent) {
