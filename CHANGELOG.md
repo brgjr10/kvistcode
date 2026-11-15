@@ -5,7 +5,9 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
-## Unreleased
+## v0.5.2 — 2026-11-15
+
+Answers to messages you send while an agent works stay in view.
 
 - When you send a message while an agent is working, its answer no longer gets lost in the folded steps. Some agents answer only in their thinking; that answer now stays open in the conversation, on the computer and on the phone. Agents are also told to answer you in a message.
 
