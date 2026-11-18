@@ -609,7 +609,8 @@ pub fn write_rules(
 /// the `>` / `|` block scalars; nested structures are ignored.
 pub(crate) fn frontmatter(text: &str) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
-    let mut lines = text.lines();
+    // Editors on Windows often save with a byte-order mark before the first `---`.
+    let mut lines = strip_bom(text).lines();
     if lines.next().map(str::trim_end) != Some("---") {
         return out;
     }
@@ -617,13 +618,36 @@ pub(crate) fn frontmatter(text: &str) -> BTreeMap<String, String> {
     let flush = |block: &mut Option<(String, bool, Vec<String>)>,
                  out: &mut BTreeMap<String, String>| {
         if let Some((key, literal, parts)) = block.take() {
-            let sep = if literal { "\n" } else { " " };
-            out.insert(key, parts.join(sep).trim().to_string());
+            // A blank line inside a folded block is a line break, not a space.
+            let text = if literal {
+                parts.join("\n")
+            } else {
+                let mut text = String::new();
+                for p in &parts {
+                    if p.is_empty() {
+                        text.push('\n');
+                    } else {
+                        if !text.is_empty() && !text.ends_with('\n') {
+                            text.push(' ');
+                        }
+                        text.push_str(p);
+                    }
+                }
+                text
+            };
+            out.insert(key, text.trim().to_string());
         }
     };
     for line in lines {
         if line.trim_end() == "---" {
             break;
+        }
+        // Blank lines don't end a `|` or `>` block (paragraphs inside a description).
+        if line.trim().is_empty() {
+            if let Some((_, _, parts)) = block.as_mut() {
+                parts.push(String::new());
+            }
+            continue;
         }
         if line.starts_with([' ', '\t']) {
             if let Some((_, _, parts)) = block.as_mut() {
@@ -647,6 +671,10 @@ pub(crate) fn frontmatter(text: &str) -> BTreeMap<String, String> {
     out
 }
 
+fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
 fn unquote(value: &str) -> &str {
     for q in ['"', '\''] {
         if let Some(inner) = value.strip_prefix(q).and_then(|v| v.strip_suffix(q)) {
@@ -658,7 +686,7 @@ fn unquote(value: &str) -> &str {
 
 /// The first non-empty line after the frontmatter that isn't a heading marker only.
 pub(crate) fn first_body_line(text: &str) -> Option<String> {
-    let mut lines = text.lines().peekable();
+    let mut lines = strip_bom(text).lines().peekable();
     if lines.peek().map(|l| l.trim_end()) == Some("---") {
         lines.next();
         for l in lines.by_ref() {
@@ -1167,5 +1195,30 @@ mod tests {
             std::fs::read_to_string(outside.join("target.md")).unwrap(),
             "keep"
         );
+    }
+
+    #[test]
+    fn frontmatter_survives_a_byte_order_mark_and_blank_lines_in_blocks() {
+        let fm = frontmatter("\u{feff}---\nname: pdf\ndescription: Read PDFs\n---\nBody\n");
+        assert_eq!(fm.get("name").map(String::as_str), Some("pdf"));
+        assert_eq!(
+            first_body_line("\u{feff}---\nname: pdf\n---\n# Body\n").as_deref(),
+            Some("Body")
+        );
+        assert_eq!(
+            first_body_line("\u{feff}# Title\n").as_deref(),
+            Some("Title")
+        );
+
+        let fm = frontmatter(
+            "---\ndescription: >\n  First part\n  goes on.\n\n  Second part.\nname: x\n---\n",
+        );
+        assert_eq!(
+            fm.get("description").map(String::as_str),
+            Some("First part goes on.\nSecond part.")
+        );
+        assert_eq!(fm.get("name").map(String::as_str), Some("x"));
+        let fm = frontmatter("---\nnotes: |\n  one\n\n  two\n---\n");
+        assert_eq!(fm.get("notes").map(String::as_str), Some("one\n\ntwo"));
     }
 }

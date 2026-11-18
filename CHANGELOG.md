@@ -5,6 +5,13 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- A Codex agent's token count no longer drops when it starts a fresh conversation after a restart or an account switch, and the tokens it spends climbing back are no longer counted twice toward spending limits.
+- A spending-limit warning says how far in you are ("94% of the limit") instead of always "80%", and token amounts near a million read "1.0M" rather than "1000.0k".
+- Exported conversations (Markdown) stay readable when a command or its output contains code fences, multi-line notices stay quoted, and shortened output says so.
+- Skills and commands saved with a byte-order mark (common on Windows) show their name and description, and a description with blank lines in it is read in full.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.
