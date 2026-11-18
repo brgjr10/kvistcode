@@ -246,13 +246,15 @@ function WindowControls() {
 function AccountsPopover({ accounts, stacked }: { accounts: Account[]; stacked: boolean }) {
   const setView = useUi((s) => s.setView);
   const signedIn = accounts.filter((a) => a.status?.loggedIn).length;
+  // Only accounts known to be signed out (a status still loading is not a warning).
+  const signedOut = accounts.filter((a) => a.status && !a.status.loggedIn).length;
   return (
     <Popover>
-      <Tooltip content="Accounts">
+      <Tooltip content={signedOut > 0 ? `Accounts · ${signedOut} not signed in` : "Accounts"}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex items-center rounded-full pl-1 transition-transform active:scale-[0.97]"
+            className="relative flex items-center rounded-full pl-1 transition-transform active:scale-[0.97]"
             aria-label={`Accounts: ${signedIn} of ${accounts.length} signed in`}
           >
             {(stacked ? accounts.slice(0, 1) : accounts.slice(0, 3)).map((a, i) => (
@@ -265,10 +267,17 @@ function AccountsPopover({ accounts, stacked }: { accounts: Account[]; stacked: 
                 +{accounts.length - 1}
               </span>
             )}
+            {/* Above the avatars (they stack by z-index), or the last one hides the "+". */}
             {!stacked && accounts.length > 3 && (
-              <span className="-ml-1 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-raised px-1 text-micro text-muted ring-2 ring-panel">
+              <span className="relative z-20 -ml-1 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-line-strong bg-raised px-1.5 text-micro font-medium text-muted tabular ring-2 ring-panel">
                 +{accounts.length - 3}
               </span>
+            )}
+            {signedOut > 0 && (
+              <span
+                aria-hidden
+                className="absolute -right-0.5 -top-0.5 z-30 h-2 w-2 rounded-full bg-warn ring-2 ring-panel"
+              />
             )}
           </button>
         </PopoverTrigger>

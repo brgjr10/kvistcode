@@ -8,6 +8,7 @@ import { EMPTY_SUMMARY, useTileSummaries } from "@/components/mission/useTileSum
 import { LIVE, matchesFilter, type Filter } from "@/components/mission/useFleet";
 import { useBackgroundIds } from "@/store/background";
 import { Button } from "@/components/ui/button";
+import { queryMatcher } from "@/lib/agents";
 import type { Agent } from "@/lib/types";
 import {
   useApp,
@@ -78,11 +79,14 @@ function useReorderAnimation(grid: RefObject<HTMLElement | null>, order: string,
 export function AllAgentsPane({
   agents,
   filter,
+  query = "",
   density,
   onClearFilter,
 }: {
   agents: Agent[];
   filter: Filter;
+  /** Text filter: title, folder, branch or last message. */
+  query?: string;
   density: Density;
   onClearFilter: () => void;
 }) {
@@ -94,10 +98,10 @@ export function AllAgentsPane({
   const openNewAgent = useUi((s) => s.openNewAgent);
 
   const background = useBackgroundIds();
-  const visible = useMemo(
-    () => agents.filter((a) => matchesFilter(a, filter, background)),
-    [agents, filter, background],
-  );
+  const visible = useMemo(() => {
+    const match = queryMatcher(query);
+    return agents.filter((a) => matchesFilter(a, filter, background) && match(a));
+  }, [agents, filter, query, background]);
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
   const pendingByAgent = useMemo(() => {
@@ -151,7 +155,11 @@ export function AllAgentsPane({
         className="my-auto"
         icon={<Radar />}
         title="No agents match this filter"
-        description="Try another filter, or show every agent."
+        description={
+          query.trim()
+            ? `Nothing here matches “${query.trim()}”. Try other words, or show every agent.`
+            : "Try another filter, or show every agent."
+        }
         action={
           <Button variant="secondary" onClick={onClearFilter}>
             Show all agents
@@ -165,7 +173,8 @@ export function AllAgentsPane({
       <div
         role="list"
         aria-label="Agents"
-        className="@container overflow-hidden rounded-xl border border-line bg-card edge"
+        // shrink-0: a clipping flex item may shrink below its rows, which hid the ones past the fold (no scroll).
+        className="@container shrink-0 overflow-hidden rounded-xl border border-line bg-card edge"
       >
         <div className="contents">
           {visible.map((a) => (

@@ -27,7 +27,7 @@ import { CONTINUE_PROMPT, attempt, findOption, respondPermission, resumeAgent } 
 import { api } from "@/lib/api";
 import { parseFileDiff } from "@/lib/diff";
 import { isPlanApproval, planChoices } from "@/lib/planApproval";
-import { formatCost, formatTokens } from "@/lib/format";
+import { agentCostText, formatCost, formatTokens, pluralize } from "@/lib/format";
 import type { PermissionOption, TimelineItem } from "@/lib/types";
 import { basename, cn } from "@/lib/utils";
 import { useApp, usePendingPermissions, usePendingQuestions } from "@/store/app";
@@ -39,6 +39,7 @@ import { REASON_TONE, reasonLabel, type TriageEntry } from "@/components/triage/
 import { CodeText } from "@/components/CodeText";
 import { ResumeLine } from "@/components/agent/ResumesAt";
 import { BudgetHoldPanel } from "./BudgetHoldPanel";
+import { turnErrorNotice } from "./notices";
 
 type Permission = Extract<TimelineItem, { kind: "permission" }>;
 
@@ -150,7 +151,7 @@ export function NeedsYouDetail({
             tone="warn"
             icon={<Gauge className="h-4 w-4" />}
             title="This account hit its rate limit"
-            text={lastOf(items, "notice")?.text ?? `${identity.short} paused until the limit resets.`}
+            text={turnErrorNotice(items) ?? `${identity.short} paused until the limit resets.`}
             note={<ResumeLine agent={agent} className="mt-1.5" />}
             actions={
               <>
@@ -419,7 +420,7 @@ function AgentContext({ agent, items }: { agent: TriageEntry["agent"]; items: Ti
             basename(agent.cwd)
           )}
         </Fact>
-        <Fact label="Spent">{formatCost(agent.costUsd)}</Fact>
+        <Fact label="Spent">{agentCostText(agent)}</Fact>
         <Fact label="Tokens">{formatTokens(agent.tokensUsed)}</Fact>
         <Fact label="Context">{ctx == null ? "n/a" : `${Math.round(ctx * 100)}% full`}</Fact>
       </dl>
@@ -506,7 +507,7 @@ function DonePanel({
           <span>
             {summary.files.length} file{summary.files.length === 1 ? "" : "s"} changed
           </span>
-          <span>{summary.commands} commands</span>
+          <span>{pluralize(summary.commands, "command")}</span>
           <span>{formatCost(summary.costUsd)}</span>
           <span>{formatTokens(summary.tokens)} tokens</span>
         </p>

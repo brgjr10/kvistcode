@@ -13,26 +13,12 @@ import type { QuestionItem } from "@/lib/question";
 import { useStatusView } from "@/store/background";
 import type { Account, Agent, PermissionOption, TimelineItem } from "@/lib/types";
 import { ResumesAt } from "../agent/ResumesAt";
+import { plainPreview as preview } from "./preview";
 import { RecoveryActions, needsRecovery } from "./RecoveryActions";
 import type { TileSummary } from "./useTileSummaries";
 import { basename, cn } from "@/lib/utils";
 
 type PermissionItem = Extract<TimelineItem, { kind: "permission" }>;
-
-/** Plain-text preview of markdown, keeping the tail of what's streaming. */
-function preview(text: string, tail = false, max = 220): string {
-  // Only a window of the (possibly huge, still streaming) message is ever shown: regex just that.
-  const window = text.length > 1200 ? (tail ? text.slice(-400) : text.slice(0, 1200)) : text;
-  const plain = window
-    .replace(/```[\s\S]*?(```|$)/g, " ")
-    .replace(/[#>*`|]/g, "")
-    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
-    .replace(/-{3,}/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (plain.length <= max) return plain;
-  return tail ? `…${plain.slice(plain.length - max)}` : `${plain.slice(0, max)}…`;
-}
 
 export const AgentTile = memo(function AgentTile({
   agent,

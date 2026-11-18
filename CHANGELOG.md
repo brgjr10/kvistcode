@@ -12,6 +12,10 @@ docs/RELEASING.md).
 - Find says "3 of 5+" while earlier messages are not loaded yet, since there may be more. With two conversations side by side, closing Find in one no longer clears the other's marks.
 - Alt+Shift+↑ goes to the start of a message you sent that is cut off at the top, instead of skipping past it. On a Mac, ⌥⇧↑ in a text field selects text again, as it should.
 - A paused queue shows how many messages are waiting.
+- Mission Control: a filter box on All agents finds agents by name, project, branch or last message.
+- Mission Control: in the compact list every agent can be scrolled to again (rows past the bottom of the window were cut off), and last messages read as plain text instead of showing markdown marks.
+- Needs you: Enter on a link or button in an agent's answer now does what that link or button does instead of opening the agent. A rate-limited agent shows the provider's own limit message, "Spent" says Free for local models, and "1 command" is no longer "1 commands".
+- Title bar: the "+3" beside the account pictures is no longer half hidden, and a small amber dot shows when an account isn't signed in.
 
 ## v0.6.0 — 2026-11-17
 

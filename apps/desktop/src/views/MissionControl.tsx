@@ -1,4 +1,4 @@
-import { LayoutGrid, Plus, Rows3 } from "lucide-react";
+import { LayoutGrid, Plus, Rows3, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AllAgentsPane, type Density } from "@/components/mission/AllAgents";
 import { NeedsYouPane } from "@/components/mission/NeedsYou";
@@ -58,6 +58,7 @@ export function MissionControlView() {
     if (chosen === null) openMission(opened);
   }, [chosen, opened, openMission]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
   const [density, setDensityState] = useState<Density>(readDensity);
   const setDensity = (d: Density) => {
     setDensityState(d);
@@ -145,17 +146,20 @@ export function MissionControlView() {
             ]}
           />
           {tab === "all" && agents.length > 0 && (
-            <Segmented<Filter>
-              size="sm"
-              aria-label="Filter agents"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: "all", label: "All" },
-                { value: "live", label: chip("Live", live, "var(--accent)") },
-                { value: "idle", label: chip("Idle", idle) },
-              ]}
-            />
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <FleetSearch value={query} onChange={setQuery} />
+              <Segmented<Filter>
+                size="sm"
+                aria-label="Filter agents"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "live", label: chip("Live", live, "var(--accent)") },
+                  { value: "idle", label: chip("Idle", idle) },
+                ]}
+              />
+            </div>
           )}
         </div>
       </PageHeader>
@@ -166,8 +170,52 @@ export function MissionControlView() {
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 @2xl:px-6 @2xl:py-5">
-          <AllAgentsPane agents={agents} filter={filter} density={density} onClearFilter={() => setFilter("all")} />
+          <AllAgentsPane
+            agents={agents}
+            filter={filter}
+            query={query}
+            density={density}
+            onClearFilter={() => {
+              setFilter("all");
+              setQuery("");
+            }}
+          />
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Narrows the board by title, folder, branch or last message (the same match as the sidebar's filter). */
+function FleetSearch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative w-44 min-w-0 @2xl:w-56">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-steel" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && value) {
+            e.preventDefault();
+            e.stopPropagation();
+            onChange("");
+          }
+        }}
+        placeholder="Filter by name or project"
+        aria-label="Filter by name or project"
+        spellCheck={false}
+        className="h-8 w-full rounded-lg border border-line bg-base/50 pl-8 pr-7 text-small text-fg placeholder:text-steel transition-colors hover:border-line-strong focus:border-accent/50 focus:outline-none focus:ring-3 focus:ring-accent/10"
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear filter"
+          onClick={() => onChange("")}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-steel hover:text-fg"
+        >
+          <X className="h-3 w-3" />
+        </button>
       )}
     </div>
   );

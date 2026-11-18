@@ -89,7 +89,8 @@ export function useTileSummaries(): ReadonlyMap<string, TileSummary> {
       next ??= new Map(prev);
       next.set(id, fresh);
     }
-    if (prev.size !== ids.length) {
+    // Against the updated map: one agent added and another removed in the same update leaves the size unchanged.
+    if ((next ?? prev).size !== ids.length) {
       next ??= new Map(prev);
       for (const id of [...next.keys()]) {
         if (!(id in s.agents)) {

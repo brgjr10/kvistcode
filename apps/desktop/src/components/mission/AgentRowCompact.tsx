@@ -15,6 +15,7 @@ import { useStatusView } from "@/store/background";
 import type { Account, Agent, PermissionOption, TimelineItem } from "@/lib/types";
 import { basename, cn } from "@/lib/utils";
 import { ResumesAt } from "../agent/ResumesAt";
+import { plainPreview } from "./preview";
 import { RecoveryActions, needsRecovery } from "./RecoveryActions";
 import type { TileSummary } from "./useTileSummaries";
 
@@ -56,7 +57,9 @@ export const AgentRowCompact = memo(function AgentRowCompact({
         ? meta.label
         : working
           ? (summary.tail ?? summary.action ?? "Working…")
-          : (agent.lastMessage ?? summary.action ?? "");
+          : agent.lastMessage
+            ? plainPreview(agent.lastMessage)
+            : (summary.action ?? "");
 
   const respond = async (option: PermissionOption | undefined) => {
     if (!pending || !option || busy) return;
