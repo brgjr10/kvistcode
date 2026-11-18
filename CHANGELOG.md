@@ -5,6 +5,12 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- With many agents side by side, an approval or question above the message box is never cut off: its buttons always show in full, and other items there make room.
+- An approval, plan or question now shows once. While it waits above the message box, the conversation keeps a one-line note in its place; "Show plan" or "Show here" opens it in full.
+- An agent stopped by a usage limit says "Rate limited" in amber instead of a red "Error".
+
 ## v0.5.2 — 2026-11-15
 
 Answers to messages you send while an agent works stay in view.

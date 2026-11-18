@@ -98,7 +98,7 @@ export const AgentRowCompact = memo(function AgentRowCompact({
       >
         <div className="flex items-center gap-2">
           <span className="flex w-3 shrink-0 justify-center">
-            <StatusDot status={view.dot} size={7} done={done} />
+            <StatusDot status={view.dot} size={7} done={done} limited={view.limited} />
           </span>
           <ProviderGlyph provider={agent.provider} customAgentId={agent.customAgentId} size="sm" />
         </div>

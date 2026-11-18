@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 import type { AgentStatus } from "@/lib/types";
-import { DONE_META, STATUS } from "@/lib/providers";
+import { DONE_META, LIMITED_META, STATUS } from "@/lib/providers";
 import { cn } from "@/lib/utils";
 
 export function StatusDot({
@@ -8,15 +8,18 @@ export function StatusDot({
   size = 8,
   className,
   done = false,
+  limited = false,
 }: {
   status: AgentStatus;
   size?: number;
   className?: string;
   /** Idle after a completed turn: a green check instead of the grey dot. */
   done?: boolean;
+  /** Stopped on a usage limit: amber, not the red of an error. */
+  limited?: boolean;
 }) {
   done = done && status === "idle";
-  const meta = done ? DONE_META : STATUS[status];
+  const meta = done ? DONE_META : limited ? LIMITED_META : STATUS[status];
   if (done) {
     return (
       <span

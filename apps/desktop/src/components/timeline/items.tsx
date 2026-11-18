@@ -675,8 +675,9 @@ export const PermissionCard = memo(function PermissionCard({
   // The draft lives in a store so it survives the row being virtualized out of view.
   const reason = usePermissionUi((s) => s.reasonDraft[item.requestId] ?? "");
   const armed = usePermissionUi((s) => Boolean(s.armed[item.requestId]));
-  // Its actions sit above the message box (ApprovalDock); this card keeps the details.
-  const docked = usePermissionUi((s) => Boolean(s.docked[item.requestId])) && !compact;
+  // Its actions sit above the message box (ApprovalDock); this card keeps the details, quietly, so the
+  // request doesn't read as two. In a grid tile, where there's no room for details, it's one line.
+  const docked = usePermissionUi((s) => Boolean(s.docked[item.requestId]));
   const setReason = (text: string) => usePermissionUi.getState().setReasonDraft(item.requestId, text);
   const identity = useIdentity(agent.provider, agent.customAgentId);
   const parsed = useMemo(
@@ -759,6 +760,18 @@ export const PermissionCard = memo(function PermissionCard({
     );
   }
 
+  if (docked && compact) {
+    return (
+      <div className="flex h-8 items-center gap-2 px-1.5 text-small" data-permission-request={item.requestId}>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-warn/30 bg-warn/10 text-warn">
+          <ShieldAlert className="h-3.5 w-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-muted">{item.title}</span>
+        <span className="shrink-0 text-meta font-medium text-warn">Waiting for you</span>
+      </div>
+    );
+  }
+
   const answer = async (o: PermissionOption) => {
     if (busy) return;
     setBusy(o.id);
@@ -796,16 +809,30 @@ export const PermissionCard = memo(function PermissionCard({
       tabIndex={keyboard ? 0 : undefined}
       data-permission-request={item.requestId}
       aria-label={`Approval needed: ${item.title}${keyboard ? ". Enter allows once." : ""}`}
-      data-tone="warn"
-      className="tl-card relative overflow-hidden rounded-2xl border border-warn/40 bg-gradient-to-b from-warn/[0.09] to-card shadow-[0_0_0_1px_color-mix(in_srgb,var(--warn)_10%,transparent),0_12px_40px_-16px_color-mix(in_srgb,var(--warn)_45%,transparent)] edge minimal:border-warn/30"
+      data-tone={docked ? undefined : "warn"}
+      className={cn(
+        "tl-card relative overflow-hidden rounded-2xl border edge",
+        docked
+          ? "border-line bg-card"
+          : "border-warn/40 bg-gradient-to-b from-warn/[0.09] to-card shadow-[0_0_0_1px_color-mix(in_srgb,var(--warn)_10%,transparent),0_12px_40px_-16px_color-mix(in_srgb,var(--warn)_45%,transparent)] minimal:border-warn/30",
+      )}
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-warn/70 to-transparent" />
+      {!docked && (
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-warn/70 to-transparent" />
+      )}
       <div className="flex items-start gap-3 px-4 pb-3 pt-3.5">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-warn/40 bg-warn/15 text-warn">
+        <span
+          className={cn(
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+            docked ? "border-line text-steel" : "border-warn/40 bg-warn/15 text-warn",
+          )}
+        >
           <ShieldAlert className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="eyebrow text-warn">{identity.short} needs your approval</div>
+          <div className={cn("eyebrow", docked ? "text-steel" : "text-warn")}>
+            {docked ? `What ${identity.short} asked to do` : `${identity.short} needs your approval`}
+          </div>
           <div
             className={cn(
               "mt-0.5 break-words text-[14px] font-medium text-fg",
@@ -829,7 +856,7 @@ export const PermissionCard = memo(function PermissionCard({
         </div>
       )}
       {docked ? (
-        <div className="border-t border-warn/15 bg-base/30 px-4 py-2 text-caption text-steel">
+        <div className="border-t border-line bg-base/30 px-4 py-2 text-caption text-steel">
           Answer with the buttons above the message box.
         </div>
       ) : (

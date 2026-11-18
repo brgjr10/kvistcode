@@ -24,6 +24,7 @@ import {
 import type { Agent } from "@/lib/types";
 import { cn, errorMessage } from "@/lib/utils";
 import { useQuestionUi } from "@/store/questionUi";
+import { useUi } from "@/store/ui";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Kbd } from "../ui/kbd";
@@ -68,6 +69,7 @@ export const QuestionCard = memo(function QuestionCard({
   // The pinned dock answers with the number keys while it shows this question; then not the card.
   const docked = useQuestionUi((s) => Boolean(s.docked[item.requestId]));
   const keyboard = keyboardProp && !docked;
+  const inDock = useQuestionUi((s) => Boolean(s.inDock[item.requestId]));
   const identity = useIdentity(agent.provider, agent.customAgentId);
   const draft = useQuestionUi((s) => s.drafts[item.requestId]) ?? EMPTY_DRAFT;
   const groups = useMemo(() => questionGroups(item.fields), [item.fields]);
@@ -225,7 +227,31 @@ export const QuestionCard = memo(function QuestionCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [keyboard, pendingNow, item.requestId]);
 
+  // While the dock above the message box shows this question (and answers it), the card is one line here,
+  // so the question doesn't read as two; "Show in conversation" from the dock opens it in full.
+  const revealed = useUi((s) => s.revealTarget?.itemId === item.id);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (revealed) setExpanded(true);
+  }, [revealed]);
+
   if (!pendingNow) return <ResolvedQuestion item={item} />;
+  if (inDock && !expanded) {
+    return (
+      <div className="flex h-8 items-center gap-2 px-1.5 text-small" data-question-request={item.requestId}>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-warn/30 bg-warn/10 text-warn">
+          <MessageCircleQuestion className="h-3.5 w-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-muted">{item.message}</span>
+        <span className="shrink-0 text-meta font-medium text-warn">Answer below</span>
+        {!compact && (
+          <Button size="xs" variant="ghost" onClick={() => setExpanded(true)}>
+            Show here
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   const single = !multi ? groups[0] : null;
   const activeKind = groups[active]?.field.kind;

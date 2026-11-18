@@ -292,9 +292,9 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
               <span
                 className="flex h-6 w-5 items-center justify-center"
                 role="img"
-                aria-label={view.background ? view.pill : STATUS[agent.status].label}
+                aria-label={view.background || view.limited ? view.pill : STATUS[agent.status].label}
               >
-                <StatusDot status={view.dot} size={8} done={done} />
+                <StatusDot status={view.dot} size={8} done={done} limited={view.limited} />
               </span>
             </Tooltip>
           ) : view.background ? (
@@ -303,7 +303,8 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
                 <StatusPill status="working" label={view.pill} className="h-7 text-xs" />
               </span>
             </Tooltip>
-          ) : (
+          ) : view.limited ? null : (
+            // A usage limit is said once, by the amber limit chip beside it (not also as a red "Error").
             <StatusPill status={agent.status} done={done} className="h-7 text-xs" />
           )}
           {helperCount > 0 && !tight && !minimal && <HelpersChip count={helperCount} label={tier !== "compact"} />}
@@ -620,7 +621,7 @@ function QuietStatus({ view, tail }: { view: StatusView; tail: string | null }) 
       className="inline-flex h-6 min-w-0 max-w-[240px] items-center gap-1.5 text-small font-medium"
       style={{ color: view.dot === "stopped" ? "var(--text-2)" : view.meta.colorVar }}
     >
-      <StatusDot status={view.dot} size={6} done={view.done} />
+      <StatusDot status={view.dot} size={6} done={view.done} limited={view.limited} />
       <span className="truncate">{view.background ? view.pill : view.meta.label}</span>
     </span>
   );

@@ -9,6 +9,7 @@ import { planChoices, planResolution, planTitle } from "@/lib/planApproval";
 import type { Agent, PermissionOption, TimelineItem } from "@/lib/types";
 import { cn, errorMessage } from "@/lib/utils";
 import { usePermissionUi } from "@/store/permissionUi";
+import { useUi } from "@/store/ui";
 import { Markdown } from "../Markdown";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/input";
@@ -49,6 +50,12 @@ export const PlanApprovalCard = memo(function PlanApprovalCard({
   const { approve, keepPlanning } = useMemo(() => planChoices(item), [item]);
   const keyed = useMemo(() => permissionKeyOptions(item), [item]);
   const showReason = reasonOpen ?? localReason;
+  const docked = usePermissionUi((s) => Boolean(s.docked[item.requestId]));
+  const revealed = useUi((s) => s.revealTarget?.itemId === item.id);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (revealed) setShown(true);
+  }, [revealed]);
   const setShowReason = onReasonOpenChange ?? setLocalReason;
 
   // Keyboard approvals only act while this card is on screen.
@@ -130,6 +137,23 @@ export const PlanApprovalCard = memo(function PlanApprovalCard({
       setBusy(null);
     }
   };
+
+  // While the dock above the message box shows this plan (and its buttons), the card is one line here,
+  // so the request doesn't read as two; "Review plan" in the dock opens it in full.
+  if (pending && docked && !shown && !revealed && !showReason) {
+    return (
+      <div className="flex h-8 items-center gap-2 px-1.5 text-small" data-permission-request={item.requestId}>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-warn/30 bg-warn/10 text-warn">
+          <ListChecks className="h-3.5 w-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-muted">{planTitle(plan)}</span>
+        <span className="shrink-0 text-meta font-medium text-warn">Waiting for you</span>
+        <Button size="xs" variant="ghost" className="shrink-0" onClick={() => setShown(true)}>
+          Show plan
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <m.div

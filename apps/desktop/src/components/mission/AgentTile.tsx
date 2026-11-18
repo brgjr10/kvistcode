@@ -142,7 +142,7 @@ export const AgentTile = memo(function AgentTile({
                 background: `color-mix(in srgb, ${color} 8%, transparent)`,
               }}
             >
-              <StatusDot status={view.dot} size={6} done={done} />
+              <StatusDot status={view.dot} size={6} done={done} limited={view.limited} />
               <span className="truncate">{meta.label}</span>
             </span>
           )}

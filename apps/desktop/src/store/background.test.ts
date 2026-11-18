@@ -309,3 +309,17 @@ describe("background tracker: the final look before announcing", () => {
     expect(finishedAlert).not.toHaveBeenCalled();
   });
 });
+
+describe("statusView: rate limits", () => {
+  it("says Rate limited in amber for an agent stopped by a limit, not a red error", () => {
+    const view = statusView({ ...base, status: "error", rateLimited: true }, false, NO_BACKGROUND);
+    expect(view).toMatchObject({ limited: true, dot: "error" });
+    expect(view.meta.label).toBe("Rate limited");
+    expect(view.meta.colorVar).toBe("var(--warn)");
+  });
+
+  it("keeps a real error red, and a limited agent that is working again is just working", () => {
+    expect(statusView({ ...base, status: "error", rateLimited: false }, false, NO_BACKGROUND).limited).toBe(false);
+    expect(statusView({ ...base, status: "working", rateLimited: true }, false, NO_BACKGROUND).limited).toBe(false);
+  });
+});

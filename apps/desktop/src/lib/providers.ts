@@ -83,6 +83,9 @@ export interface StatusMeta {
 /** Presentation for an idle agent whose last turn just completed (the same words as Mission Control). */
 export const DONE_META: StatusMeta = { label: "Ready to review", colorVar: "var(--ok)", live: false };
 
+/** A turn that stopped on the account's usage limit: waiting for the reset, not a failure (amber, not red). */
+export const LIMITED_META: StatusMeta = { label: "Rate limited", colorVar: "var(--warn)", live: false };
+
 export const STATUS: Record<AgentStatus, StatusMeta> = {
   starting: { label: "Starting", colorVar: "var(--accent)", live: true },
   working: { label: "Working", colorVar: "var(--accent)", live: true },

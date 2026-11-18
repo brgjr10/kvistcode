@@ -20,7 +20,7 @@ import {
   setBackgroundWork,
   type BackgroundWork,
 } from "@/lib/background";
-import { DONE_META, STATUS, type StatusMeta } from "@/lib/providers";
+import { DONE_META, LIMITED_META, STATUS, type StatusMeta } from "@/lib/providers";
 import type { Agent, AgentStatus } from "@/lib/types";
 import {
   forgetWorkflowsOf,
@@ -65,6 +65,8 @@ export interface StatusView {
   detail: string | null;
   /** Header pill text: names what finished and what did not. */
   pill: string;
+  /** Stopped on a usage limit: drawn amber as "Rate limited", not as a red "Error". */
+  limited: boolean;
 }
 
 /** Pure part of `useStatusView`. */
@@ -81,10 +83,12 @@ export function statusView(agent: Agent, marked: boolean, bg: BackgroundWork): S
       background,
       detail: backgroundDetail(bg),
       pill: backgroundPill(bg),
+      limited: false,
     };
   }
-  const meta = done ? DONE_META : STATUS[agent.status];
-  return { done, meta, dot: agent.status, bg, background, detail: null, pill: meta.label };
+  const limited = agent.rateLimited && agent.status === "error";
+  const meta = limited ? LIMITED_META : done ? DONE_META : STATUS[agent.status];
+  return { done, meta, dot: agent.status, bg, background, detail: null, pill: meta.label, limited };
 }
 
 /** Done / working / idle for one agent, with background work counted as working. */

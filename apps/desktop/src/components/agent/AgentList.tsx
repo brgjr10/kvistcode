@@ -1300,7 +1300,7 @@ const AgentRow = memo(function AgentRow({
                         {basename(agent.projectPath)}
                       </span>
                     )}
-                    <StatusDot status={view.dot} size={6} done={done} />
+                    <StatusDot status={view.dot} size={6} done={done} limited={view.limited} />
                     <span
                       className="min-w-0 truncate"
                       title={view.detail ?? undefined}
@@ -1360,7 +1360,7 @@ const AgentRow = memo(function AgentRow({
                       </span>
                     </div>
                     <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-meta text-steel">
-                      <StatusDot status={view.dot} size={6} done={done} />
+                      <StatusDot status={view.dot} size={6} done={done} limited={view.limited} />
                       {/* May shrink (and end in …) when the label is long, e.g. "1 background agent may be running". */}
                       <span
                         className="min-w-0 truncate"

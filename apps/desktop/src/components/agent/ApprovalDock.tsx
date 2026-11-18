@@ -28,10 +28,13 @@ export function ApprovalSection({
   agent,
   item,
   focused = true,
+  compact = false,
 }: {
   agent: Agent;
   item: PermissionItem;
   focused?: boolean;
+  /** A grid tile: one row of actions, the secondary ones as icons, so nothing is cut off. */
+  compact?: boolean;
 }) {
   const identity = useIdentity(agent.provider, agent.customAgentId);
   const singleKeys = useSingleKeys();
@@ -124,26 +127,32 @@ export function ApprovalSection({
           >
             {plan ? planTitle(item.plan ?? "") : item.title}
           </div>
-          {!plan && item.command && item.command !== item.title && (
+          {!plan && !compact && item.command && item.command !== item.title && (
             <div className="mt-0.5 truncate font-mono text-meta text-steel" title={item.command}>
               ❯ {item.command}
             </div>
           )}
         </div>
         <Button
-          size="sm"
+          size={compact ? "icon-sm" : "sm"}
           variant="ghost"
           onClick={() => reveal(item.id)}
           aria-label={plan ? "Show the full plan in the conversation" : "Show the full request in the conversation"}
+          title={compact ? (plan ? "Review plan" : "Details") : undefined}
         >
           <ChevronsDownUp />
-          {plan ? "Review plan" : "Details"}
+          {!compact && (plan ? "Review plan" : "Details")}
         </Button>
       </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-warn/15 bg-base/30 px-3.5 py-2.5">
+      <div
+        className={cn(
+          "flex items-center border-t border-warn/15 bg-base/30",
+          compact ? "gap-1.5 px-2.5 py-2" : "flex-wrap gap-2 px-3.5 py-2.5",
+        )}
+      >
         {options.map((o, i) => {
           const allow = !(o.kind === "reject_once" || o.kind === "reject_always");
-          const k = hint(o);
+          const k = compact ? null : hint(o);
           return (
             <Button
               key={o.id}
@@ -151,31 +160,40 @@ export function ApprovalSection({
               disabled={busy !== null}
               variant={allow ? (i === 0 ? "warn" : "secondary") : "danger"}
               onClick={() => void answer(o)}
-              className={cn(!allow && !plan && "sm:ml-auto")}
+              title={compact ? labelOf(o) : undefined}
+              className={cn(!allow && !plan && !compact && "sm:ml-auto", compact && (i === 0 ? "min-w-0 max-w-[60%] shrink-0" : allow ? "min-w-0 shrink-[4]" : "min-w-0 max-w-[40%] shrink-0"))}
             >
               {busy === o.id ? <Spinner className="h-3.5 w-3.5 text-current" /> : null}
-              {labelOf(o)}
+              <span className={cn(compact && "truncate")}>{labelOf(o)}</span>
               {k && <Kbd className="ml-0.5 border-current/25 bg-transparent text-current opacity-75">{k}</Kbd>}
             </Button>
           );
         })}
         {denyOption && !reasonOpen && (
-          <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setReasonOpen(true)}>
+          <Button
+            size={compact ? "icon-sm" : "sm"}
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={() => setReasonOpen(true)}
+            aria-label={compact ? (plan ? "Give feedback" : "Deny with reason") : undefined}
+            title={compact ? (plan ? "Give feedback…" : "Deny with reason…") : undefined}
+            className={cn(compact && "ml-auto shrink-0")}
+          >
             <MessageSquareX />
-            {plan ? "Give feedback…" : "Deny with reason…"}
+            {!compact && (plan ? "Give feedback…" : "Deny with reason…")}
           </Button>
         )}
         <Tooltip content="Stop the whole turn instead of answering" shortcut={["Esc ×2"]}>
           <Button
-            size="sm"
+            size={compact ? "icon-sm" : "sm"}
             variant="ghost"
             disabled={busy !== null}
             onClick={() => void cancelTurn(agent)}
             aria-label="Stop this turn"
-            className="ml-auto"
+            className={cn(compact ? "shrink-0" : "ml-auto", compact && reasonOpen && "ml-auto")}
           >
             <Square className="!h-3 !w-3 fill-current" />
-            Stop turn
+            {!compact && "Stop turn"}
           </Button>
         </Tooltip>
       </div>

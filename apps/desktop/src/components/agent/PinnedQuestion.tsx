@@ -66,6 +66,10 @@ export function QuestionSection({
 
   // While this row answers with the number keys, the card in the timeline leaves them alone.
   useEffect(() => {
+    useQuestionUi.getState().setInDock(requestId, true);
+    return () => useQuestionUi.getState().setInDock(requestId, false);
+  }, [requestId]);
+  useEffect(() => {
     if (!quick && !formVisible) return;
     useQuestionUi.getState().setDocked(requestId, true);
     return () => useQuestionUi.getState().setDocked(requestId, false);

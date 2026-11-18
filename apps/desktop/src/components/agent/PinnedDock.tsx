@@ -27,6 +27,9 @@ import { useWorkflowPin, WorkflowSection } from "./WorkflowRow";
 /** The dock never takes more than this share of its pane; past that it scrolls inside. */
 const MAX_SHARE = 0.4;
 const MIN_MAX_PX = 150;
+/** While something waits for you, its section may take up to this multiple of that share, and never scrolls away. */
+const NEEDS_SHARE = 1.75;
+const MIN_REST_PX = 72;
 
 /** `MAX_SHARE` of the height of the pane (the nearest `[data-pane]`) the element sits in. */
 function usePaneShare(ref: React.RefObject<HTMLElement | null>): number | undefined {
@@ -147,49 +150,66 @@ export const PinnedDock = memo(function PinnedDock({
                   )
             }
           >
-            <DockScroller maxHeight={maxHeight}>
-              <Fold open={needs !== null}>
-                {keptNeeds && (
-                  <div className="bg-gradient-to-b from-warn/[0.09] to-transparent">
-                    {keptNeeds.kind === "question" ? (
-                      <QuestionSection
-                        key={keptNeeds.requestId}
-                        agent={agent}
-                        item={keptNeeds}
-                        focused={focused}
-                        compact={compact}
-                      />
-                    ) : keptNeeds.kind === "permission" ? (
-                      <ApprovalSection key={keptNeeds.requestId} agent={agent} item={keptNeeds} focused={focused} />
-                    ) : null}
-                  </div>
-                )}
-              </Fold>
-              <Fold open={block.rateLimit}>
-                <RateLimitBanner agent={agent} embedded />
-              </Fold>
-              <Fold open={block.error}>
-                <ErrorRow agent={agent} />
-              </Fold>
-              <Fold open={block.budget}>
-                <BudgetRow agent={agent} cap={cap} />
-              </Fold>
-              <Fold open={block.conflict}>
-                <ConflictBanner agent={agent} embedded />
-              </Fold>
-              <Fold open={planPin.open}>
-                {planPin.pin && <PlanSection agentId={agent.id} pin={planPin.pin} compact={compact} />}
-              </Fold>
-              <Fold open={workflow.open}>
-                {workflow.call && <WorkflowSection agentId={agent.id} call={workflow.call} compact={compact} />}
-              </Fold>
-              <Fold open={sub.open}>
-                {sub.strip && <SubagentRow agentId={agent.id} runs={sub.runs} strip={sub.strip} compact={compact} />}
-              </Fold>
-              <Fold open={queued}>
-                <QueueStack agent={agent} onEdit={onEditQueued} embedded />
-              </Fold>
-            </DockScroller>
+            <div>
+              {/* What needs you is never scrolled out of view, even in a small tile; the rest shares what's left. */}
+              <div
+                className="overflow-y-auto overscroll-contain empty:hidden"
+                style={maxHeight ? { maxHeight: Math.round(maxHeight * NEEDS_SHARE) } : undefined}
+              >
+                <Fold open={needs !== null}>
+                  {keptNeeds && (
+                    <div className="bg-gradient-to-b from-warn/[0.09] to-transparent">
+                      {keptNeeds.kind === "question" ? (
+                        <QuestionSection
+                          key={keptNeeds.requestId}
+                          agent={agent}
+                          item={keptNeeds}
+                          focused={focused}
+                          compact={compact}
+                        />
+                      ) : keptNeeds.kind === "permission" ? (
+                        <ApprovalSection
+                          key={keptNeeds.requestId}
+                          agent={agent}
+                          item={keptNeeds}
+                          focused={focused}
+                          compact={compact}
+                        />
+                      ) : null}
+                    </div>
+                  )}
+                </Fold>
+              </div>
+              <DockScroller
+                maxHeight={maxHeight && urgent ? Math.max(MIN_REST_PX, Math.round(maxHeight / 2)) : maxHeight}
+                className={needs !== null ? "border-t border-line" : undefined}
+              >
+                <Fold open={block.rateLimit}>
+                  <RateLimitBanner agent={agent} embedded />
+                </Fold>
+                <Fold open={block.error}>
+                  <ErrorRow agent={agent} />
+                </Fold>
+                <Fold open={block.budget}>
+                  <BudgetRow agent={agent} cap={cap} />
+                </Fold>
+                <Fold open={block.conflict}>
+                  <ConflictBanner agent={agent} embedded />
+                </Fold>
+                <Fold open={planPin.open}>
+                  {planPin.pin && <PlanSection agentId={agent.id} pin={planPin.pin} compact={compact} />}
+                </Fold>
+                <Fold open={workflow.open}>
+                  {workflow.call && <WorkflowSection agentId={agent.id} call={workflow.call} compact={compact} />}
+                </Fold>
+                <Fold open={sub.open}>
+                  {sub.strip && <SubagentRow agentId={agent.id} runs={sub.runs} strip={sub.strip} compact={compact} />}
+                </Fold>
+                <Fold open={queued}>
+                  <QueueStack agent={agent} onEdit={onEditQueued} embedded />
+                </Fold>
+              </DockScroller>
+            </div>
           </section>
         </div>
       </Fold>
@@ -198,13 +218,21 @@ export const PinnedDock = memo(function PinnedDock({
 });
 
 /** The dock's scroller: soft edges when its sections outgrow the share of the pane it may take. */
-function DockScroller({ maxHeight, children }: { maxHeight: number | undefined; children: React.ReactNode }) {
+function DockScroller({
+  maxHeight,
+  className,
+  children,
+}: {
+  maxHeight: number | undefined;
+  className?: string;
+  children: React.ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useScrollFade(ref, 10);
   return (
     <div
       ref={ref}
-      className="scroll-fade divide-y divide-line overflow-y-auto overscroll-contain"
+      className={cn("scroll-fade divide-y divide-line overflow-y-auto overscroll-contain empty:hidden", className)}
       style={maxHeight ? { maxHeight } : undefined}
     >
       {children}
