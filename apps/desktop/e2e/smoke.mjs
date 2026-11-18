@@ -151,8 +151,13 @@ try {
     ["Accounts", "Accounts"],
     ["Projects", null], // the agent list's rail label (it was "Agents" before 0.2)
   ];
+  // The agent list's button: "Projects" on the icon rail, "Home" in the sidebar's icon row (0.6+).
+  const navButton = (label) =>
+    label === "Projects"
+      ? 'nav[aria-label="Primary"] button[aria-label^="Projects"], nav[aria-label="Primary"] button[aria-label^="Home"]'
+      : `nav[aria-label="Primary"] button[aria-label^="${label}"]`;
   const goRail = async (label) => {
-    const btn = await browser.$(`nav[aria-label="Primary"] button[aria-label^="${label}"]`);
+    const btn = await browser.$(navButton(label));
     await btn.waitForExist({ timeout: 10_000, timeoutMsg: `rail button "${label}" missing` });
     await btn.click();
     await browser.waitUntil(async () => (await btn.getAttribute("aria-current")) === "page", {
@@ -183,7 +188,7 @@ try {
 
   // ---- Back / Forward in the title bar (the walk above ended Accounts -> Projects) ------
   const railCurrent = async (label) =>
-    (await browser.$(`nav[aria-label="Primary"] button[aria-label^="${label}"]`)).getAttribute("aria-current");
+    (await browser.$(navButton(label))).getAttribute("aria-current");
   for (const [button, label] of [["Back", "Accounts"], ["Forward", "Projects"]]) {
     log(`title bar: ${button}`);
     await (await browser.$(`header button[aria-label="${button}"]`)).click();
