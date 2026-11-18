@@ -51,7 +51,7 @@ export function TemplatePicker({
       <PopoverContent
         side={side}
         align={align}
-        className="w-[360px] p-0"
+        className="w-[min(360px,calc(100vw-16px))] p-0"
         onCloseAutoFocus={(e) => {
           if (keepFocus.current) e.preventDefault();
           keepFocus.current = false;
@@ -96,6 +96,11 @@ function PickerBody({
   }, [templates, query]);
 
   useEffect(() => setActive(0), [query]);
+  // Arrow keys move the highlight; a long list scrolls to keep it in view.
+  const listRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    listRef.current?.querySelector(`#tpl-opt-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [active]);
 
   const choose = (t: PromptTemplate) => {
     if (templatePlaceholders(t.body).length > 0) setFilling(t);
@@ -119,23 +124,32 @@ function PickerBody({
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
               setActive((a) => Math.max(0, a - 1));
-            } else if (e.key === "Enter" && list[active]) {
+            } else if ((e.key === "PageDown" || e.key === "PageUp") && list.length > 0) {
+              e.preventDefault();
+              setActive((a) => (e.key === "PageDown" ? Math.min(list.length - 1, a + 5) : Math.max(0, a - 5)));
+            } else if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229 && list[active]) {
               e.preventDefault();
               choose(list[active]);
             }
           }}
           placeholder="Search templates"
           aria-label="Search templates"
+          role="combobox"
+          aria-expanded
+          aria-controls="tpl-list"
+          aria-activedescendant={list[active] ? `tpl-opt-${active}` : undefined}
           className="h-10 flex-1 bg-transparent text-body text-fg placeholder:text-steel focus:outline-none"
         />
       </div>
-      <ul role="listbox" aria-label="Templates" className="min-h-0 flex-1 overflow-y-auto p-1">
+      <ul ref={listRef} id="tpl-list" role="listbox" aria-label="Templates" className="min-h-0 flex-1 overflow-y-auto p-1">
         {list.map((t, i) => {
           const fields = templatePlaceholders(t.body);
           return (
-            <li key={t.id} role="option" aria-selected={i === active}>
+            <li key={t.id} id={`tpl-opt-${i}`} role="option" aria-selected={i === active}>
               <button
                 type="button"
+                // The search field keeps focus and drives the list; Tab goes on to "Manage templates".
+                tabIndex={-1}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(t)}
                 className={cn(
@@ -158,7 +172,16 @@ function PickerBody({
         })}
         {list.length === 0 && (
           <li className="px-3 py-8 text-center text-small text-steel">
-            {templates.length === 0 ? "No templates yet." : "No templates match."}
+            {templates.length === 0 ? (
+              <>
+                No templates yet.
+                <span className="mt-1 block text-meta">
+                  Save prompts you reuse in Manage templates. Use {"{{name}}"} for parts you fill in each time.
+                </span>
+              </>
+            ) : (
+              "No templates match."
+            )}
           </li>
         )}
       </ul>

@@ -3,7 +3,6 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { toast } from "sonner";
 import { cancelTurn, resumeAgent } from "@/lib/actions";
 import { api } from "@/lib/api";
-import { MAX_ATTACHMENTS } from "@/lib/attachments";
 import { canStartHelper, decideBusySend, type BusyIntent } from "@/lib/helpers";
 import { restoreDraft } from "@/lib/draftRestore";
 import { isSlashCommand } from "@/lib/sendNow";
@@ -202,9 +201,15 @@ function ComposerImpl({
   // The list can shrink under a stale index (commands/files update); always clamp.
   const activeIndex = slashOpen ? Math.min(slashIndex, suggestions.length - 1) : 0;
 
-  // Per-agent drafts survive switching agents.
+  // Per-agent drafts (text and pictures) survive switching agents. Skipped on mount: the state starts from them.
+  const draftFor = useRef(agent.id);
+  const setAttachmentsRef = useRef(attach.setAttachments);
+  setAttachmentsRef.current = attach.setAttachments;
   useEffect(() => {
+    if (draftFor.current === agent.id) return;
+    draftFor.current = agent.id;
     setText(getDraft(agent.id));
+    setAttachmentsRef.current(getDraftAttachments(agent.id));
     setHint(null);
     setEscArmed(false);
   }, [agent.id]);
@@ -282,18 +287,14 @@ function ComposerImpl({
     [agent.id],
   );
 
-  // Images sent in from elsewhere (Preview screenshots and element crops).
-  const setAttachmentsRef = useRef(attach.setAttachments);
-  setAttachmentsRef.current = attach.setAttachments;
+  // Images sent in from elsewhere (Preview screenshots and element crops). The same shot twice goes in once.
+  const mergeRef = useRef(attach.merge);
+  mergeRef.current = attach.merge;
   useEffect(
     () =>
       onAttachmentsInsert(agent.id, (incoming) => {
-        setAttachmentsRef.current((cur) => {
-          const room = Math.max(0, MAX_ATTACHMENTS - cur.length);
-          if (incoming.length > room)
-            toast.warning(`Only ${MAX_ATTACHMENTS} images per message; some weren't attached`);
-          return [...cur, ...incoming.slice(0, room)];
-        });
+        const skipped = mergeRef.current(incoming);
+        if (skipped.length) toast.info(skipped.join(". "));
       }),
     [agent.id],
   );
@@ -343,7 +344,10 @@ function ComposerImpl({
     const cur = textRef.current;
     const next = cur.trim() ? `${cur.trimEnd()}\n\n${body}` : body;
     update(next);
-    if (images.length) attach.setAttachments((cur) => [...cur, ...images].slice(0, MAX_ATTACHMENTS));
+    if (images.length) {
+      const skipped = attach.merge(images);
+      if (skipped.length) toast.info(skipped.join(". "));
+    }
     if (resumable) {
       toast("Moved to your draft", { description: "Resume the agent to edit and send it." });
       return;

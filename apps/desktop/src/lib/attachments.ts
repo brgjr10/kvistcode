@@ -97,3 +97,48 @@ export function imageFilesFrom(dt: DataTransfer | null): File[] {
 export function hasFiles(dt: DataTransfer | null): boolean {
   return !!dt && Array.from(dt.types ?? []).includes("Files");
 }
+
+/** What makes two attachments the same picture: its bytes, or the file it points at. */
+function sameKey(a: Attachment): string | null {
+  if (a.data) return `data:${a.mimeType}:${a.data}`;
+  if (a.path) return `path:${a.path}`;
+  return null;
+}
+
+/**
+ * Adds `incoming` after `current`: a picture that is already attached (or comes twice) is skipped,
+ * so dropping or pasting the same image again doesn't add it twice, and the total stays within MAX_ATTACHMENTS.
+ */
+export function mergeAttachments(
+  current: Attachment[],
+  incoming: Attachment[],
+): { next: Attachment[]; duplicates: number; dropped: number } {
+  const seen = new Set<string>();
+  for (const a of current) {
+    const k = sameKey(a);
+    if (k) seen.add(k);
+  }
+  const fresh: Attachment[] = [];
+  let duplicates = 0;
+  for (const a of incoming) {
+    const k = sameKey(a);
+    if (k && seen.has(k)) {
+      duplicates++;
+      continue;
+    }
+    if (k) seen.add(k);
+    fresh.push(a);
+  }
+  const room = Math.max(0, MAX_ATTACHMENTS - current.length);
+  const accepted = fresh.slice(0, room);
+  return { next: [...current, ...accepted], duplicates, dropped: fresh.length - accepted.length };
+}
+
+/** Why some pictures weren't added (empty when all of them were). */
+export function skippedNotes(duplicates: number, dropped: number): string[] {
+  const out: string[] = [];
+  if (duplicates > 0)
+    out.push(duplicates === 1 ? "That image is already attached" : `${duplicates} images were already attached`);
+  if (dropped > 0) out.push(`Only ${MAX_ATTACHMENTS} images per message; ${dropped} not attached`);
+  return out;
+}

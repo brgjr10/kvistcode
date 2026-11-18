@@ -5,6 +5,16 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- Dropping, pasting or sending in the same image twice attaches it once, and Kvistcode tells you it was already there.
+- The New agent dialog keeps a prompt you typed and closed without launching, with a Clear link, and says why Launch is greyed out (no folder, no account, no model).
+- The command palette can now hand off or delete the open agent, show or hide the agent list, start the voice assistant, go back and forward, and change the interface scale. Its ⌘1–9 numbers match the sidebar's order.
+- Removing an attached image with the keyboard keeps focus in the message box area instead of losing it.
+- Template picker: arrow keys keep the highlighted template in view, and it fits narrow windows.
+- On Home, pressing Enter without a project folder opens the folder picker.
+- The keyboard shortcuts sheet lists the keys for starting agents; the Handoff dialog shows its ⌘⏎ shortcut.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.

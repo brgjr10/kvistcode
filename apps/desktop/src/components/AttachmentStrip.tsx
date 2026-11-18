@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Attachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AttachmentImg } from "./AttachmentImg";
@@ -18,10 +18,34 @@ export function AttachmentStrip({
   className?: string;
 }) {
   const [open, setOpen] = useState<number | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  // Removing with the keyboard: focus moves to the next picture's remove button (or the previous one),
+  // not off to the page. The last one gone hands focus back to the field it belongs to.
+  const focusAfter = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const at = focusAfter.current;
+    if (at === null) return;
+    focusAfter.current = null;
+    const buttons = listRef.current?.querySelectorAll<HTMLButtonElement>("[data-remove]");
+    if (buttons && buttons.length > 0) buttons[Math.min(at, buttons.length - 1)].focus();
+  }, [attachments.length]);
   if (attachments.length === 0) return null;
+  const removeAt = (i: number, byKeyboard: boolean) => {
+    if (!onRemove) return;
+    if (byKeyboard && attachments.length > 1) focusAfter.current = i;
+    else if (byKeyboard) {
+      // The strip goes away: focus the nearest message field (never a terminal's hidden one).
+      const sel = "textarea:not(.xterm-helper-textarea)";
+      let box = listRef.current?.parentElement ?? null;
+      while (box && !box.querySelector(sel)) box = box.parentElement;
+      const field = box?.querySelector<HTMLTextAreaElement>(sel);
+      requestAnimationFrame(() => field?.focus());
+    }
+    onRemove(i);
+  };
   return (
     <>
-      <ul className={cn("flex flex-wrap gap-2", className)} aria-label="Attached images">
+      <ul ref={listRef} className={cn("flex flex-wrap gap-2", className)} aria-label="Attached images">
         {attachments.map((a, i) => (
           <li key={`${a.name}-${i}`} className="group relative">
             <button
@@ -36,7 +60,9 @@ export function AttachmentStrip({
             {onRemove && (
               <button
                 type="button"
-                onClick={() => onRemove(i)}
+                data-remove
+                // detail 0: pressed with Enter or Space rather than clicked.
+                onClick={(e) => removeAt(i, e.detail === 0)}
                 aria-label={`Remove ${a.name}`}
                 className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-line-strong bg-raised text-muted shadow-md transition-colors hover:bg-err hover:text-err-fg"
               >

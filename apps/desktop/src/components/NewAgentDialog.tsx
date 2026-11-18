@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { recallLocalModel, rememberLocalModel } from "@/lib/local";
+import { initialPrompt, keepUnsentPrompt, launchBlocker } from "@/lib/newAgentDraft";
 import { choicesFor } from "@/lib/modelGuide";
 import { CUSTOM_ACCOUNT_ID, PROVIDER_ORDER, PROVIDERS } from "@/lib/providers";
 import type { Account, Agent, Provider } from "@/lib/types";
@@ -117,7 +118,19 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
   const [count, setCount] = useState(1);
   const [title, setTitle] = useState(preset?.title ?? "");
   const [model, setModel] = useState("");
-  const [prompt, setPrompt] = useState(preset?.prompt ?? "");
+  const [prompt, setPrompt] = useState(() => initialPrompt(preset?.prompt));
+  // A prompt left here unsent last time came back: offer to clear it.
+  const [restored, setRestored] = useState(() => !preset?.prompt && prompt !== "");
+  // Closing without launching keeps what was typed for next time; a launch clears it.
+  const promptNow = useRef(prompt);
+  promptNow.current = prompt;
+  const launchedAll = useRef(false);
+  useEffect(
+    () => () => {
+      keepUnsentPrompt(launchedAll.current ? "" : promptNow.current);
+    },
+    [],
+  );
   const [showAdvanced, setShowAdvanced] = useState(!!preset?.title);
   const [submitting, setSubmitting] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -235,16 +248,20 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
         : [];
   /** What a launch starts: one per account in Compare mode, otherwise `count` copies of the one chosen. */
   const launches: LaunchTarget[] = compare ? chosen : chosen.flatMap((t) => Array.from({ length: count }, () => t));
-  const canSubmit =
-    project.trim() !== "" &&
-    chosen.length > 0 &&
-    !notGit &&
-    // The prompt is optional (the agent starts and waits), except in Compare mode,
-    // which exists to send one prompt to several agents.
-    // After a partial Compare launch, retrying the failed targets joins the same group.
-    (!compare || ((chosen.length >= 2 || launched.length > 0) && prompt.trim() !== "")) &&
-    // A local agent needs to know which of its server's models to run.
-    (compare || provider !== "local" || model.trim() !== "");
+  // The prompt is optional (the agent starts and waits), except in Compare mode, which exists to send one
+  // prompt to several agents. After a partial Compare launch, retrying the failed targets joins the same group.
+  // A local agent needs to know which of its server's models to run.
+  const blocker = launchBlocker({
+    project,
+    compare,
+    chosen: chosen.length,
+    launched: launched.length,
+    prompt,
+    provider,
+    model,
+    notGit,
+  });
+  const canSubmit = blocker === null;
 
   /** The model to start a target with: typed/picked (single launch), or a local account's last one. */
   const modelFor = (t: LaunchTarget): string | null => {
@@ -307,6 +324,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
             worktree,
           });
         }
+        launchedAll.current = true;
         onDone();
         if (groupId && allLaunched.length >= 2) {
           // A comparison (one agent per account) has its own page; several copies of one agent
@@ -379,8 +397,9 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
         {/* Project */}
         <div>
           <Label htmlFor="na-project">Project folder</Label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
+          {/* Narrow windows: the buttons wrap under the path instead of squeezing it to nothing. */}
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-[14rem] flex-1">
               <FolderOpen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-steel" />
               <Input
                 id="na-project"
@@ -421,7 +440,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
               {compare ? "Run on" : "Provider"}
               {!compare && (
                 <span className="hidden items-center gap-0.5 font-normal text-steel sm:flex">
-                  <Kbd>Alt</Kbd>
+                  <Kbd>{isMac ? "⌥" : "Alt"}</Kbd>
                   <Kbd>1–{keyChoices.length}</Kbd>
                 </span>
               )}
@@ -606,6 +625,22 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
               Prompt
               {!compare && <span className="ml-1.5 font-normal text-steel">optional</span>}
             </Label>
+            {restored && prompt.trim() !== "" && (
+              <span className="mr-auto ml-2 flex min-w-0 items-center gap-1.5 text-meta text-steel">
+                <span className="truncate">Not sent last time</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrompt("");
+                    setRestored(false);
+                    promptRef.current?.focus();
+                  }}
+                  className="shrink-0 text-muted underline-offset-2 hover:text-fg hover:underline"
+                >
+                  Clear
+                </button>
+              </span>
+            )}
             <div className="flex items-center gap-1">
               <AttachButton onClick={attach.openPicker} count={attach.attachments.length} />
               <TemplatePicker
@@ -671,7 +706,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
           </button>
         </div>
         {showAdvanced && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="na-title">Title (optional)</Label>
               <Input
@@ -702,14 +737,26 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
         )}
       </DialogBody>
       <DialogFooter>
-        <span className="mr-auto hidden items-center gap-1 text-meta text-steel sm:flex">
-          <Kbd>{modKey}</Kbd>
-          <Kbd>⏎</Kbd> to launch
-        </span>
+        {blocker && !submitting ? (
+          // Says why Launch is greyed out, instead of leaving you to guess.
+          <span id="na-blocker" className="mr-auto min-w-0 truncate text-meta text-warn">
+            {blocker}
+          </span>
+        ) : (
+          <span className="mr-auto hidden items-center gap-1 text-meta text-steel sm:flex">
+            <Kbd>{modKey}</Kbd>
+            <Kbd>⏎</Kbd> to launch
+          </span>
+        )}
         <Button variant="ghost" onClick={onDone}>
           Cancel
         </Button>
-        <Button variant="primary" disabled={!canSubmit || submitting} onClick={() => void submit()}>
+        <Button
+          variant="primary"
+          disabled={!canSubmit || submitting}
+          aria-describedby={blocker && !submitting ? "na-blocker" : undefined}
+          onClick={() => void submit()}
+        >
           {submitting ? <Spinner className="h-3.5 w-3.5 text-current" /> : <Rocket />}
           {compare || count > 1 ? `Launch ${launches.length} agents` : "Launch agent"}
         </Button>

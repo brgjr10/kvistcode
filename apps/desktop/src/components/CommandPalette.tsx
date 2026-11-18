@@ -3,6 +3,15 @@ import { Command } from "cmdk";
 import {
   Archive,
   ArchiveRestore,
+  ArrowLeft,
+  ArrowRight,
+  ArrowRightLeft,
+  AudioLines,
+  Maximize,
+  PanelLeft,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
   Bell,
   BellOff,
   GitCompare,
@@ -77,6 +86,11 @@ import { useDebounced } from "@/hooks/useDebounced";
 import { useApp, usePendingPermissions, usePendingQuestions } from "@/store/app";
 import { useUi, type SettingsSection } from "@/store/ui";
 import { toggleInspector } from "@/hooks/useInspectorDocked";
+import { showOrHideAgentList } from "@/hooks/useAgentListLayout";
+import { DEFAULT_SCALE, stepInterfaceScale } from "@/lib/zoom";
+import { goBack, goForward } from "@/store/navHistory";
+import { shortcutOrder } from "@/store/shortcutOrder";
+import { toggleVoiceAssistant } from "@/store/voiceAssistant";
 import { previewOf, togglePreview, usePreview } from "@/store/preview";
 import { openTerminal } from "@/store/workspace";
 import { openShortcutHelp } from "./shell/ShortcutHelp";
@@ -198,6 +212,17 @@ function Palette({ onClose }: { onClose: () => void }) {
     () => orderedAgents(Object.values(agentsMap), projectLayout ?? EMPTY_LAYOUT),
     [agentsMap, projectLayout],
   );
+  // The ⌘1–9 badges number agents as the shortcut does (the sidebar's order, also "By activity").
+  const shortcutIds = useMemo(
+    () => shortcutOrder().slice(0, 9).map((a) => a.id),
+    // shortcutOrder reads the stores itself; recount when the agents or their layout change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [agentsMap, projectLayout],
+  );
+  const shortcutNumber = (id: string) => {
+    const i = shortcutIds.indexOf(id);
+    return i < 0 ? undefined : i + 1;
+  };
   const archived = useMemo(() => Object.values(agentsMap).filter((a) => a.archived), [agentsMap]);
   const needsYou = useTriageQueue();
   const recent = useMemo(() => {
@@ -395,7 +420,7 @@ function Palette({ onClose }: { onClose: () => void }) {
                     key={a.id}
                     agent={a}
                     value={`agent:${a.id}`}
-                    kbd={agents.indexOf(a) < 9 ? agents.indexOf(a) + 1 : undefined}
+                    kbd={shortcutNumber(a.id)}
                     onSelect={() => run(() => ui.openAgent(a.id))}
                   />
                 ))}
@@ -446,7 +471,7 @@ function Palette({ onClose }: { onClose: () => void }) {
         {!startMode && !searchMode && !idle && (
           <>
             <Command.Group heading="Agents" className={groupClass}>
-              {[...agents, ...archived].map((a, i) => (
+              {[...agents, ...archived].map((a) => (
                 <Command.Item
                   key={a.id}
                   value={`agent:${a.id}`}
@@ -471,10 +496,10 @@ function Palette({ onClose }: { onClose: () => void }) {
                   </span>
                   {/* Always reserve the badge's width so rows don't shift when one is selected. */}
                   <span className="invisible flex w-[52px] shrink-0 justify-end gap-0.5 group-data-[selected=true]:visible max-[480px]:hidden">
-                    {i < 9 && !a.archived && (
+                    {shortcutNumber(a.id) !== undefined && !a.archived && (
                       <>
                         <Kbd>{modKey}</Kbd>
-                        <Kbd>{i + 1}</Kbd>
+                        <Kbd>{shortcutNumber(a.id)}</Kbd>
                       </>
                     )}
                   </span>
@@ -604,6 +629,12 @@ function Palette({ onClose }: { onClose: () => void }) {
                   />
                 )}
                 <PaletteAction
+                  icon={<ArrowRightLeft />}
+                  label="Hand off to another agent…"
+                  keywords={["hand off", "handoff", "second opinion", "another provider", "codex", "claude"]}
+                  onSelect={() => run(() => ui.setHandoffAgent(current))}
+                />
+                <PaletteAction
                   icon={current.archived ? <ArchiveRestore /> : <Archive />}
                   label={current.archived ? "Unarchive" : "Archive"}
                   keywords={["archive", "hide"]}
@@ -617,6 +648,12 @@ function Palette({ onClose }: { onClose: () => void }) {
                     onSelect={() => run(() => void stopAgent(current))}
                   />
                 )}
+                <PaletteAction
+                  icon={<Trash2 />}
+                  label="Delete agent…"
+                  keywords={["delete", "remove", "trash"]}
+                  onSelect={() => run(() => ui.setDeleteAgent(current))}
+                />
               </Command.Group>
             )}
 
@@ -714,6 +751,34 @@ function Palette({ onClose }: { onClose: () => void }) {
                 keywords={["inspector", "details", "side panel"]}
                 onSelect={() => run(toggleInspector)}
               />
+              <PaletteAction
+                icon={<PanelLeft />}
+                label="Show or hide the agent list"
+                shortcut={[modKey, "B"]}
+                keywords={["sidebar", "agent list", "toggle", "drawer"]}
+                onSelect={() => run(showOrHideAgentList)}
+              />
+              <PaletteAction
+                icon={<AudioLines />}
+                label="Voice assistant"
+                shortcut={[modKey, "⇧", "A"]}
+                keywords={["voice", "talk", "speak", "assistant", "microphone"]}
+                onSelect={() => run(toggleVoiceAssistant)}
+              />
+              <PaletteAction
+                icon={<ArrowLeft />}
+                label="Go back"
+                shortcut={isMac ? ["⌘", "["] : ["Alt", "←"]}
+                keywords={["back", "previous", "history"]}
+                onSelect={() => run(goBack)}
+              />
+              <PaletteAction
+                icon={<ArrowRight />}
+                label="Go forward"
+                shortcut={isMac ? ["⌘", "]"] : ["Alt", "→"]}
+                keywords={["forward", "next", "history"]}
+                onSelect={() => run(goForward)}
+              />
             </Command.Group>
 
             <Command.Group heading="Settings" className={groupClass}>
@@ -780,6 +845,29 @@ function Palette({ onClose }: { onClose: () => void }) {
                     )
                   }
                 />
+                <PaletteAction
+                  icon={<ZoomIn />}
+                  label="Interface scale: larger"
+                  shortcut={[modKey, "+"]}
+                  keywords={["zoom", "bigger", "font size", "text size", "scale"]}
+                  onSelect={() => stepInterfaceScale(1)}
+                />
+                <PaletteAction
+                  icon={<ZoomOut />}
+                  label="Interface scale: smaller"
+                  shortcut={[modKey, "−"]}
+                  keywords={["zoom", "font size", "text size", "scale"]}
+                  onSelect={() => stepInterfaceScale(-1)}
+                />
+                {(settings.interfaceScale ?? DEFAULT_SCALE) !== DEFAULT_SCALE && (
+                  <PaletteAction
+                    icon={<Maximize />}
+                    label={`Interface scale: reset to ${DEFAULT_SCALE}%`}
+                    shortcut={[modKey, "0"]}
+                    keywords={["zoom", "reset", "actual size", "scale"]}
+                    onSelect={() => run(() => stepInterfaceScale(0))}
+                  />
+                )}
                 {settings.theme !== "system" && (
                   <PaletteAction
                     icon={<PaletteIcon />}
