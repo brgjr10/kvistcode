@@ -5,7 +5,9 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
-## Unreleased
+## v0.6.1 — 2026-11-17
+
+A wide sweep of fixes and polish: Find opens what hides a match, Mission Control gets a filter, Usage and Schedules fill out, and the phone app handles being offline.
 
 - Find in a conversation now opens what hides a match (a long message, a thought, a folded code block) and scrolls to the words themselves. The match you are on is marked in a different colour from the others.
 - Esc in Find puts you back where you were, usually the message box. Find no longer opens behind a dialog or inside a terminal, and on a Mac it uses ⌘F only, so Ctrl+F still moves the cursor in text fields.
