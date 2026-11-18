@@ -22,6 +22,7 @@ import { BarList, ShareBar, type BarDatum } from "@/components/usage/BarList";
 import { BudgetBar } from "@/components/usage/BudgetBar";
 import { TokenInsights } from "@/components/usage/TokenInsights";
 import { KpiTile } from "@/components/usage/KpiTile";
+import { foldRest, topAgents, usedBy, type UsageMetric } from "@/components/usage/usageRank";
 import { UsageMeters } from "@/components/UsageMeter";
 import { useBudgetStatus } from "@/hooks/useBudgetStatus";
 import { splitCost } from "@/lib/costSplit";
@@ -33,7 +34,7 @@ import { basename, prettyPath } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useUi } from "@/store/ui";
 
-type Metric = "cost" | "tokens";
+type Metric = UsageMetric;
 type Group = "provider" | "account" | "project";
 
 interface Bucket {
@@ -173,22 +174,40 @@ export function UsageView() {
       };
     });
 
-  const projectData: BarDatum[] = [...byProject.values()]
-    .sort((a, b) => val(b) - val(a))
-    .slice(0, 8)
-    .map((b) => ({
-      key: b.key,
-      label: basename(b.key),
-      sub: `${b.agents} ${b.agents === 1 ? "agent" : "agents"}`,
-      icon: <FolderOpen className="h-3.5 w-3.5 shrink-0 text-steel" />,
-      value: val(b),
-      display: fmt(b),
-      color: "var(--accent)",
-      tooltip: tip(prettyPath(b.key), b, total, metric),
-    }));
+  // The eight biggest projects, then everything else in one row so the list still adds up.
+  const projects = foldRest(
+    [...byProject.values()].sort((a, b) => val(b) - val(a)),
+    8,
+  );
+  const projectData: BarDatum[] = projects.shown.map((b) => ({
+    key: b.key,
+    label: basename(b.key),
+    sub: `${b.agents} ${b.agents === 1 ? "agent" : "agents"}`,
+    icon: <FolderOpen className="h-3.5 w-3.5 shrink-0 text-steel" />,
+    value: val(b),
+    display: fmt(b),
+    color: "var(--accent)",
+    tooltip: tip(prettyPath(b.key), b, total, metric),
+  }));
+  if (projects.rest) {
+    const rest = projects.rest;
+    const label = `${rest.count} more ${rest.count === 1 ? "project" : "projects"}`;
+    projectData.push({
+      key: rest.key,
+      label,
+      sub: `${rest.agents} ${rest.agents === 1 ? "agent" : "agents"}`,
+      icon: <FolderOpen className="h-3.5 w-3.5 shrink-0 text-steel/60" />,
+      value: val(rest),
+      display: fmt(rest),
+      color: "var(--steel)",
+      tooltip: tip(label, rest, total, metric),
+    });
+  }
 
-  const top = [...agents].sort((a, b) => b.costUsd - a.costUsd).slice(0, 8);
-  const topMax = Math.max(0.0001, ...top.map((a) => a.costUsd));
+  const top = topAgents(agents, metric);
+  const topMax = Math.max(Number.EPSILON, ...top.map((a) => usedBy(a, metric)));
+  const emptyLabel = metric === "cost" ? "Nothing spent yet" : "No tokens used yet";
+  const showUsed = (a: Agent) => (metric === "cost" ? formatCost(a.costUsd) : formatTokens(a.tokensUsed));
   const live = agents.filter(
     (a) => a.status === "working" || a.status === "needs_permission" || a.status === "starting",
   ).length;
@@ -242,7 +261,7 @@ export function UsageView() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1040px] space-y-3 px-4 py-4 @2xl:space-y-4 @2xl:px-6 @2xl:py-5">
+        <div className="mx-auto max-w-[1040px] space-y-3 px-4 pb-10 pt-4 @2xl:space-y-4 @2xl:px-6 @2xl:pb-16 @2xl:pt-6">
           {budget && (dailyCap != null || dailyTokenCap != null || dailyTurnCap != null) && (
             <BudgetBar status={budget} onConfigure={() => openSettings("budgets")} />
           )}
@@ -304,7 +323,7 @@ export function UsageView() {
                         </div>
                       </div>
                     </div>
-                    <UsageMeters usage={acc.usage} className="w-full max-w-[520px] @2xl:w-auto @2xl:flex-1" />
+                    <UsageMeters usage={acc.usage} className="w-full max-w-[560px] @4xl:w-auto @4xl:flex-1" />
                   </li>
                 ))}
               </ul>
@@ -340,89 +359,101 @@ export function UsageView() {
                     return { key: k, label: id.name, value: val(b), display: fmt(b), color: id.color };
                   })}
                 />
-                <BarList data={providerData} />
+                <BarList data={providerData} emptyLabel={emptyLabel} />
               </div>
             )}
-            {group === "account" && <BarList data={accountData} />}
-            {group === "project" && <BarList data={projectData} />}
+            {group === "account" && <BarList data={accountData} emptyLabel={emptyLabel} />}
+            {group === "project" && <BarList data={projectData} emptyLabel={emptyLabel} />}
           </Panel>
 
           <Panel
-            title="Top agents by cost"
+            title={metric === "cost" ? "Top agents by cost" : "Top agents by tokens"}
             icon={<Trophy />}
             flush
             open={topOpen}
             onToggle={() => setTopOpen((o) => !o)}
-            hint={top[0] ? `${top[0].title} · ${formatCost(top[0].costUsd)}` : undefined}
+            hint={top[0] ? `${top[0].title} · ${showUsed(top[0])}` : emptyLabel}
           >
-            <table className="w-full text-small">
-              <thead>
-                <tr className="border-b border-line text-left eyebrow text-steel">
-                  <th className="w-10 py-2 pl-4 font-medium">#</th>
-                  <th className="py-2 font-medium">Agent</th>
-                  <th className="hidden w-[150px] py-2 font-medium @2xl:table-cell">Account</th>
-                  <th className="hidden w-[90px] py-2 pr-4 text-right font-medium @md:table-cell">Tokens</th>
-                  <th className="w-[84px] py-2 pr-4 text-right font-medium @lg:w-[180px]">Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {top.map((a, i) => {
-                  const acc = accounts.find((x) => x.id === a.accountId);
-                  return (
-                    <tr
-                      key={a.id}
-                      tabIndex={0}
-                      onClick={() => openAgent(a.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") openAgent(a.id);
-                      }}
-                      className="cursor-default border-b border-line/60 transition-colors last:border-0 hover:bg-raised/50 focus-visible:bg-raised/60 focus-visible:outline-none"
-                    >
-                      <td className="py-2.5 pl-4 text-steel tabular">{i + 1}</td>
-                      <td className="max-w-0 py-2.5 pr-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <ProviderGlyph provider={a.provider} customAgentId={a.customAgentId} size="xs" />
-                          <span className="truncate text-fg">{a.title}</span>
-                          <StatusDot status={a.status} size={6} />
-                          <span className="hidden truncate text-meta text-steel @4xl:inline">
-                            {basename(a.projectPath)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="hidden py-2.5 pr-3 @2xl:table-cell">
-                        {acc ? (
-                          <span className="flex items-center gap-1.5 text-muted">
-                            <AccountAvatar account={acc} size={14} showProvider={false} />
-                            <span className="truncate">{acc.name}</span>
-                          </span>
-                        ) : a.provider === "custom" ? (
-                          <span className="truncate text-steel">{identity(runtimeKey(a)).name}</span>
-                        ) : (
-                          <span className="text-steel">—</span>
-                        )}
-                      </td>
-                      <td className="hidden py-2.5 pr-4 text-right text-muted tabular @md:table-cell">
-                        {formatTokens(a.tokensUsed)}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <div className="flex items-center justify-end gap-2.5">
-                          <span className="hidden h-1.5 w-20 overflow-hidden rounded-[4px] bg-raised/70 @lg:block">
-                            <span
-                              className="block h-full rounded-[4px]"
-                              style={{
-                                width: `${(a.costUsd / topMax) * 100}%`,
-                                background: identity(runtimeKey(a)).color,
-                              }}
-                            />
-                          </span>
-                          <span className="w-14 text-right font-medium text-fg tabular">{formatCost(a.costUsd)}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {top.length === 0 ? (
+              <p className="px-4 pb-4 pt-1 text-small text-steel">{emptyLabel}</p>
+            ) : (
+              <table className="w-full text-small">
+                <thead>
+                  <tr className="border-b border-line text-left eyebrow text-steel">
+                    <th className="w-10 py-2 pl-4 font-medium">#</th>
+                    <th className="py-2 font-medium">Agent</th>
+                    <th className="hidden w-[150px] py-2 font-medium @2xl:table-cell">Account</th>
+                    <th className="hidden w-[90px] py-2 pr-4 text-right font-medium @md:table-cell">
+                      {metric === "cost" ? "Tokens" : "Cost"}
+                    </th>
+                    <th className="w-[84px] py-2 pr-4 text-right font-medium @lg:w-[180px]">
+                      {metric === "cost" ? "Cost" : "Tokens"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top.map((a, i) => {
+                    const acc = accounts.find((x) => x.id === a.accountId);
+                    return (
+                      <tr
+                        key={a.id}
+                        tabIndex={0}
+                        onClick={() => openAgent(a.id)}
+                        aria-label={`Open ${a.title}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openAgent(a.id);
+                          }
+                        }}
+                        className="cursor-default border-b border-line/60 transition-colors last:border-0 hover:bg-raised/50 focus-visible:bg-raised/60 focus-visible:outline-none"
+                      >
+                        <td className="py-2.5 pl-4 text-steel tabular">{i + 1}</td>
+                        <td className="max-w-0 py-2.5 pr-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ProviderGlyph provider={a.provider} customAgentId={a.customAgentId} size="xs" />
+                            <span className="truncate text-fg">{a.title}</span>
+                            <StatusDot status={a.status} size={6} />
+                            <span className="hidden truncate text-meta text-steel @4xl:inline">
+                              {basename(a.projectPath)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="hidden py-2.5 pr-3 @2xl:table-cell">
+                          {acc ? (
+                            <span className="flex items-center gap-1.5 text-muted">
+                              <AccountAvatar account={acc} size={14} showProvider={false} />
+                              <span className="truncate">{acc.name}</span>
+                            </span>
+                          ) : a.provider === "custom" ? (
+                            <span className="truncate text-steel">{identity(runtimeKey(a)).name}</span>
+                          ) : (
+                            <span className="text-steel">—</span>
+                          )}
+                        </td>
+                        <td className="hidden py-2.5 pr-4 text-right text-muted tabular @md:table-cell">
+                          {metric === "cost" ? formatTokens(a.tokensUsed) : formatCost(a.costUsd)}
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <div className="flex items-center justify-end gap-2.5">
+                            <span className="hidden h-1.5 w-20 overflow-hidden rounded-[4px] bg-raised/70 @lg:block">
+                              <span
+                                className="block h-full rounded-[4px]"
+                                style={{
+                                  width: `${(usedBy(a, metric) / topMax) * 100}%`,
+                                  background: identity(runtimeKey(a)).color,
+                                }}
+                              />
+                            </span>
+                            <span className="w-14 text-right font-medium text-fg tabular">{showUsed(a)}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </Panel>
         </div>
       </div>

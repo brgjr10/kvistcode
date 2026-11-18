@@ -145,7 +145,8 @@ export function Onboarding() {
                 >
                   {i < step ? <Check className="h-2.5 w-2.5" strokeWidth={3.5} /> : i + 1}
                 </span>
-                <span className="hidden md:inline">{s.label}</span>
+                {/* Narrow windows keep only the current step's name, so you still know where you are. */}
+                <span className={i === step ? "inline" : "hidden md:inline"}>{s.label}</span>
               </span>
               {i < STEPS.length - 1 && <span className={cn("h-px w-5", i < step ? "bg-accent/50" : "bg-line")} />}
             </button>
@@ -155,7 +156,8 @@ export function Onboarding() {
           <button
             type="button"
             onClick={finish}
-            className="h-6 shrink-0 whitespace-nowrap rounded-md px-2 text-caption text-muted transition-colors hover:text-fg"
+            disabled={finishing}
+            className="h-6 shrink-0 whitespace-nowrap rounded-md px-2 text-caption text-muted transition-colors hover:text-fg disabled:opacity-50"
           >
             Skip setup
           </button>
@@ -234,7 +236,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
         Run several AI coding agents at once, and stay in control. Use Claude, Codex and Grok side by side, on all your
         accounts. Approve, review and ship from one place.
       </p>
-      <div className="mt-7 flex items-center gap-2.5">
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
         {PROVIDER_ORDER.map((p, i) => (
           <span
             key={p}
@@ -454,9 +456,9 @@ function AccountsStep() {
       {offers.length > 0 && (
         <div className="mb-3 space-y-2 rounded-xl border border-accent/30 bg-accent/[0.06] p-3 edge">
           {offers.map((a, i) => (
-            <div key={a.id} className="flex items-center gap-3.5">
+            <div key={a.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
               <ProviderGlyph provider={a.provider} size="lg" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[180px] flex-1">
                 <div className="text-[13.5px] font-medium">{PROVIDERS[a.provider].name} is installed</div>
                 <div className="text-caption text-muted">
                   Sign in to use it. A window opens, and then your browser for the login.
@@ -530,14 +532,14 @@ function PrefsStep() {
             />
           }
         >
-          <div className={cn("mt-3 flex items-center gap-3", !s.enabled && "opacity-40")}>
+          <div className={cn("mt-3 flex flex-wrap items-center gap-x-3 gap-y-2", !s.enabled && "opacity-40")}>
             <Slider
               aria-label="Volume"
               value={volume}
               disabled={!s.enabled}
               onValueChange={setVolume}
               onValueCommit={(v) => void save({ sounds: { ...s, volume: v } })}
-              className="max-w-[220px]"
+              className="min-w-[120px] max-w-[220px] flex-1"
             />
             <span className="w-9 text-caption text-muted tabular">{Math.round(volume * 100)}%</span>
             <div className="ml-auto flex gap-1">

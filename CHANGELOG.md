@@ -16,6 +16,11 @@ docs/RELEASING.md).
 - Mission Control: in the compact list every agent can be scrolled to again (rows past the bottom of the window were cut off), and last messages read as plain text instead of showing markdown marks.
 - Needs you: Enter on a link or button in an agent's answer now does what that link or button does instead of opening the agent. A rate-limited agent shows the provider's own limit message, "Spent" says Free for local models, and "1 command" is no longer "1 commands".
 - Title bar: the "+3" beside the account pictures is no longer half hidden, and a small amber dot shows when an account isn't signed in.
+- Usage: with Tokens picked, the top agents list ranks by tokens too. The project list adds up past the top eight ("3 more projects"), and agents that used nothing are left out.
+- Usage and Accounts: rate-limit meters get their own line on narrow windows, so reset times no longer wrap.
+- Schedules: a Duplicate button copies a schedule (the copy starts paused). A run that failed to start says "Didn't start" instead of linking an older agent or saying the agent was removed.
+- Settings → Keyboard lists Find and Search shortcuts and has a "See all shortcuts" button.
+- Setup: narrow windows show the current step's name, and the sound and sign-in rows wrap instead of overflowing.
 
 ## v0.6.0 — 2026-11-17
 

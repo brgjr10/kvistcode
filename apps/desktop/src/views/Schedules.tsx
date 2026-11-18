@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/EmptyState";
 import { HeaderAction, PageHeader } from "@/components/PageHeader";
+import { duplicateSchedule } from "@/components/schedules/duplicate";
 import { blankSchedule, ScheduleDialog } from "@/components/schedules/ScheduleDialog";
 import { ScheduleRow } from "@/components/schedules/ScheduleRow";
 import { ConfirmDialog } from "@/components/ui/alert-dialog";
@@ -212,6 +213,7 @@ export function SchedulesView() {
                   onToggle={(v) => void toggle(s, v)}
                   onRun={() => void run(s)}
                   onEdit={() => setEditing(s)}
+                  onDuplicate={() => setEditing(duplicateSchedule(s))}
                   onDelete={() => setDeleting(s)}
                   onOpenAgent={openAgent}
                 />

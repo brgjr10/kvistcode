@@ -47,7 +47,7 @@ function Meter({ w, name, compact }: { w: UsageWindow; name: string; compact?: b
         <span className="min-w-0 text-steel">
           {name}
           {reset && !compact && (
-            <span className="block text-steel/80 @[220px]/m:inline">
+            <span className="block truncate text-steel/80 @[220px]/m:inline">
               <span aria-hidden className="hidden @[220px]/m:inline">
                 {" "}
                 ·{" "}
