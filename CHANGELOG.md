@@ -5,6 +5,14 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- Usage: with Tokens picked, the top agents list ranks by tokens too. The project list adds up past the top eight ("3 more projects"), and agents that used nothing are left out.
+- Usage and Accounts: rate-limit meters get their own line on narrow windows, so reset times no longer wrap.
+- Schedules: a Duplicate button copies a schedule (the copy starts paused). A run that failed to start says "Didn't start" instead of linking an older agent or saying the agent was removed.
+- Settings → Keyboard lists Find and Search shortcuts and has a "See all shortcuts" button.
+- Setup: narrow windows show the current step's name, and the sound and sign-in rows wrap instead of overflowing.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.

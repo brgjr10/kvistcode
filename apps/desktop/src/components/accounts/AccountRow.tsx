@@ -214,7 +214,7 @@ export function AccountRow({ account, compact }: { account: Account; compact?: b
             <div className={cn("flex items-end gap-x-4 gap-y-1.5", compact ? "mt-1.5" : "mt-2.5")}>
               <UsageMeters usage={usage} className="min-w-0 flex-1 max-w-[640px]" />
               {!compact && (
-                <span className="hidden shrink-0 pb-px text-micro text-steel @xl/acct:inline">
+                <span className="hidden shrink-0 pb-px text-micro text-steel @3xl/acct:inline">
                   updated {relativeTimeLong(usage.updatedAt, now)}
                 </span>
               )}

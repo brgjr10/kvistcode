@@ -1,6 +1,7 @@
 import {
   ArrowUpRight,
   CalendarClock,
+  Copy,
   FolderOpen,
   GitBranch,
   Pencil,
@@ -23,6 +24,7 @@ import { Button } from "../ui/button";
 import { Spinner } from "../ui/misc";
 import { Switch } from "../ui/switch";
 import { Tooltip } from "../ui/tooltip";
+import { lastRunNote } from "./lastRun";
 
 export const ScheduleRow = memo(function ScheduleRow({
   schedule,
@@ -34,6 +36,7 @@ export const ScheduleRow = memo(function ScheduleRow({
   onToggle,
   onRun,
   onEdit,
+  onDuplicate,
   onDelete,
   onOpenAgent,
 }: {
@@ -46,12 +49,14 @@ export const ScheduleRow = memo(function ScheduleRow({
   onToggle: (enabled: boolean) => void;
   onRun: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
   onOpenAgent: (id: string) => void;
 }) {
   const next = schedule.enabled ? nextRun(schedule, new Date(now)) : null;
   const identity = useIdentity(schedule.provider, schedule.customAgentId);
   const runtime = account ? `${identity.short} · ${account.name}` : identity.name;
+  const note = lastRunNote(schedule, lastAgent !== undefined);
 
   return (
     <li
@@ -174,7 +179,9 @@ export const ScheduleRow = memo(function ScheduleRow({
                 {schedule.lastRunAt ? (
                   <>
                     <span className="block truncate text-fg/90">{relativeTimeLong(schedule.lastRunAt, now)}</span>
-                    {lastAgent ? (
+                    {note === "failed" ? (
+                      <span className="block text-meta text-warn">Didn't start</span>
+                    ) : note === "agent" && lastAgent ? (
                       <button
                         type="button"
                         onClick={() => onOpenAgent(lastAgent.id)}
@@ -184,9 +191,9 @@ export const ScheduleRow = memo(function ScheduleRow({
                         <span className="truncate">Open agent</span>
                         <ArrowUpRight className="h-3 w-3 shrink-0 opacity-60 group-hover/link:opacity-100" />
                       </button>
-                    ) : (
+                    ) : note === "removed" ? (
                       <span className="block text-meta text-steel">Agent removed</span>
-                    )}
+                    ) : null}
                   </>
                 ) : (
                   <span className="text-steel">Never</span>
@@ -222,6 +229,11 @@ export const ScheduleRow = memo(function ScheduleRow({
             <Tooltip content="Edit">
               <Button size="icon-sm" variant="ghost" onClick={onEdit} aria-label={`Edit ${schedule.name}`}>
                 <Pencil className="!h-3.5 !w-3.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip content="Duplicate">
+              <Button size="icon-sm" variant="ghost" onClick={onDuplicate} aria-label={`Duplicate ${schedule.name}`}>
+                <Copy className="!h-3.5 !w-3.5" />
               </Button>
             </Tooltip>
             <Tooltip content="Delete">

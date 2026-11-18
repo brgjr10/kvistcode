@@ -51,6 +51,7 @@ import { SectionHeader, SettingGroup, SettingRow } from "@/components/settings/S
 import { ToolsSection } from "@/components/settings/ToolsSection";
 import { TemplatesSection } from "@/components/settings/TemplatesSection";
 import { ThemeCard } from "@/components/settings/ThemeCard";
+import { openShortcutHelp } from "@/components/shell/ShortcutHelp";
 import {
   ANCHOR_OF,
   NAV_GROUPS,
@@ -1197,11 +1198,18 @@ function KeyboardPage({ settings }: { settings: Settings }) {
           </SettingRow>
         </SettingGroup>
         <Spot id="shortcuts">
-          <SettingGroup title="Shortcuts">
+          <SettingGroup
+            title="Shortcuts"
+            right={
+              <Button size="xs" variant="ghost" onClick={openShortcutHelp}>
+                <Keyboard /> See all shortcuts
+              </Button>
+            }
+          >
             {SHORTCUTS.map((s) => (
-              <div key={s.label} className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-body text-muted">{s.label}</span>
-                <span className="flex gap-1">
+              <div key={s.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <span className="min-w-0 text-body text-muted">{s.label}</span>
+                <span className="flex shrink-0 gap-1">
                   {s.keys.map((k) => (
                     <Kbd key={k}>{k}</Kbd>
                   ))}
@@ -1364,6 +1372,8 @@ function Providers() {
 const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: [modKey, "K"], label: "Command palette" },
   { keys: [modKey, "N"], label: "New agent" },
+  { keys: [modKey, "⇧", "F"], label: "Search every conversation" },
+  { keys: [modKey, "F"], label: "Find in this conversation" },
   { keys: [modKey, "1–9"], label: "Jump to agent" },
   { keys: [modKey, "J"], label: "Needs you" },
   { keys: [modKey, "⇧", "M"], label: "Mission Control: All agents" },
