@@ -5,6 +5,14 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- Find in a conversation now opens what hides a match (a long message, a thought, a folded code block) and scrolls to the words themselves. The match you are on is marked in a different colour from the others.
+- Esc in Find puts you back where you were, usually the message box. Find no longer opens behind a dialog or inside a terminal, and on a Mac it uses ⌘F only, so Ctrl+F still moves the cursor in text fields.
+- Find says "3 of 5+" while earlier messages are not loaded yet, since there may be more. With two conversations side by side, closing Find in one no longer clears the other's marks.
+- Alt+Shift+↑ goes to the start of a message you sent that is cut off at the top, instead of skipping past it. On a Mac, ⌥⇧↑ in a text field selects text again, as it should.
+- A paused queue shows how many messages are waiting.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.

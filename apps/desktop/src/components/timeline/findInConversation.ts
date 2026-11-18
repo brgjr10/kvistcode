@@ -1,4 +1,50 @@
+import { createContext, useContext } from "react";
 import type { TimelineItem } from "@/lib/types";
+
+/**
+ * The item holding the current Find match (null while Find is closed or finds nothing). Folded content
+ * that holds it opens (a long message, a thought), and marks itself with `data-find-target` so the
+ * timeline can bring the exact words into view.
+ */
+export const FindTargetContext = createContext<FindTarget | null>(null);
+
+export type FindTarget = { id: string; query: string };
+
+/** True when the current Find match is `id` (or one of `ids`, the pieces of a run of messages). */
+export function holdsFindTarget(
+  target: string | null | undefined,
+  id: string,
+  parts?: readonly { id: string }[],
+): boolean {
+  if (!target) return false;
+  if (target === id) return true;
+  return !!parts && parts.some((p) => p.id === target);
+}
+
+export function useFindTarget(id: string, parts?: readonly { id: string }[]): boolean {
+  return holdsFindTarget(useContext(FindTargetContext)?.id, id, parts);
+}
+
+type KeyLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">;
+
+/**
+ * The conversation's own keys: Find (⌘F on a Mac, Ctrl+F elsewhere; Ctrl+F is "forward a character" in
+ * a Mac text field) and the previous / next message you sent (Alt+Shift+Up / Down; in a Mac text field
+ * ⌥⇧↑ selects to the paragraph start, so it stays the field's there).
+ */
+export function conversationKey(
+  e: KeyLike,
+  mac: boolean,
+  editable: boolean,
+): "find" | "prev-message" | "next-message" | null {
+  const mod = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") return "find";
+  if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+    if (mac && editable) return null;
+    return e.key === "ArrowUp" ? "prev-message" : "next-message";
+  }
+  return null;
+}
 
 /** The words of an item that Find in conversation searches: what was said, and what each step was. */
 export function searchableText(it: TimelineItem): string {
@@ -42,4 +88,13 @@ export function stepUserRow(userRows: readonly number[], current: number, dir: -
   }
   for (const r of userRows) if (r > current) return r;
   return null;
+}
+
+/** "2 of 5", or "2 of 5+" while earlier messages aren't loaded (there may be more). */
+export function findCountLabel(query: string, index: number, count: number, partial = false): string {
+  if (!query.trim()) return "";
+  if (count === 0) return partial ? "None loaded" : "No matches";
+  // (Between a new query and its first jump the old position may not fit the new count.)
+  const at = index < 0 || index >= count ? "–" : String(index + 1);
+  return `${at} of ${count}${partial ? "+" : ""}`;
 }

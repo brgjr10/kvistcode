@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Agent, TimelineItem } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, isEditableTarget, isMac } from "@/lib/utils";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useMinimal } from "@/hooks/useLook";
 import { useScrollFade } from "@/hooks/useScrollFade";
@@ -28,8 +28,9 @@ import { finalAnswers, groupActivity, replyThoughts } from "./activityGroups";
 import { messageRole } from "./collapse";
 import { stitchMessages } from "./messageFlow";
 import { UNFOLLOW_EVENT } from "./MessageFold";
-import { clearHighlights, FindBar, highlightMatches } from "./FindBar";
-import { findMatches, stepUserRow } from "./findInConversation";
+import { clearHighlights, FindBar, findTargetEl, firstMatchIn, highlightMatches } from "./FindBar";
+import { conversationKey, FindTargetContext, findMatches, stepUserRow } from "./findInConversation";
+import { dialogOpen, inTerminal } from "@/hooks/useGlobalShortcuts";
 import { SubagentCard } from "./SubagentCard";
 import { WorkflowCard } from "./WorkflowCard";
 import { useRunningSubagentCount, useSubagentRuns } from "../agent/useSubagents";
@@ -346,9 +347,13 @@ export function Timeline({
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findIndex, setFindIndex] = useState(-1);
+  // Where the keyboard was before Find opened (usually the composer): Esc goes back there.
+  const findReturn = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     setFindOpen(false);
     setFindQuery("");
+    setFindIndex(-1);
+    findReturn.current = null;
   }, [agent.id]);
   const matches = useMemo(() => (findOpen ? findMatches(list, findQuery) : []), [findOpen, list, findQuery]);
   const matchesRef = useRef(matches);
@@ -375,34 +380,81 @@ export function Timeline({
   );
   const closeFind = useCallback(() => {
     setFindOpen(false);
-    clearHighlights();
-    scrollRef.current?.focus({ preventScroll: true });
-  }, []);
+    clearHighlights(agent.id);
+    const back = findReturn.current;
+    findReturn.current = null;
+    if (back?.isConnected && !back.closest("[role=search]")) back.focus({ preventScroll: true });
+    else scrollRef.current?.focus({ preventScroll: true });
+  }, [agent.id]);
+  // The item holding the current match: folded content that holds it opens (see FindTargetContext).
+  const findTarget = findOpen && findIndex >= 0 ? (matches[findIndex] ?? null) : null;
+  const findContext = useMemo(
+    () => (findTarget ? { id: findTarget, query: findQuery } : null),
+    [findTarget, findQuery],
+  );
   // Marks follow what is on screen: re-mark when rows render (virtualized) or the query changes.
   useEffect(() => {
     const root = contentRef.current;
     if (!findOpen || !root) return;
+    const owner = agent.id;
     let frame = 0;
     const mark = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => highlightMatches(root, findQuery));
+      frame = requestAnimationFrame(() => highlightMatches(root, findQuery, owner));
     };
     mark();
     const mo = new MutationObserver(mark);
-    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    mo.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["data-find-target"],
+    });
     return () => {
       cancelAnimationFrame(frame);
       mo.disconnect();
-      clearHighlights();
+      clearHighlights(owner);
     };
-  }, [findOpen, findQuery]);
+  }, [findOpen, findQuery, agent.id]);
+  // Bring the matched words themselves into view: the row is centred first, but a long message's match
+  // can sit far below its middle (and only shows once its fold opens). Settles over a few frames.
+  useEffect(() => {
+    if (!findTarget) return;
+    let frame = 0;
+    let tries = 0;
+    let steady = 0;
+    const settle = () => {
+      const root = contentRef.current;
+      const el = scrollRef.current;
+      if (!root || !el) return;
+      const range = firstMatchIn(findTargetEl(root), findQuery);
+      if (range) {
+        const r = range.getBoundingClientRect();
+        const box = el.getBoundingClientRect();
+        if (r.height > 0 && (r.top < box.top + 48 || r.bottom > box.bottom - 48)) {
+          steady = 0;
+          stick.current = false;
+          virtualizer.scrollToOffset(Math.max(0, el.scrollTop + r.top - box.top - el.clientHeight / 2));
+        } else if (++steady >= 3) return;
+      }
+      if (tries++ < 40) frame = requestAnimationFrame(settle);
+    };
+    frame = requestAnimationFrame(settle);
+    return () => cancelAnimationFrame(frame);
+  }, [findTarget, findQuery, virtualizer]);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
   useEffect(() => {
     if (!focused) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+      if (e.defaultPrevented || e.isComposing || dialogOpen() || inTerminal(e.target)) return;
+      const key = conversationKey(e, isMac, isEditableTarget(e.target));
+      if (key === "find") {
         e.preventDefault();
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active !== document.body && !active.closest("[role=search]"))
+          findReturn.current = active;
         setFindOpen(true);
         requestAnimationFrame(() => {
           const input = scrollRef.current?.parentElement?.querySelector<HTMLInputElement>("[data-find-input]");
@@ -412,7 +464,7 @@ export function Timeline({
         return;
       }
       // (Alt+Up / Alt+Down alone step between agents: see useGlobalShortcuts.)
-      if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      if (key === "prev-message" || key === "next-message") {
         const el = scrollRef.current;
         if (!el) return;
         const rowsNow = rowsRef.current;
@@ -421,8 +473,11 @@ export function Timeline({
           if (list[idx]?.kind === "user_message") userRows.push(r);
         });
         const top = el.scrollTop + 24;
-        const current = virtualizer.getVirtualItems().find((v) => v.end > top)?.index ?? 0;
-        const target = stepUserRow(userRows, current, e.key === "ArrowUp" ? -1 : 1);
+        const atTop = virtualizer.getVirtualItems().find((v) => v.end > top);
+        const up = key === "prev-message";
+        // A message cut off at the top counts as above: going up lands on its start first.
+        const current = (atTop?.index ?? 0) + (up && atTop && atTop.start < el.scrollTop - 8 ? 1 : 0);
+        const target = stepUserRow(userRows, current, up ? -1 : 1);
         e.preventDefault();
         if (target === null) return;
         stick.current = false;
@@ -647,6 +702,7 @@ export function Timeline({
           count={matches.length}
           onStep={stepFind}
           onClose={closeFind}
+          partial={hasOlder}
         />
       )}
       {olderError && !olderLoading && (
@@ -684,100 +740,103 @@ export function Timeline({
         aria-busy={live}
       >
         <div ref={contentRef} className="tl-col mx-auto w-full max-w-[780px] px-3.5 pb-6 @lg:px-6">
-          {loading && !items ? (
-            <div className="pt-4">
-              <TimelineSkeleton />
-            </div>
-          ) : (
-            <div
-              role="list"
-              aria-label="Conversation"
-              className="relative w-full"
-              style={{ height: virtualizer.getTotalSize() }}
-            >
-              {virtualRows.map((v) => {
-                const it = list[rows[v.index]];
-                if (!it) return null;
-                const prev = v.index > 0 ? list[rows[v.index - 1]] : undefined;
-                const group = groupItems.get(it.id);
-                const turnStart = startsAgentTurn(it, prev, hasOlder);
-                const run = runItems.get(it.id);
-                const tailId = run ? run[run.length - 1].id : it.id;
-                // Minimal: the first step of a finished turn carries its "Worked for…" line; closed, it is only that line.
-                const fold = folded?.heads.get(rows[v.index]);
-                const step = !!folded?.steps.has(rows[v.index]);
-                const spacing = spacingFor(
-                  it,
-                  prev,
-                  !!group,
-                  !!prev && groupItems.has(prev.id),
-                  view.finalIds.has(it.id),
-                );
-                const content = group ? (
-                  <ActivityGroup
-                    groupId={it.id}
-                    items={group}
-                    agent={stableAgent}
-                    live={live && !waiting && group[group.length - 1].id === lastId}
-                    agentLive={stableAgent.running && stableAgent.status !== "interrupted"}
-                    open={openGroups.has(it.id)}
-                    onToggle={toggleGroup}
-                  />
-                ) : (
-                  renderItem(it, {
-                    agent: stableAgent,
+          <FindTargetContext.Provider value={findContext}>
+            {loading && !items ? (
+              <div className="pt-4">
+                <TimelineSkeleton />
+              </div>
+            ) : (
+              <div
+                role="list"
+                aria-label="Conversation"
+                className="relative w-full"
+                style={{ height: virtualizer.getTotalSize() }}
+              >
+                {virtualRows.map((v) => {
+                  const it = list[rows[v.index]];
+                  if (!it) return null;
+                  const prev = v.index > 0 ? list[rows[v.index - 1]] : undefined;
+                  const group = groupItems.get(it.id);
+                  const turnStart = startsAgentTurn(it, prev, hasOlder);
+                  const run = runItems.get(it.id);
+                  const tailId = run ? run[run.length - 1].id : it.id;
+                  // Minimal: the first step of a finished turn carries its "Worked for…" line; closed, it is only that line.
+                  const fold = folded?.heads.get(rows[v.index]);
+                  const step = !!folded?.steps.has(rows[v.index]);
+                  const spacing = spacingFor(
+                    it,
                     prev,
-                    liveTail: live && tailId === lastId,
-                    parts: run,
-                    view,
-                    childrenOf,
-                    bgRunningIds,
-                    lastPrompt: lastPrompt?.kind === "user_message" ? lastPrompt : null,
-                    midTurnWaiting,
-                    pendingId,
-                    questionId,
-                    reasonFor,
-                    reasonHandler,
-                  })
-                );
-                return (
-                  <div
-                    key={v.key}
-                    role="listitem"
-                    data-index={v.index}
-                    ref={virtualizer.measureElement}
-                    className={cn(
-                      "absolute left-0 top-0 w-full",
-                      fold ? !step && "pb-2.5" : !step && spacing,
-                      flashId === it.id && "[&>*]:rounded-xl [&>*]:ring-2 [&>*]:ring-accent/50",
-                    )}
-                    style={{ transform: `translateY(${v.start}px)` }}
-                  >
-                    <ErrorBoundary resetKey={group ?? it} fallback={() => <RowFailed />}>
-                      {turnStart && !minimal && <TurnHeader agent={stableAgent} ts={it.ts} />}
-                      {fold && (
-                        <WorkedLine
-                          foldId={it.id}
-                          items={foldItems.get(it.id) ?? NO_ITEMS}
-                          durationMs={fold.durationMs}
-                          open={step}
-                          onToggle={toggleFold}
-                        />
+                    !!group,
+                    !!prev && groupItems.has(prev.id),
+                    view.finalIds.has(it.id),
+                  );
+                  const content = group ? (
+                    <ActivityGroup
+                      groupId={it.id}
+                      items={group}
+                      agent={stableAgent}
+                      live={live && !waiting && group[group.length - 1].id === lastId}
+                      agentLive={stableAgent.running && stableAgent.status !== "interrupted"}
+                      open={openGroups.has(it.id)}
+                      onToggle={toggleGroup}
+                    />
+                  ) : (
+                    renderItem(it, {
+                      agent: stableAgent,
+                      prev,
+                      liveTail: live && tailId === lastId,
+                      parts: run,
+                      view,
+                      childrenOf,
+                      bgRunningIds,
+                      lastPrompt: lastPrompt?.kind === "user_message" ? lastPrompt : null,
+                      midTurnWaiting,
+                      pendingId,
+                      questionId,
+                      reasonFor,
+                      reasonHandler,
+                    })
+                  );
+                  return (
+                    <div
+                      key={v.key}
+                      role="listitem"
+                      data-index={v.index}
+                      data-find-target={findTarget === it.id ? "" : undefined}
+                      ref={virtualizer.measureElement}
+                      className={cn(
+                        "absolute left-0 top-0 w-full",
+                        fold ? !step && "pb-2.5" : !step && spacing,
+                        flashId === it.id && "[&>*]:rounded-xl [&>*]:ring-2 [&>*]:ring-accent/50",
                       )}
-                      {step ? (
-                        // An open fold's steps hang off one rule; the spacing sits inside it so the rule has no gaps.
-                        <div className={cn("ml-1.5 border-l border-line pl-3.5", fold && "mt-1.5", spacing)}>
-                          {content}
-                        </div>
-                      ) : (
-                        !fold && content
-                      )}
-                    </ErrorBoundary>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                      style={{ transform: `translateY(${v.start}px)` }}
+                    >
+                      <ErrorBoundary resetKey={group ?? it} fallback={() => <RowFailed />}>
+                        {turnStart && !minimal && <TurnHeader agent={stableAgent} ts={it.ts} />}
+                        {fold && (
+                          <WorkedLine
+                            foldId={it.id}
+                            items={foldItems.get(it.id) ?? NO_ITEMS}
+                            durationMs={fold.durationMs}
+                            open={step}
+                            onToggle={toggleFold}
+                          />
+                        )}
+                        {step ? (
+                          // An open fold's steps hang off one rule; the spacing sits inside it so the rule has no gaps.
+                          <div className={cn("ml-1.5 border-l border-line pl-3.5", fold && "mt-1.5", spacing)}>
+                            {content}
+                          </div>
+                        ) : (
+                          !fold && content
+                        )}
+                      </ErrorBoundary>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </FindTargetContext.Provider>
           {showThinking && (
             <LiveStatus
               agent={agent}

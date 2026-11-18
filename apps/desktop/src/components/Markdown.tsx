@@ -5,6 +5,7 @@ import {
   isValidElement,
   memo,
   useContext,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -36,6 +37,7 @@ import { commandText, findHiddenChars, isShellLang, looksLikeCommand, revealHidd
 import { useApp } from "@/store/app";
 import { RunButton } from "./RunButton";
 import { CODE_PREVIEW_LINES, codeCollapses } from "./timeline/collapse";
+import { FindTargetContext } from "./timeline/findInConversation";
 
 /** Agent whose terminal shell code blocks can run in; null (default) hides the Run button. */
 const RunContext = createContext<string | null>(null);
@@ -57,6 +59,14 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
   const foldable = !streaming && codeCollapses(lines.length, watched.current);
   const [open, setOpen] = useState(false);
   const folded = foldable && !open;
+  // Find in conversation went to the message holding this block, and the words are in here: open it.
+  const find = useContext(FindTargetContext);
+  const preRef = useRef<HTMLPreElement>(null);
+  useLayoutEffect(() => {
+    const q = find?.query.trim().toLowerCase();
+    if (!folded || !q || !code.toLowerCase().includes(q)) return;
+    if (preRef.current?.closest("[data-find-target]")) setOpen(true);
+  }, [find, folded, code]);
   const runAgent = useContext(RunContext);
   const platform = useApp((s) => s.platform);
   const shellish = useMemo(
@@ -96,6 +106,7 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
         </div>
       )}
       <pre
+        ref={preRef}
         // Focusable so the keyboard can scroll a wide block sideways (and run a command with Ctrl/⌘+Enter).
         tabIndex={0}
         {...(command

@@ -1412,3 +1412,8 @@ html[data-window="blurred"] ::after {
   background-color: color-mix(in srgb, var(--warn) 40%, transparent);
   color: inherit;
 }
+/* The match Enter / Shift+Enter went to. */
+::highlight(kv-find-current) {
+  background-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: inherit;
+}

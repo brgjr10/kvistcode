@@ -23,6 +23,7 @@ export function MessageFold({
   role,
   streaming,
   canFold = true,
+  reveal = false,
   children,
 }: {
   id: string;
@@ -30,6 +31,8 @@ export function MessageFold({
   streaming: boolean;
   /** False: always shown in full (a reply with pictures). */
   canFold?: boolean;
+  /** Find in conversation went here: open, so the match shows. */
+  reveal?: boolean;
   children: ReactNode;
 }) {
   const bodyId = useId();
@@ -63,6 +66,11 @@ export function MessageFold({
   const foldable =
     canFold && height !== null && shouldCollapse(height, foldRole, { streaming, watched: watched.current });
   const collapsed = foldable && !expanded;
+  useLayoutEffect(() => {
+    if (!reveal || !collapsed) return;
+    opened.add(id);
+    setExpanded(true);
+  }, [reveal, collapsed, id]);
 
   // After folding back up, keep the message's top in view instead of leaving the reader below it.
   const refocus = useRef(false);

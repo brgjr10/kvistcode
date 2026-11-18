@@ -135,14 +135,16 @@ export function QueueStack({
         >
           {paused ? <Pause className="h-3.5 w-3.5 shrink-0" /> : <ListOrdered className="h-3.5 w-3.5 shrink-0" />}
           <span className="min-w-0 truncate font-medium">
-            {needsResume && !agent.queuePaused ? (
-              "Resume to run queued messages"
-            ) : paused ? (
-              needsResume ? (
-                "Queue paused"
-              ) : (
-                "Queue paused — sending (or Resume queue) runs it"
-              )
+            {paused ? (
+              <>
+                {needsResume && !agent.queuePaused
+                  ? "Resume to run queued messages"
+                  : needsResume
+                    ? "Queue paused"
+                    : "Queue paused — sending (or Resume queue) runs it"}
+                {/* How many are waiting, which the running header says and the paused one did not. */}
+                <span className="tabular text-warn/75"> · {queue.length} waiting</span>
+              </>
             ) : (
               <>
                 <span className="tabular text-fg">{queue.length}</span> queued

@@ -235,11 +235,11 @@ export function navKey(e: KeyboardEvent): "back" | "forward" | null {
 }
 
 /** A shell uses Alt+arrows itself (word moves). */
-function inTerminal(t: EventTarget | null): boolean {
+export function inTerminal(t: EventTarget | null): boolean {
   return t instanceof Element && t.closest(".xterm") !== null;
 }
 
-function dialogOpen(): boolean {
+export function dialogOpen(): boolean {
   return !!document.querySelector(
     '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"]',
   );

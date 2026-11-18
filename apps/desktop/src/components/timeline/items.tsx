@@ -67,6 +67,7 @@ import { PlanChecklist } from "./PlanChecklist";
 import { userMessageFolds, userMessageLines, type MessageRole } from "./collapse";
 import { MessageFold } from "./MessageFold";
 import { runText } from "./messageFlow";
+import { useFindTarget } from "./findInConversation";
 import { CodeText } from "../CodeText";
 import { ProviderGlyph } from "../ProviderGlyph";
 import { Button } from "../ui/button";
@@ -88,6 +89,11 @@ export const UserBubble = memo(function UserBubble({
   const long = userMessageFolds(item.text);
   const [open, setOpen] = useState(false);
   const folded = long && !open;
+  // Find went here: a long paste opens so the match shows.
+  const found = useFindTarget(item.id);
+  useEffect(() => {
+    if (found) setOpen(true);
+  }, [found]);
   // Kvistcode's own "continue" after a rate limit reset: a quiet line, not a bubble the user wrote.
   if (item.automatic) {
     return (
@@ -101,7 +107,7 @@ export const UserBubble = memo(function UserBubble({
     );
   }
   return (
-    <div className="tl-user group flex justify-end">
+    <div className="tl-user group flex justify-end" data-find-target={found ? "" : undefined}>
       <div className="relative max-w-[80%] terminal:w-full terminal:max-w-none">
         {item.attachments && item.attachments.length > 0 && (
           <AttachmentStrip attachments={item.attachments} size={88} className="mb-1.5 justify-end" />
@@ -238,6 +244,7 @@ export const AgentMessage = memo(function AgentMessage({
   if (!turnOpen) noted.current = false;
   else if (wanted === "narration") noted.current = true;
   const role: MessageRole = wanted === "latest" && noted.current ? "narration" : wanted;
+  const found = useFindTarget(item.id, parts);
   const images = item.images ?? [];
   const text = useMemo(() => (parts ? runText(parts) : item.text), [parts, item.text]);
   // Demoted while on screen (the answer in the making turned out to be a working note): ease into the new style.
@@ -248,10 +255,14 @@ export const AgentMessage = memo(function AgentMessage({
   return (
     // With text, the row's own bottom padding becomes a 20px gutter for the copy button, so it never
     // prints over the last line (the negative margin keeps the gap to the next row at 20px).
-    <div className={cn("tl-msg group relative", text && "-mb-3 pb-5")} data-role={role}>
+    <div
+      className={cn("tl-msg group relative", text && "-mb-3 pb-5")}
+      data-role={role}
+      data-find-target={found ? "" : undefined}
+    >
       {images.length > 0 && <MessageImages images={images} />}
       {text ? (
-        <MessageFold id={item.id} role={role} streaming={streaming} canFold={!hasPicture(text)}>
+        <MessageFold id={item.id} role={role} streaming={streaming} canFold={!hasPicture(text)} reveal={found}>
           <Markdown
             text={text}
             streaming={streaming}
@@ -328,15 +339,16 @@ export const ThoughtBlock = memo(function ThoughtBlock({
   reply?: boolean;
 }) {
   const [open, setOpen] = useState(live || reply);
+  const found = useFindTarget(item.id);
   useEffect(() => {
-    if (live) setOpen(true);
-  }, [live]);
+    if (live || found) setOpen(true);
+  }, [live, found]);
   const preview = item.text
     .replace(/[*_`#]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return (
-    <div className="text-small">
+    <div className="text-small" data-find-target={found ? "" : undefined}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
