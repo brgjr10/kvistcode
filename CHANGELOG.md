@@ -34,6 +34,12 @@ docs/RELEASING.md).
 - Skills and commands saved with a byte-order mark (common on Windows) show their name and description, and a description with blank lines in it is read in full.
 - A share link can no longer be made while remote access is off (it would have had no address and could never be opened); Kvistcode now asks you to turn remote access on first.
 - Error messages sent to a paired phone have keys and tokens blanked out, like notifications already do.
+- Phone: when the phone itself has no network, the "Can't reach Kvistcode" screen now says "Your phone is offline" and reconnects once you're back online, instead of pointing at your computer.
+- Phone: code blocks with long lines have a Wrap button, so you can read them without scrolling sideways.
+- Phone: the agent search has a clear button (Escape clears it too).
+- Phone: if a screen hits an error, "Back to agents" gets you out of it.
+- Phone: Escape on a confirmation now closes only the confirmation, not the panel behind it.
+- Phone: an approval you swiped is sent right away if you leave the app, and its Undo button goes away with it.
 
 ## v0.6.0 — 2026-11-17
 

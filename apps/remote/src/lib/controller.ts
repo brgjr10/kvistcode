@@ -1495,7 +1495,7 @@ export async function answerQuestion(
 const UNDO_MS = 5_000;
 const deferredAnswers = new Map<
   string,
-  { agentId: string; optionId: string; timer: ReturnType<typeof setTimeout> }
+  { agentId: string; optionId: string; timer: ReturnType<typeof setTimeout>; toastId: string }
 >();
 
 /** Answer after UNDO_MS unless undone; the card hides right away. */
@@ -1510,8 +1510,7 @@ export function respondWithUndo(
   setState((s) => ({ resolving: { ...s.resolving, [requestId]: optionId } }));
   vibrate(12);
   const timer = setTimeout(() => flushAnswer(requestId), UNDO_MS);
-  deferredAnswers.set(requestId, { agentId, optionId, timer });
-  pushToast({
+  const toastId = pushToast({
     tone: "info",
     title: label,
     body: detail,
@@ -1520,6 +1519,7 @@ export function respondWithUndo(
     duration: UNDO_MS,
     action: { label: "Undo", run: () => undoAnswer(requestId) },
   });
+  deferredAnswers.set(requestId, { agentId, optionId, timer, toastId });
 }
 
 function undoAnswer(requestId: string) {
@@ -1538,6 +1538,8 @@ function flushAnswer(requestId: string, keepalive = false) {
   const d = deferredAnswers.get(requestId);
   if (!d) return;
   undoAnswer(requestId);
+  // Sent early (the app was hidden): its Undo can no longer take it back, so don't leave the button up.
+  dismissToast(d.toastId);
   void respondToPermission(d.agentId, requestId, d.optionId, keepalive);
 }
 

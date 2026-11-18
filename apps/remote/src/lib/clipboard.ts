@@ -12,6 +12,8 @@ export async function copyText(text: string): Promise<boolean> {
       // fall through
     }
   }
+  // Selecting the hidden text area takes focus; give it back (the Copy button, a sheet's focus) afterwards.
+  const focused = document.activeElement as HTMLElement | null;
   const el = document.createElement("textarea");
   el.value = text;
   el.setAttribute("readonly", "");
@@ -32,6 +34,7 @@ export async function copyText(text: string): Promise<boolean> {
     ok = false;
   }
   el.remove();
+  focused?.focus?.({ preventScroll: true });
   if (previous && selection) {
     selection.removeAllRanges();
     selection.addRange(previous);
