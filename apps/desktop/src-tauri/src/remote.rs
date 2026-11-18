@@ -1275,7 +1275,12 @@ impl Remote {
     }
 
     /// A read-only link to one agent, valid for `hours` (1, 24 or 168; default 24).
+    /// Refused while the server is off: the link (shown only once) would have no address,
+    /// leaving a share nobody can open.
     pub fn create_share(&self, agent_id: &str, hours: Option<u32>) -> anyhow::Result<ShareLink> {
+        let Some(base) = self.base_url() else {
+            anyhow::bail!("Turn on remote access to create share links.");
+        };
         let agent = self.core().agent(agent_id)?;
         let hours = hours
             .filter(|h| SHARE_HOURS.contains(h))
@@ -1293,7 +1298,7 @@ impl Remote {
         self.save_tokens();
         Ok(ShareLink {
             id: share.id(),
-            url: self.base_url().map(|b| format!("{b}/#token={token}")),
+            url: Some(format!("{base}/#token={token}")),
             agent_id: share.agent_id,
             agent_title: Some(agent.title),
             created_at: share.created_at,
@@ -1961,7 +1966,8 @@ impl IntoResponse for ApiError {
 
 impl From<anyhow::Error> for ApiError {
     fn from(e: anyhow::Error) -> Self {
-        let msg = format!("{e:#}");
+        // Sent over the network: a provider or git error may quote a key or a token URL.
+        let msg = kvistcode_core::redact::redact_secrets(&format!("{e:#}")).into_owned();
         let status = if msg.contains("not found") {
             StatusCode::NOT_FOUND
         } else if msg.contains("no longer pending")
@@ -4738,6 +4744,31 @@ mod tests {
         assert_eq!(SHARE_HOURS, [1, 24, 168]);
         core.shutdown().await;
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn no_share_link_while_the_server_is_off() {
+        let dir = temp_dir();
+        let (remote, core) = test_remote(&dir);
+        // Its address would be unknown, and the token is shown only once: nothing is kept.
+        let Err(err) = remote.create_share("a1", Some(1)) else {
+            panic!("a share link was made with the server off");
+        };
+        assert!(err.to_string().contains("Turn on remote access"), "{err}");
+        assert!(remote.tokens.lock().shares.is_empty());
+        core.shutdown().await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn errors_sent_to_the_phone_are_redacted() {
+        let key = format!("sk-ant-{}", "a".repeat(40));
+        let e: ApiError = anyhow::anyhow!("provider said: invalid key {key}").into();
+        assert_eq!(e.0, StatusCode::BAD_REQUEST);
+        assert!(!e.1.contains(&key), "{}", e.1);
+        assert!(e.1.contains("[REDACTED]"), "{}", e.1);
+        let e: ApiError = anyhow::anyhow!("Agent x not found").into();
+        assert_eq!(e.0, StatusCode::NOT_FOUND);
     }
 
     #[test]

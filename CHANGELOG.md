@@ -32,6 +32,8 @@ docs/RELEASING.md).
 - A spending-limit warning says how far in you are ("94% of the limit") instead of always "80%", and token amounts near a million read "1.0M" rather than "1000.0k".
 - Exported conversations (Markdown) stay readable when a command or its output contains code fences, multi-line notices stay quoted, and shortened output says so.
 - Skills and commands saved with a byte-order mark (common on Windows) show their name and description, and a description with blank lines in it is read in full.
+- A share link can no longer be made while remote access is off (it would have had no address and could never be opened); Kvistcode now asks you to turn remote access on first.
+- Error messages sent to a paired phone have keys and tokens blanked out, like notifications already do.
 
 ## v0.6.0 — 2026-11-17
 
