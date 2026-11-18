@@ -5,6 +5,13 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- Mission Control: a filter box on All agents finds agents by name, project, branch or last message.
+- Mission Control: in the compact list every agent can be scrolled to again (rows past the bottom of the window were cut off), and last messages read as plain text instead of showing markdown marks.
+- Needs you: Enter on a link or button in an agent's answer now does what that link or button does instead of opening the agent. A rate-limited agent shows the provider's own limit message, "Spent" says Free for local models, and "1 command" is no longer "1 commands".
+- Title bar: the "+3" beside the account pictures is no longer half hidden, and a small amber dot shows when an account isn't signed in.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.

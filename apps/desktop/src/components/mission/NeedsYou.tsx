@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyPane } from "@/components/ui/emptyPane";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
+import { keepsOwnEnter } from "@/components/mission/keys";
 import { RecoveryActions, needsRecovery } from "@/components/mission/RecoveryActions";
 import { archiveAgent, findOption, respondPermission, attempt } from "@/lib/actions";
 import { api } from "@/lib/api";
@@ -150,7 +151,7 @@ export function NeedsYouPane({ hasAgents }: { hasAgents: boolean }) {
       } else if (k === "k") {
         e.preventDefault();
         step(-1);
-      } else if (k === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+      } else if (k === "Enter" && !keepsOwnEnter(e.target)) {
         e.preventDefault();
         useUi.getState().openAgent(current.agent.id);
       } else if (k === "e") {

@@ -26,7 +26,7 @@ const isWorking = (a: Agent, background?: ReadonlySet<string>) =>
   a.status === "working" || a.status === "starting" || (a.status === "idle" && !!background?.has(a.id));
 
 /** The sidebar's search: title, folder, branch or last message contains `query`. */
-function queryMatcher(query: string): (a: Agent) => boolean {
+export function queryMatcher(query: string): (a: Agent) => boolean {
   const q = query.trim().toLowerCase();
   return (a) =>
     !q ||
