@@ -7,7 +7,10 @@ export function plainPreview(text: string, tail = false, max = 220): string {
   const window = text.length > 1200 ? (tail ? text.slice(-400) : text.slice(0, 1200)) : text;
   const plain = window
     .replace(/```[\s\S]*?(```|$)/g, " ")
-    .replace(/[#>*`|]/g, "")
+    .replace(/^\s{0,3}(#{1,6}\s+|>\s?)/gm, "")
+    .replace(/[*`]/g, "")
+    .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/gm, " ")
+    .replace(/\s*\|\s*/g, " ")
     .replace(/\[(.*?)\]\(.*?\)/g, "$1")
     .replace(/-{3,}/g, " ")
     .replace(/\s+/g, " ")

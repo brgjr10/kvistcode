@@ -12,7 +12,7 @@ import {
   mergeAttachments,
   skippedNotes,
 } from "@/lib/attachments";
-import { setDraftAttachments } from "@/components/agent/drafts";
+import { getDraftAttachments, setDraftAttachments } from "@/components/agent/drafts";
 import { api } from "@/lib/api";
 import type { Attachment } from "@/lib/types";
 
@@ -28,6 +28,9 @@ export function useAttachments(initial: Attachment[] = [], agentId?: string) {
   // The current list, updated synchronously on every change (not from render), so two quick adds
   // can't both see the same free room and silently overflow, and a repeat is noticed at once.
   const live = useRef(initial);
+  // Which agent the composer shows now: a read that finishes after a switch goes to the agent it was for.
+  const currentAgent = useRef(agentId);
+  currentAgent.current = agentId;
 
   const setAttachments = useCallback(
     (next: SetStateAction<Attachment[]>) => {
@@ -58,10 +61,15 @@ export function useAttachments(initial: Attachment[] = [], agentId?: string) {
     async (files: File[]) => {
       if (files.length === 0) return;
       const { attachments: read, problems } = await filesToAttachments(files, live.current.length);
+      if (agentId && currentAgent.current !== agentId) {
+        // The composer moved to another agent while reading: keep the pictures with the one they were added to.
+        setDraftAttachments(agentId, mergeAttachments(getDraftAttachments(agentId), read).next);
+        return;
+      }
       // Merged after the async read: another add may have used the room meanwhile.
       reportProblems(problems, merge(read), "files");
     },
-    [merge],
+    [merge, agentId],
   );
 
   const remove = useCallback((i: number) => setAttachments((cur) => cur.filter((_, j) => j !== i)), [setAttachments]);

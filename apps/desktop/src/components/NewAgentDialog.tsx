@@ -127,7 +127,9 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
   const launchedAll = useRef(false);
   useEffect(
     () => () => {
-      keepUnsentPrompt(launchedAll.current ? "" : promptNow.current);
+      // A preset's own prompt (template, fork, schedule) was never typed here: don't bring it back.
+      const untouched = !!preset?.prompt && promptNow.current === preset.prompt;
+      keepUnsentPrompt(launchedAll.current || untouched ? "" : promptNow.current);
     },
     [],
   );

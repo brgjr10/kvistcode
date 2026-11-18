@@ -24,3 +24,14 @@ describe("plainPreview", () => {
     expect(plainPreview("  Fixed the   race.  ")).toBe("Fixed the race.");
   });
 });
+
+describe("plainPreview keeps symbols that aren't markdown", () => {
+  it("keeps # and > inside a sentence, drops them at a line start", () => {
+    expect(plainPreview("Fixed issue #12 where a > b")).toBe("Fixed issue #12 where a > b");
+    expect(plainPreview("# Title\n> quoted line")).toBe("Title quoted line");
+  });
+
+  it("reads a table as words", () => {
+    expect(plainPreview("| File | Status |\n| --- | :-: |\n| a.ts | ok |")).toBe("File Status a.ts ok");
+  });
+});
