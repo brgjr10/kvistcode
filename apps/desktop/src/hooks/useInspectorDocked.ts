@@ -16,7 +16,7 @@ export function useInspectorDocked(): boolean {
 /** Show or hide the details panel the way the header's button does (outside React: the palette). */
 export function toggleInspector() {
   const ui = useUi.getState();
-  const docked = window.matchMedia(INSPECTOR_DOCK_QUERY).matches && ui.look !== "minimal";
+  const docked = window.matchMedia(INSPECTOR_DOCK_QUERY).matches && ui.look === "classic";
   if (docked) ui.setInspectorOpen(!ui.inspectorOpen);
   else ui.setInspectorOverlay(!ui.inspectorOverlay);
 }

@@ -148,19 +148,6 @@ export const ScheduleRow = memo(function ScheduleRow({
                     Last run failed: {schedule.lastError}
                   </span>
                 </Tooltip>
-                <span className="flex shrink-0 items-center gap-2.5 whitespace-nowrap font-medium">
-                  <button
-                    type="button"
-                    disabled={running}
-                    onClick={onRun}
-                    className="underline-offset-2 hover:underline disabled:opacity-45"
-                  >
-                    Run now
-                  </button>
-                  <button type="button" onClick={onEdit} className="underline-offset-2 hover:underline">
-                    Edit
-                  </button>
-                </span>
               </div>
             )}
           </div>

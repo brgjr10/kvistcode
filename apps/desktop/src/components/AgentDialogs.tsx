@@ -185,6 +185,7 @@ function HandoffDialog({ agent, onClose }: { agent: Agent | null; onClose: () =>
             </div>
             <Textarea
               id="handoff-instruction"
+              autoFocus
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               className="min-h-24"

@@ -11,5 +11,7 @@ try {
 // The same for the layout ("look"): see LOOK_KEY in src/lib/look.ts.
 try {
   var l = localStorage.getItem("kvistcode.look");
-  document.documentElement.dataset.look = l === "minimal" ? "minimal" : "classic";
+  // Clean and Terminal share one layout; a saved Classic or Minimal opens as Clean (lookOf in look.ts).
+  document.documentElement.dataset.look = "minimal";
+  document.documentElement.dataset.chat = l === "terminal" ? "terminal" : "clean";
 } catch (e) {}

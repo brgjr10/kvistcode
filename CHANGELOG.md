@@ -10,6 +10,11 @@ docs/RELEASING.md).
 - With many agents side by side, an approval or question above the message box is never cut off: its buttons always show in full, and other items there make room.
 - An approval, plan or question now shows once. While it waits above the message box, the conversation keeps a one-line note in its place; "Show plan" or "Show here" opens it in full.
 - An agent stopped by a usage limit says "Rate limited" in amber instead of a red "Error".
+- Two new looks, Clean and Terminal, replace Classic and Minimal (Settings → General → Look). Clean reads like a chat app. Terminal reads like Claude Code in a terminal: monospace, with ● for each step and ⎿ for its result. Both use one sidebar with details on request. If you used Classic or Minimal, Kvistcode opens in Clean.
+- Find in a conversation with Ctrl+F (⌘F on a Mac). Enter goes to the next match, Shift+Enter to the previous one.
+- Alt+Shift+↑ and Alt+Shift+↓ jump to the previous or next message you sent.
+- Hover a message you sent and click the pencil to edit it and send it again. Hover the latest answer to retry it.
+- Smaller fixes: the Handoff dialog starts in its message box, a failed schedule no longer shows Run now and Edit twice, the Phone & remote safety notes are short points, and the sidebar's bottom icons no longer overlap the list.
 
 ## v0.5.2 — 2026-11-15
 

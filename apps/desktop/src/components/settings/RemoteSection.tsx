@@ -46,8 +46,14 @@ import { fieldErrorId, saveSettingsPatch, useFieldError } from "./settingsErrors
 import { useCommitOnUnmount } from "./useCommitOnUnmount";
 import { SectionHeader, SettingGroup, SettingRow } from "./SettingRow";
 
-const SECURITY_COPY =
-  "Off by default. Tailscale is the safest way in: traffic is encrypted and only your own devices can connect, at home or away, without opening anything on your network. On your local network (LAN), traffic is not encrypted (plain HTTP): anyone on the same Wi-Fi could read or tamper with it, so use it only on networks you trust. The pairing code in the QR works once and expires after 5 minutes; each paired device gets its own key you can revoke below. Share links are read-only, limited to one agent, and expire.";
+/** How remote access stays safe, one short point each (the options' own notes say the rest). */
+const SECURITY_POINTS = [
+  "Off until you turn it on.",
+  "Tailscale is the safest way in: encrypted, and only your own devices can connect.",
+  "On a local network, traffic is not encrypted. Use it only on Wi-Fi you trust.",
+  "Pairing codes work once and expire in 5 minutes. You can remove any paired device below.",
+  "Share links are read-only, for one agent, and expire.",
+];
 
 type Reach = "local" | "tailscale" | "lan";
 
@@ -190,7 +196,11 @@ export function RemoteSection({ settings }: { settings: Settings }) {
       <div className="space-y-6">
         <div className="flex gap-3 rounded-xl border border-line bg-card/60 px-4 py-3 edge">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-          <p className="text-small leading-relaxed text-muted">{SECURITY_COPY}</p>
+          <ul className="space-y-1 text-small leading-5 text-muted">
+            {SECURITY_POINTS.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
         </div>
 
         <SettingGroup>

@@ -39,7 +39,7 @@ export function ContextRing({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-body font-semibold tabular">{Math.round(ratio * 100)}%</span>
-        {label && <span className="text-[9.5px] uppercase tracking-wider text-steel">{label}</span>}
+        {label && <span className="text-[10px] uppercase tracking-wide text-steel">{label}</span>}
       </div>
     </div>
   );

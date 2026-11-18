@@ -5,9 +5,14 @@ export function useLook(): Look {
   return useUi((s) => s.look);
 }
 
-/** True in the Minimal look. */
+/** True on the one-sidebar layout (both Clean and Terminal; false only for the old Classic layout). */
 export function useMinimal(): boolean {
-  return useUi((s) => s.look === "minimal");
+  return useUi((s) => s.look !== "classic");
+}
+
+/** True in the Terminal look (the conversation drawn like Claude Code in a terminal). */
+export function useTerminal(): boolean {
+  return useUi((s) => s.look === "terminal");
 }
 
 /**
@@ -15,4 +20,4 @@ export function useMinimal(): boolean {
  * `sections`: how many sections the user made (with none chosen, people with sections see projects).
  */
 export const byActivity = (s: { look: Look; sidebarGroup: SidebarGroup | null }, sections: number): boolean =>
-  s.look === "minimal" && sidebarGroupOf(s.sidebarGroup, sections) === "activity";
+  s.look !== "classic" && sidebarGroupOf(s.sidebarGroup, sections) === "activity";

@@ -58,6 +58,8 @@ const SECTIONS: { title: string; rows: Row[] }[] = [
       { keys: ["/"], label: "Slash commands (at the start of the message)" },
       { keys: ["@"], label: "Mention a file" },
       { keys: ["Esc"], label: "Stop this turn (press twice from an empty composer)" },
+      { keys: [modKey, "F"], label: "Find in this conversation (⏎ next, ⇧⏎ previous)" },
+      { keys: isMac ? ["⌥", "⇧", "↑", "↓"] : ["Alt", "⇧", "↑", "↓"], label: "Previous or next message you sent" },
       { keys: [modKey, "`"], label: "Show or hide the workspace panel (terminals, scripts)" },
       { keys: [modKey, "⇧", "P"], label: "Show or hide the web preview beside the conversation" },
       { keys: [modKey, "⇧", "R"], label: "Review the agent's changes (agents with their own worktree)" },

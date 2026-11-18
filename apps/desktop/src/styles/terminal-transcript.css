@@ -1,0 +1,137 @@
+/* Terminal look: the conversation drawn like Claude Code in a terminal (see lib/look.ts).
+ * Every rule here must be scoped to [data-chat="terminal"], so the Clean look is untouched.
+ * It sits on the Minimal layout and its surfaces; this only changes the type and the markers.
+ * Line heights stay whole pixels, and the prose line stays 24px (the fold heights in collapse.ts count on it). */
+
+/* ---- Type ---- */
+[data-chat="terminal"] .tl-col {
+  font-family: var(--font-mono);
+}
+[data-chat="terminal"] .tl-col .prose-chat {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+[data-chat="terminal"] .tl-col .prose-chat :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+[data-chat="terminal"] .tl-col .prose-chat :not(pre) > code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+}
+[data-chat="terminal"] .tl-col :is(.text-small, .text-caption, .text-meta) {
+  font-family: var(--font-mono);
+}
+
+/* ---- Your messages: a "> " line across the column, not a bubble ---- */
+[data-chat="terminal"] .tl-user-text {
+  position: relative;
+  border-radius: 6px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--bg-3) 70%, transparent);
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  padding-left: 18px;
+}
+[data-chat="terminal"] .tl-user-text::before {
+  content: ">";
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  line-height: 23px;
+  color: var(--steel);
+}
+
+/* ---- The agent's text: a ● in the gutter ---- */
+[data-chat="terminal"] .tl-msg {
+  padding-left: 20px;
+}
+[data-chat="terminal"] .tl-msg::before {
+  content: "●";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 10px;
+  line-height: 24px;
+  color: var(--text-1);
+}
+[data-chat="terminal"] .tl-msg[data-role="narration"]::before {
+  color: var(--steel);
+}
+
+/* ---- Steps: ● Read(src/app.ts), coloured by how it went; the result under a ⎿ ---- */
+[data-chat="terminal"] :is(.tl-step > button, .tl-group) > .tl-icon:first-child {
+  display: none;
+}
+[data-chat="terminal"] :is(.tl-step > button, .tl-group)::before {
+  content: "●";
+  flex: none;
+  width: 14px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ok);
+}
+[data-chat="terminal"] .tl-step[data-state="failed"] > button::before,
+[data-chat="terminal"] .tl-group[data-state="failed"]::before {
+  color: var(--err);
+}
+[data-chat="terminal"] .tl-step[data-state="stalled"] > button::before {
+  color: var(--steel);
+}
+[data-chat="terminal"] .tl-step[data-state="running"] > button::before,
+[data-chat="terminal"] .tl-group[data-state="running"]::before {
+  color: var(--accent);
+  animation: var(--animate-breathe);
+}
+[data-chat="terminal"] .tl-step {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+[data-chat="terminal"] .tl-body {
+  position: relative;
+  margin-left: 22px;
+  border-top: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0 6px 6px 0;
+}
+[data-chat="terminal"] .tl-body::before {
+  content: "⎿";
+  position: absolute;
+  left: -16px;
+  top: 2px;
+  line-height: 18px;
+  color: var(--steel);
+}
+
+/* ---- Thinking and turn ends: ✻ lines ---- */
+[data-chat="terminal"] .tl-thought > .tl-icon,
+[data-chat="terminal"] .tl-end > .tl-icon {
+  display: none;
+}
+[data-chat="terminal"] .tl-thought::before,
+[data-chat="terminal"] .tl-worked::before,
+[data-chat="terminal"] .tl-end::before {
+  content: "✻";
+  flex: none;
+  width: 14px;
+  color: var(--steel);
+}
+[data-chat="terminal"] .tl-thought {
+  font-style: italic;
+}
+[data-chat="terminal"] .tl-end[data-tone="error"]::before {
+  color: var(--err);
+}
+
+/* ---- The message box: mono, squarer, like a prompt line ---- */
+[data-chat="terminal"] .m-composer {
+  border-radius: 8px;
+}
+[data-chat="terminal"] .m-composer textarea {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}

@@ -5,9 +5,13 @@
 /* Minimal look, by area (all rules are scoped to [data-look="minimal"]). */
 @import "./minimal-transcript.css";
 @import "./minimal-agent.css";
+/* Terminal look's conversation (all rules are scoped to [data-chat="terminal"]). */
+@import "./terminal-transcript.css";
 
 /* The Minimal layout (see lib/look.ts). `minimal:` styles apply only in it, so Classic renders as before. */
 @custom-variant minimal (&:where([data-look="minimal"], [data-look="minimal"] *));
+/* The Terminal look (the conversation drawn like a terminal): `terminal:` styles apply only in it. */
+@custom-variant terminal (&:where([data-chat="terminal"], [data-chat="terminal"] *));
 
 /* ------------------------------------------------------------------------
  * Theme tokens. "Gunmetal" values come straight from docs/PLAN.md §8.
@@ -1401,4 +1405,10 @@ html[data-window="blurred"] ::after {
   background-image: none;
   border-color: transparent;
   box-shadow: none;
+}
+
+/* Find in conversation (timeline/FindBar.tsx): every visible match. */
+::highlight(kv-find) {
+  background-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  color: inherit;
 }

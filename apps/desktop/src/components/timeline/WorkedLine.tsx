@@ -32,7 +32,7 @@ export const WorkedLine = memo(function WorkedLine({
       type="button"
       onClick={() => onToggle(foldId)}
       aria-expanded={open}
-      className="group/worked flex h-[34px] w-full items-center gap-1.5 border-b border-line text-left text-[13.5px] text-steel transition-colors hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      className="tl-worked group/worked flex h-[34px] w-full items-center gap-1.5 border-b border-line text-left text-[13.5px] text-steel transition-colors hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
     >
       <span className="shrink-0 tabular">
         {timed

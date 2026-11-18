@@ -109,9 +109,10 @@ export const ActivityGroup = memo(function ActivityGroup({
         onClick={() => onToggle(groupId)}
         aria-expanded={open}
         aria-controls={bodyId}
-        className="group/trace -mx-1.5 flex h-7 w-[calc(100%+0.75rem)] items-center gap-2 rounded-lg px-1.5 text-left text-steel transition-colors hover:bg-raised/40 hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        data-state={live ? "running" : failed > 0 ? "failed" : "done"}
+        className="tl-group group/trace -mx-1.5 flex h-7 w-[calc(100%+0.75rem)] items-center gap-2 rounded-lg px-1.5 text-left text-steel transition-colors hover:bg-raised/40 hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+        <span className="tl-icon flex h-3.5 w-3.5 shrink-0 items-center justify-center">
           {minimal ? <KindIcon className={cn("h-3.5 w-3.5", live && "text-accent")} aria-hidden /> : status}
         </span>
         <span
@@ -126,7 +127,7 @@ export const ActivityGroup = memo(function ActivityGroup({
           </span>
         )}
         <span className="shrink-0 text-meta tabular-nums text-steel">· {pluralize(items.length, "step")}</span>
-        {minimal && <span className="ml-auto flex h-3.5 w-3.5 shrink-0 items-center justify-center">{status}</span>}
+        {minimal && <span className="tl-icon ml-auto flex h-3.5 w-3.5 shrink-0 items-center justify-center">{status}</span>}
         <ChevronRight
           className={cn(
             "h-3 w-3 shrink-0 text-steel transition-transform duration-150 group-hover/trace:text-muted",
@@ -144,7 +145,7 @@ export const ActivityGroup = memo(function ActivityGroup({
             transition={{ duration: 0.12 }}
             className="pb-1 pt-1"
           >
-            <div className="ml-[7px] space-y-1 border-l border-line pl-3">
+            <div className="ml-[7px] space-y-1 border-l border-line pl-3 terminal:border-l-0">
               {items.map((it, i) => {
                 const tail = live && i === items.length - 1;
                 switch (it.kind) {

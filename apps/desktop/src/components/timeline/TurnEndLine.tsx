@@ -21,11 +21,11 @@ export function TurnEndLine({ end, lastActivityAt }: { end: TurnEnd; lastActivit
   // Minimal: a plain mark, no ring, and no glow that animates.
   const minimal = useMinimal();
   return (
-    <div role="status" className="flex items-center gap-2.5 pb-2 pt-1 minimal:min-h-9 minimal:gap-2">
+    <div role="status" data-tone={end.tone} className="tl-end flex items-center gap-2.5 pb-2 pt-1 minimal:min-h-9 minimal:gap-2">
       <span
         aria-hidden
         className={cn(
-          "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border minimal:h-3.5 minimal:w-3.5 minimal:border-0 minimal:bg-transparent",
+          "tl-icon inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border minimal:h-3.5 minimal:w-3.5 minimal:border-0 minimal:bg-transparent",
           tone.ring,
         )}
         style={

@@ -710,7 +710,7 @@ function Palette({ onClose }: { onClose: () => void }) {
               />
               <PaletteAction
                 icon={<PanelRight />}
-                label={ui.look === "minimal" ? "Toggle details" : "Toggle inspector"}
+                label={ui.look !== "classic" ? "Toggle details" : "Toggle inspector"}
                 keywords={["inspector", "details", "side panel"]}
                 onSelect={() => run(toggleInspector)}
               />

@@ -34,7 +34,7 @@ function ScreenNav() {
   // The same count as the Needs you tab and the window title.
   const needs = useTriageCount();
   return (
-    <nav aria-label="Primary" className="flex shrink-0 items-center justify-between px-3 pb-2.5 pt-1.5">
+    <nav aria-label="Primary" className="flex shrink-0 items-center justify-between border-t border-line/60 px-3 pb-2.5 pt-2">
       {ITEMS.map((item) => {
         const active = view === item.view;
         const Icon = item.icon;

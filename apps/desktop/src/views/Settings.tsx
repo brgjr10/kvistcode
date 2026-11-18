@@ -485,9 +485,9 @@ function Appearance({ settings }: { settings: Settings }) {
     <>
       <SectionHeader title="General" description="How Kvistcode looks, starts and updates." />
       <SettingGroup className="mb-3">
-        <SettingRow title="Layout" description={LOOKS.find((l) => l.id === look)?.description ?? ""}>
+        <SettingRow title="Look" description={LOOKS.find((l) => l.id === look)?.description ?? ""}>
           <Segmented
-            aria-label="Layout"
+            aria-label="Look"
             size="sm"
             value={look}
             onChange={setLook}

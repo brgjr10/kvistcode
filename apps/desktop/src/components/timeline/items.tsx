@@ -13,6 +13,7 @@ import {
   Info,
   ListChecks,
   MessageSquareX,
+  Pencil,
   Repeat,
   RotateCcw,
   Search,
@@ -28,7 +29,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { m, AnimatePresence } from "motion/react";
-import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { respondPermission } from "@/lib/actions";
 import { api } from "@/lib/api";
 import { PREVIEW_LINK_HINT, splitLoopbackUrls } from "@/lib/external";
@@ -54,11 +55,12 @@ import { stripOutputFence } from "@/lib/terminalOutput";
 import { ImageLightbox } from "../ImageLightbox";
 import { LocationThumb } from "../LocalImage";
 import { useIdentity } from "@/hooks/useIdentity";
-import { useMinimal } from "@/hooks/useLook";
+import { useMinimal, useTerminal } from "@/hooks/useLook";
 import { useSingleKeys } from "@/hooks/useSingleKeys";
 import { AttachmentImg } from "../AttachmentImg";
 import { AttachmentStrip } from "../AttachmentStrip";
 import { CopyButton } from "../CopyButton";
+import { insertAttachments, insertIntoDraft } from "../agent/drafts";
 import { DiffStat, FileDiffView } from "../DiffView";
 import { Markdown } from "../Markdown";
 import { PlanChecklist } from "./PlanChecklist";
@@ -99,13 +101,13 @@ export const UserBubble = memo(function UserBubble({
     );
   }
   return (
-    <div className="group flex justify-end">
-      <div className="relative max-w-[80%]">
+    <div className="tl-user group flex justify-end">
+      <div className="relative max-w-[80%] terminal:w-full terminal:max-w-none">
         {item.attachments && item.attachments.length > 0 && (
           <AttachmentStrip attachments={item.attachments} size={88} className="mb-1.5 justify-end" />
         )}
         {item.text && (
-          <div className="rounded-2xl rounded-br-md border border-line/70 bg-raised/60 text-[14.5px] leading-[1.55] text-fg minimal:m-raised minimal:rounded-[14px] minimal:rounded-br-md minimal:leading-[23px]">
+          <div className="tl-user-text rounded-2xl rounded-br-md border border-line/70 bg-raised/60 text-[14.5px] leading-[1.55] text-fg minimal:m-raised minimal:rounded-[14px] minimal:rounded-br-md minimal:leading-[23px]">
             <div
               dir="auto"
               className={cn(
@@ -136,6 +138,17 @@ export const UserBubble = memo(function UserBubble({
         )}
         <div className="absolute right-0 top-full z-[1] flex gap-1 pt-0.5 text-micro text-steel opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           {item.text && <CopyButton text={item.text} className="h-5" />}
+          {(item.text || item.attachments?.length) && (
+            <MessageAction
+              label="Edit and send again"
+              onClick={() => {
+                if (item.attachments?.length) insertAttachments(item.agentId, item.attachments);
+                insertIntoDraft(item.agentId, item.text);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </MessageAction>
+          )}
           <RestoreAction item={item} />
           <RelTime ts={item.ts} long className="self-center" />
         </div>
@@ -143,6 +156,32 @@ export const UserBubble = memo(function UserBubble({
     </div>
   );
 });
+
+/** A small icon button in the row under a message (beside Copy), with a tooltip. */
+function MessageAction({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-5 items-center rounded-md px-1.5 text-steel transition-colors hover:bg-raised hover:text-fg disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
 
 // ---------------------------------------------------------------- agent message
 
@@ -165,6 +204,7 @@ export const AgentMessage = memo(function AgentMessage({
   role: wanted = "answer",
   turnOpen = false,
   streaming,
+  retryPrompt,
 }: {
   /** The message (the first of a run of consecutive ones). */
   item: Item<"agent_message">;
@@ -176,7 +216,21 @@ export const AgentMessage = memo(function AgentMessage({
   /** The agent is mid-turn. */
   turnOpen?: boolean;
   streaming: boolean;
+  /** The message this answers (latest answer only): "Retry" sends it again. */
+  retryPrompt?: { text: string; attachments?: Attachment[] } | null;
 }) {
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    if (!retryPrompt || retrying) return;
+    setRetrying(true);
+    try {
+      await api.sendPrompt(agent.id, retryPrompt.text, retryPrompt.attachments ?? []);
+    } catch (e) {
+      toast.error("Couldn't retry", { description: errorMessage(e) });
+    } finally {
+      setRetrying(false);
+    }
+  };
   // One way while the turn runs: a message that became a working note stays one until the turn ends. A
   // stray call that shows for a moment and then moves into its sub-agent's card must not flip the
   // message between answer and note typesetting (a jump of tens of pixels each time).
@@ -194,7 +248,7 @@ export const AgentMessage = memo(function AgentMessage({
   return (
     // With text, the row's own bottom padding becomes a 20px gutter for the copy button, so it never
     // prints over the last line (the negative margin keeps the gap to the next row at 20px).
-    <div className={cn("group relative", text && "-mb-3 pb-5")}>
+    <div className={cn("tl-msg group relative", text && "-mb-3 pb-5")} data-role={role}>
       {images.length > 0 && <MessageImages images={images} />}
       {text ? (
         <MessageFold id={item.id} role={role} streaming={streaming} canFold={!hasPicture(text)}>
@@ -222,6 +276,11 @@ export const AgentMessage = memo(function AgentMessage({
       {!streaming && text && (
         <div className="absolute bottom-0 left-0 z-[1] flex opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           <CopyButton text={text} className="-ml-1.5 h-5" label="Copy message" />
+          {retryPrompt && !turnOpen && agent.running && (
+            <MessageAction label="Retry: send your last message again" disabled={retrying} onClick={() => void retry()}>
+              {retrying ? <Spinner className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            </MessageAction>
+          )}
         </div>
       )}
     </div>
@@ -282,9 +341,9 @@ export const ThoughtBlock = memo(function ThoughtBlock({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="group flex max-w-full items-center gap-1.5 rounded-md py-0.5 pr-1.5 text-steel transition-colors hover:text-muted minimal:h-7 minimal:gap-2 minimal:py-0"
+        className="tl-thought group flex max-w-full items-center gap-1.5 rounded-md py-0.5 pr-1.5 text-steel transition-colors hover:text-muted minimal:h-7 minimal:gap-2 minimal:py-0"
       >
-        <Brain className={cn("h-3.5 w-3.5 shrink-0", live && "text-accent animate-breathe")} />
+        <Brain className={cn("tl-icon h-3.5 w-3.5 shrink-0", live && "text-accent animate-breathe")} />
         <span className={cn("font-medium", live && "text-muted")}>Thought</span>
         <ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform duration-150", open && "rotate-90")} />
         {!open && <span className="min-w-0 truncate text-steel">{preview}</span>}
@@ -529,6 +588,19 @@ const StepTitle = memo(function StepTitle({
   );
 });
 
+/** Terminal look: a step as Claude Code prints it, "Read(src/app.ts)", "Bash(npm test)". */
+const TermTitle = memo(function TermTitle({ title, kind }: { title: string; kind: ToolKind }) {
+  const path = kind === "execute" ? null : PATH_TITLE_RE.exec(title);
+  const verb = kind === "execute" ? "Bash" : path?.[1];
+  const rest = kind === "execute" ? title.replace(RUN_TITLE_RE, "") : path?.[2];
+  if (!verb || !rest) return <span className="font-semibold text-fg/90">{title}</span>;
+  return (
+    <>
+      <span className="font-semibold text-fg/90">{verb[0].toUpperCase() + verb.slice(1)}</span>({rest})
+    </>
+  );
+});
+
 export const ToolCallCard = memo(function ToolCallCard({
   item,
   agentId,
@@ -563,11 +635,13 @@ export const ToolCallCard = memo(function ToolCallCard({
   const failed = item.status === "failed";
   const exit = isCmd && failed ? exitCodeOf(item.output) : null;
   const minimal = useMinimal();
+  const terminal = useTerminal();
 
   return (
     <div
+      data-state={running ? "running" : failed ? "failed" : stalled ? "stalled" : "done"}
       className={cn(
-        "overflow-hidden rounded-lg border transition-colors minimal:rounded-[11px]",
+        "tl-step overflow-hidden rounded-lg border transition-colors minimal:rounded-[11px]",
         !nested && "-mx-1.5",
         expanded && hasBody ? "tl-well border-line bg-card/40" : "border-transparent",
         failed && expanded && "border-err/30",
@@ -585,7 +659,7 @@ export const ToolCallCard = memo(function ToolCallCard({
           hasBody && "hover:bg-raised/40 hover:text-muted",
         )}
       >
-        <Icon className={cn("h-3.5 w-3.5 shrink-0", running && "text-accent")} aria-hidden />
+        <Icon className={cn("tl-icon h-3.5 w-3.5 shrink-0", running && "text-accent")} aria-hidden />
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-small",
@@ -593,7 +667,9 @@ export const ToolCallCard = memo(function ToolCallCard({
             running ? "text-muted" : failed ? "text-err/90" : "",
           )}
         >
-          {minimal ? (
+          {terminal ? (
+            <TermTitle title={item.title} kind={item.toolKind} />
+          ) : minimal ? (
             <StepTitle title={item.title} kind={item.toolKind} running={running} />
           ) : (
             <ToolTitle title={item.title} kind={item.toolKind} />
@@ -623,7 +699,7 @@ export const ToolCallCard = memo(function ToolCallCard({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12 }}
-            className="border-t border-line/70"
+            className="tl-body border-t border-line/70"
           >
             {(item.command || item.output) && !hasDiffs && (
               <TerminalOutput command={item.command} output={item.output} live={running} compact />

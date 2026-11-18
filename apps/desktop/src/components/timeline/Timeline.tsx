@@ -28,6 +28,8 @@ import { finalAnswers, groupActivity, replyThoughts } from "./activityGroups";
 import { messageRole } from "./collapse";
 import { stitchMessages } from "./messageFlow";
 import { UNFOLLOW_EVENT } from "./MessageFold";
+import { clearHighlights, FindBar, highlightMatches } from "./FindBar";
+import { findMatches, stepUserRow } from "./findInConversation";
 import { SubagentCard } from "./SubagentCard";
 import { WorkflowCard } from "./WorkflowCard";
 import { useRunningSubagentCount, useSubagentRuns } from "../agent/useSubagents";
@@ -310,7 +312,25 @@ export function Timeline({
       setOpenFolds((s) => new Set(s).add(list[foldedIn].id));
       return;
     }
-    const row = at === undefined ? -1 : rows.indexOf(at);
+    let row = at === undefined ? -1 : rows.indexOf(at);
+    // Inside a collapsed run of steps (open it) or a run of messages: go to the row that holds it.
+    if (row < 0 && at !== undefined) {
+      const target = at;
+      for (const [id, idxs] of view.groups) {
+        if (!idxs.includes(target)) continue;
+        if (!openGroups.has(id)) setOpenGroups((s) => new Set(s).add(id));
+        row = rows.indexOf(idxs[0]);
+        break;
+      }
+      if (row < 0) {
+        for (const idxs of view.runs.values()) {
+          if (idxs.includes(target)) {
+            row = rows.indexOf(idxs[0]);
+            break;
+          }
+        }
+      }
+    }
     useUi.getState().clearRevealTarget();
     if (row < 0) return;
     stick.current = false;
@@ -319,7 +339,102 @@ export function Timeline({
     setFlashId(list[at as number].id);
     // Measurement can shift rows after the first jump; settle on the target again.
     requestAnimationFrame(() => virtualizer.scrollToIndex(row, { align: "center" }));
-  }, [revealTarget, rows, list, items, loading, view, virtualizer, folded]);
+  }, [revealTarget, rows, list, items, loading, view, virtualizer, folded, openGroups]);
+
+  // Find in conversation (Ctrl+F) and jumping between your messages (Alt+Shift+Up / Down), in the pane
+  // that has the keyboard.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findIndex, setFindIndex] = useState(-1);
+  useLayoutEffect(() => {
+    setFindOpen(false);
+    setFindQuery("");
+  }, [agent.id]);
+  const matches = useMemo(() => (findOpen ? findMatches(list, findQuery) : []), [findOpen, list, findQuery]);
+  const matchesRef = useRef(matches);
+  matchesRef.current = matches;
+  // A new query starts at the latest match (the reader is usually at the end); stepping wraps around.
+  useEffect(() => {
+    if (!findOpen) return;
+    const t = setTimeout(() => {
+      const n = matchesRef.current.length;
+      setFindIndex(n - 1);
+      if (n > 0) useUi.getState().revealItem(agent.id, matchesRef.current[n - 1]);
+    }, 150);
+    return () => clearTimeout(t);
+  }, [findOpen, findQuery, agent.id]);
+  const stepFind = useCallback(
+    (dir: -1 | 1) => {
+      const n = matches.length;
+      if (n === 0) return;
+      const next = (((findIndex < 0 ? (dir > 0 ? -1 : 0) : findIndex) + dir) % n + n) % n;
+      setFindIndex(next);
+      useUi.getState().revealItem(agent.id, matches[next]);
+    },
+    [matches, findIndex, agent.id],
+  );
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    clearHighlights();
+    scrollRef.current?.focus({ preventScroll: true });
+  }, []);
+  // Marks follow what is on screen: re-mark when rows render (virtualized) or the query changes.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!findOpen || !root) return;
+    let frame = 0;
+    const mark = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => highlightMatches(root, findQuery));
+    };
+    mark();
+    const mo = new MutationObserver(mark);
+    mo.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      mo.disconnect();
+      clearHighlights();
+    };
+  }, [findOpen, findQuery]);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  useEffect(() => {
+    if (!focused) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setFindOpen(true);
+        requestAnimationFrame(() => {
+          const input = scrollRef.current?.parentElement?.querySelector<HTMLInputElement>("[data-find-input]");
+          input?.focus();
+          input?.select();
+        });
+        return;
+      }
+      // (Alt+Up / Alt+Down alone step between agents: see useGlobalShortcuts.)
+      if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        const el = scrollRef.current;
+        if (!el) return;
+        const rowsNow = rowsRef.current;
+        const userRows: number[] = [];
+        rowsNow.forEach((idx, r) => {
+          if (list[idx]?.kind === "user_message") userRows.push(r);
+        });
+        const top = el.scrollTop + 24;
+        const current = virtualizer.getVirtualItems().find((v) => v.end > top)?.index ?? 0;
+        const target = stepUserRow(userRows, current, e.key === "ArrowUp" ? -1 : 1);
+        e.preventDefault();
+        if (target === null) return;
+        stick.current = false;
+        setAtBottom(false);
+        markIntent();
+        virtualizer.scrollToIndex(target, { align: "start" });
+        requestAnimationFrame(() => virtualizer.scrollToIndex(target, { align: "start" }));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focused, list, virtualizer]);
   useEffect(() => {
     if (!flashId) return;
     const t = setTimeout(() => setFlashId(null), 1600);
@@ -524,6 +639,16 @@ export function Timeline({
   return (
     <div data-agent-id={agent.id} className="@container relative flex min-h-0 flex-1 flex-col">
       <LiveAnnouncer agent={agent} items={items} />
+      {findOpen && (
+        <FindBar
+          query={findQuery}
+          onQuery={setFindQuery}
+          index={findIndex}
+          count={matches.length}
+          onStep={stepFind}
+          onClose={closeFind}
+        />
+      )}
       {olderError && !olderLoading && (
         <div
           role="alert"
@@ -558,7 +683,7 @@ export function Timeline({
         className="scroll-fade min-h-0 flex-1 overflow-y-auto [overflow-anchor:none] focus-visible:[outline-offset:-2px]"
         aria-busy={live}
       >
-        <div ref={contentRef} className="mx-auto w-full max-w-[780px] px-3.5 pb-6 @lg:px-6">
+        <div ref={contentRef} className="tl-col mx-auto w-full max-w-[780px] px-3.5 pb-6 @lg:px-6">
           {loading && !items ? (
             <div className="pt-4">
               <TimelineSkeleton />
@@ -1058,6 +1183,7 @@ function renderItem(
           })}
           turnOpen={turnOpen}
           streaming={liveTail}
+          retryPrompt={it.id === view.lastFinalId ? ctx.lastPrompt : null}
         />
       );
     }

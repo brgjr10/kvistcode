@@ -195,7 +195,7 @@ export function App() {
               <>
                 <TitleBar />
                 <div className="flex min-h-0 flex-1">
-                  {look === "minimal" ? <SideNav /> : <Rail />}
+                  {look !== "classic" ? <SideNav /> : <Rail />}
                   <Main />
                 </div>
                 <WhenOpened open={(s) => s.paletteOpen} warm>
