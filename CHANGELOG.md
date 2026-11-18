@@ -5,6 +5,11 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- A share link can no longer be made while remote access is off (it would have had no address and could never be opened); Kvistcode now asks you to turn remote access on first.
+- Error messages sent to a paired phone have keys and tokens blanked out, like notifications already do.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.

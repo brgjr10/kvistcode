@@ -2110,7 +2110,7 @@ export const mockApi: KvistcodeApi = {
 
   async saveDiagnostics() {
     await sleep(300);
-    return "~/Downloads/kvistcode-diagnostics-20260101-120000.txt";
+    return "/home/sam/Downloads/kvistcode-diagnostics-20260101-120000.txt";
   },
 
   async exportAgent(agentId) {
@@ -2892,6 +2892,18 @@ export const mockApi: KvistcodeApi = {
   },
 
   async previewProxyStart(_agentId, target) {
+    // Refuses what the Rust proxy refuses (it only fronts loopback http), so the pane's
+    // "no page tools" path shows up in the browser too.
+    if (!/^http:\/\//i.test(target.trim()))
+      throw new Error("Only http:// addresses on localhost can be previewed with page tools");
+    let host = "";
+    try {
+      host = new URL(target).hostname.toLowerCase();
+    } catch {
+      throw new Error("Invalid address");
+    }
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(host))
+      throw new Error("Only localhost, 127.0.0.1 and [::1] can be previewed");
     // No Rust proxy in the browser mock: the page loads directly.
     return delay({ url: target, token: "mock-preview-token", simulated: true }, 80);
   },
@@ -3094,8 +3106,15 @@ export const mockApi: KvistcodeApi = {
   },
 
   async openPath(path) {
-    if (/^https?:\/\//.test(path)) window.open(path, "_blank", "noopener");
-    else console.info("[mock] open path", path);
+    // The same refusals as the Rust command: web links, mail links and absolute paths only.
+    const target = path.trim();
+    const scheme = /^([a-z][a-z0-9+.-]+):/i.exec(target)?.[1]?.toLowerCase();
+    if (scheme === "http" || scheme === "https") window.open(target, "_blank", "noopener");
+    else if (scheme === "mailto") console.info("[mock] open mail link", target);
+    else if (scheme) throw new Error(`Links of type ${scheme}: can't be opened`);
+    else if (!/^(\/|[a-z]:[\\/])/i.test(target))
+      throw new Error(`Can't open ${target}: not a web link or an absolute path`);
+    else console.info("[mock] open path", target);
   },
 
   async readClipboardImages() {
@@ -3260,9 +3279,11 @@ export const mockApi: KvistcodeApi = {
     return delay(remoteStatus(), 200);
   },
 
-  async createShareLink(agentId, hours = 24) {
-    const a = getAgent(agentId);
+  async createShareLink(agentId, hours) {
     if (!db.settings.remote.enabled) throw new Error("Turn on remote access to create share links.");
+    const a = getAgent(agentId);
+    // Like the Rust side: only 1 hour, 1 day or 1 week; anything else gets a day.
+    if (hours === undefined || ![1, 24, 168].includes(hours)) hours = 24;
     const token = randomToken().slice(0, 16);
     const createdAt = Date.now();
     const link = {
