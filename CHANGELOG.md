@@ -28,6 +28,10 @@ docs/RELEASING.md).
 - Template picker: arrow keys keep the highlighted template in view, and it fits narrow windows.
 - On Home, pressing Enter without a project folder opens the folder picker.
 - The keyboard shortcuts sheet lists the keys for starting agents; the Handoff dialog shows its ⌘⏎ shortcut.
+- A Codex agent's token count no longer drops when it starts a fresh conversation after a restart or an account switch, and the tokens it spends climbing back are no longer counted twice toward spending limits.
+- A spending-limit warning says how far in you are ("94% of the limit") instead of always "80%", and token amounts near a million read "1.0M" rather than "1000.0k".
+- Exported conversations (Markdown) stay readable when a command or its output contains code fences, multi-line notices stay quoted, and shortened output says so.
+- Skills and commands saved with a byte-order mark (common on Windows) show their name and description, and a description with blank lines in it is read in full.
 
 ## v0.6.0 — 2026-11-17
 

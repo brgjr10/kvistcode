@@ -1129,7 +1129,7 @@ impl CodexDriver {
                         // Codex reports seconds; normalize to ms.
                         resets_at: w["resetsAt"].as_i64().map(|t| {
                             if t < 1_000_000_000_000 {
-                                t * 1000
+                                t.saturating_mul(1000)
                             } else {
                                 t
                             }

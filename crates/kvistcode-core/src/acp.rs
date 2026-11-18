@@ -1594,15 +1594,13 @@ fn parse_claude_rate_limit(info: &Value) -> Option<AccountUsage> {
         Some(UsageWindow {
             used_percent: (util * 100.0).clamp(0.0, 100.0),
             window_mins: Some(mins),
-            resets_at: w["resetsAt"].as_i64().map(
-                |t| {
-                    if t < 1_000_000_000_000 {
-                        t * 1000
-                    } else {
-                        t
-                    }
-                },
-            ),
+            resets_at: w["resetsAt"].as_i64().map(|t| {
+                if t < 1_000_000_000_000 {
+                    t.saturating_mul(1000)
+                } else {
+                    t
+                }
+            }),
         })
     }
     if !info.is_object() {
@@ -1688,6 +1686,15 @@ mod rate_limit_tests {
             parse_claude_rate_limit(&json!({"status":"allowed","rateLimitType":"five_hour"}))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_wild_reset_time_does_not_overflow() {
+        let v = json!({"unifiedWindows": {"five_hour": {
+            "utilization": 0.5, "resetsAt": i64::MIN
+        }}});
+        let u = parse_claude_rate_limit(&v).unwrap();
+        assert_eq!(u.primary.unwrap().resets_at, Some(i64::MIN));
     }
 }
 

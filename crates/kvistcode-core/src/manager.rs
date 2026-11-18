@@ -3248,6 +3248,20 @@ impl Core {
     }
 }
 
+/// `text` as a Markdown quote, every line of it (a bare `> ` quotes only the first).
+fn quote_lines(text: &str) -> String {
+    text.lines()
+        .map(|l| {
+            if l.is_empty() {
+                ">".to_string()
+            } else {
+                format!("> {l}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// A code fence longer than any run of backticks in `text`.
 fn backtick_fence(text: &str) -> String {
     let (mut longest, mut run) = (0usize, 0usize);
@@ -3761,20 +3775,30 @@ fn transcript_markdown(agent: &Agent, items: &[TimelineItem]) -> String {
                 ..
             } => {
                 md.push_str(&format!("- **{title}** ({status:?})\n"));
+                // Fences at the margin, longer than any backticks inside: a command or
+                // output that holds ``` (or spans lines) can't break the rest of the file.
                 if let Some(cmd) = command {
-                    md.push_str(&format!("\n  ```sh\n  {cmd}\n  ```\n"));
+                    let fence = backtick_fence(cmd);
+                    md.push_str(&format!("\n{fence}sh\n{cmd}\n{fence}\n"));
                 }
                 if !output.trim().is_empty() {
-                    let clipped: String = output.chars().take(4000).collect();
-                    md.push_str(&format!("\n  ```\n{clipped}\n  ```\n"));
+                    let mut clipped: String = output.chars().take(4000).collect();
+                    if clipped.len() < output.len() {
+                        clipped.push_str("\n… (output shortened)");
+                    }
+                    let fence = backtick_fence(&clipped);
+                    md.push_str(&format!("\n{fence}\n{clipped}\n{fence}\n"));
                 }
                 md.push('\n');
             }
             ItemBody::Permission {
                 title, resolution, ..
             } => md.push_str(&format!(
-                "> **Approval requested:** {title} \u{2192} {}\n\n",
-                resolution.as_deref().unwrap_or("pending")
+                "{}\n\n",
+                quote_lines(&format!(
+                    "**Approval requested:** {title} \u{2192} {}",
+                    resolution.as_deref().unwrap_or("pending")
+                ))
             )),
             ItemBody::Question {
                 message,
@@ -3788,7 +3812,10 @@ fn transcript_markdown(agent: &Agent, items: &[TimelineItem]) -> String {
                     (Some(r), _) => r.to_string(),
                     (None, _) => "pending".into(),
                 };
-                md.push_str(&format!("> **Question:** {message} \u{2192} {answer}\n\n"));
+                md.push_str(&format!(
+                    "{}\n\n",
+                    quote_lines(&format!("**Question:** {message} \u{2192} {answer}"))
+                ));
             }
             ItemBody::Plan { entries } => {
                 md.push_str("**Plan**\n\n");
@@ -3802,7 +3829,7 @@ fn transcript_markdown(agent: &Agent, items: &[TimelineItem]) -> String {
                 }
                 md.push('\n');
             }
-            ItemBody::Notice { text, .. } => md.push_str(&format!("> {text}\n\n")),
+            ItemBody::Notice { text, .. } => md.push_str(&format!("{}\n\n", quote_lines(text))),
             ItemBody::TurnSummary {
                 duration_ms,
                 files,
@@ -4120,6 +4147,67 @@ mod tests {
     fn history_fences_outgrow_the_content() {
         assert_eq!(backtick_fence("none"), "```");
         assert_eq!(backtick_fence("a ```` b"), "`````");
+    }
+
+    #[test]
+    fn markdown_export_keeps_fences_and_quotes_whole() {
+        let agent: Agent = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "provider": "claude", "accountId": "x",
+            "projectPath": "/p", "cwd": "/p", "worktree": false, "status": "idle",
+            "running": false, "branch": null, "baseBranch": null, "baseCommit": null,
+            "sessionId": null, "groupId": null, "createdAt": 0, "updatedAt": 0,
+            "lastActivityAt": 0, "costUsd": 0.0, "tokensUsed": 0, "contextUsed": null,
+            "contextSize": null, "unread": false, "archived": false, "lastMessage": null,
+            "pendingPermissions": 0
+        }))
+        .unwrap_or_else(|e| panic!("{e}"));
+        let item = |seq: i64, body: ItemBody| TimelineItem {
+            id: format!("i{seq}"),
+            agent_id: "a".into(),
+            seq,
+            ts: seq,
+            body,
+        };
+        let items = vec![
+            item(
+                1,
+                ItemBody::ToolCall {
+                    tool_call_id: "t1".into(),
+                    title: "Read README.md".into(),
+                    tool_kind: ToolKind::Execute,
+                    status: ToolStatus::Completed,
+                    locations: vec![],
+                    diffs: vec![],
+                    output: format!(
+                        "# Title\n```rust\nfn main() {{}}\n```\n{}",
+                        "x".repeat(5000)
+                    ),
+                    command: Some("cat README.md \\\n  | head".into()),
+                    images: vec![],
+                    subagent: None,
+                    parent_tool_call_id: None,
+                },
+            ),
+            item(
+                2,
+                ItemBody::Notice {
+                    level: NoticeLevel::Error,
+                    text: "The agent stopped.\nlast line of stderr".into(),
+                },
+            ),
+        ];
+        let md = transcript_markdown(&agent, &items);
+        // The output's own ``` sits inside a longer fence, so it can't close it.
+        assert!(md.contains("\n````\n# Title\n```rust\n"), "{md}");
+        assert!(
+            md.contains("\n```sh\ncat README.md \\\n  | head\n```\n"),
+            "{md}"
+        );
+        assert!(md.contains("… (output shortened)\n````\n"), "{md}");
+        assert!(
+            md.contains("> The agent stopped.\n> last line of stderr\n"),
+            "{md}"
+        );
     }
 
     fn sched(time: &str, days: Vec<u8>) -> Schedule {

@@ -170,6 +170,10 @@ struct CtxState {
     cost_gen: u64,
     cost_base: f64,
     cost_last: f64,
+    /// Token bookkeeping for runtimes that report a running total per thread (Codex):
+    /// what earlier counts added up to, and the last total seen (None: none yet).
+    tokens_base: i64,
+    tokens_last: Option<i64>,
 }
 
 /// See `AgentCtx::begin_answer`. Dropped without the request resolved (the write
@@ -253,6 +257,8 @@ impl AgentCtx {
                 cost_gen: 0,
                 cost_base: 0.0,
                 cost_last: 0.0,
+                tokens_base: 0,
+                tokens_last: None,
             }),
             settle: Mutex::new(()),
             gate: Mutex::new(()),
@@ -2194,12 +2200,20 @@ impl AgentCtx {
         }
     }
 
-    pub fn set_tokens(&self, tokens: i64) {
-        if let Some(old) = self
-            .agent_snapshot()
-            .map(|a| a.tokens_used)
-            .filter(|old| *old != tokens)
-        {
+    /// The runtime's running token total for its conversation. A total that goes down
+    /// started over (a fresh thread after a restart, a switched account): what came
+    /// before is kept, so the agent's count never shrinks and nothing is counted twice
+    /// toward the spending limits.
+    pub fn set_tokens(&self, total: i64) {
+        let Some(old) = self.agent_snapshot().map(|a| a.tokens_used) else {
+            return;
+        };
+        let tokens = {
+            let mut st = self.st.lock();
+            let st = &mut *st;
+            running_tokens(&mut st.tokens_base, &mut st.tokens_last, old, total)
+        };
+        if tokens != old {
             self.update_agent(|a| a.tokens_used = tokens);
             self.budget_tokens(tokens - old);
         }
@@ -2296,6 +2310,22 @@ fn tool_shape(b: &ItemBody) -> Option<ToolShape> {
         )),
         _ => None,
     }
+}
+
+/// The agent's token count after a runtime reported `total` for its conversation; `old`
+/// is the agent's count so far. `base` and `last` carry what earlier totals added up to.
+fn running_tokens(base: &mut i64, last: &mut Option<i64>, old: i64, total: i64) -> i64 {
+    let total = total.max(0);
+    match *last {
+        // First total this run: carry on from what the agent already had (the thread
+        // may count from zero or from where it left off; either way, never go back).
+        None => *base = old.saturating_sub(total).max(0),
+        // The count started over: keep what the previous one reached.
+        Some(prev) if total < prev => *base = base.saturating_add(prev),
+        Some(_) => {}
+    }
+    *last = Some(total);
+    base.saturating_add(total)
 }
 
 fn paused_notice(n: usize) -> String {
@@ -2892,5 +2922,32 @@ mod tests {
         assert!(core.db().search("second").unwrap().is_empty());
         ctx.append_text(StreamKind::Message, Some("b"), " more");
         assert_eq!(core.db().search("second").unwrap().len(), 1);
+    }
+
+    /// Codex reports a running total per thread. A fresh thread (after a restart that
+    /// couldn't resume, or a switched account) counts from zero again: the agent's
+    /// count must not drop, and the climb back must not be counted twice.
+    #[test]
+    fn a_running_token_total_that_starts_over_keeps_what_came_before() {
+        let (mut base, mut last) = (0, None);
+        let mut agent = 0;
+        for total in [1_000, 5_000, 9_000] {
+            agent = running_tokens(&mut base, &mut last, agent, total);
+        }
+        assert_eq!(agent, 9_000);
+        // A new thread: 300 tokens in, the agent is 300 further on.
+        agent = running_tokens(&mut base, &mut last, agent, 300);
+        assert_eq!(agent, 9_300);
+        agent = running_tokens(&mut base, &mut last, agent, 2_000);
+        assert_eq!(agent, 11_000);
+
+        // After an app restart the first total is either a resumed thread's (where it
+        // left off, or a bit more) or a fresh one's; never lower than before.
+        let (mut base, mut last) = (0, None);
+        assert_eq!(running_tokens(&mut base, &mut last, 11_000, 11_500), 11_500);
+        assert_eq!(running_tokens(&mut base, &mut last, 11_500, 12_000), 12_000);
+        let (mut base, mut last) = (0, None);
+        assert_eq!(running_tokens(&mut base, &mut last, 11_000, 400), 11_000);
+        assert_eq!(running_tokens(&mut base, &mut last, 11_000, 1_400), 12_000);
     }
 }

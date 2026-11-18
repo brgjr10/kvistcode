@@ -275,9 +275,11 @@ fn whose(scope: BudgetScope, agent_title: &str, project: &str) -> String {
 
 /// "12.3k", "1.2M".
 pub fn fmt_tokens(n: f64) -> String {
-    if n >= 1_000_000.0 {
+    // Thresholds where the rounded figure reaches the next unit, so 999,960 reads
+    // "1.0M", not "1000.0k".
+    if n >= 999_950.0 {
         format!("{:.1}M", n / 1_000_000.0)
-    } else if n >= 1_000.0 {
+    } else if n >= 999.5 {
         format!("{:.1}k", n / 1_000.0)
     } else {
         format!("{n:.0}")
@@ -321,7 +323,10 @@ impl Alert {
         match self.level {
             BudgetLevel::Warn => (
                 format!("Close to the {}", subject(self.scope)),
-                format!("{who} is at {amounts} (80% of the limit)."),
+                format!(
+                    "{who} is at {amounts} ({}% of the limit).",
+                    warn_percent(self.spent, self.cap)
+                ),
             ),
             _ => {
                 let tail = match action {
@@ -337,6 +342,15 @@ impl Alert {
             }
         }
     }
+}
+
+/// Whole percent of `cap` that `spent` is, rounded down so a warning never says 100%
+/// while still under the limit. One big turn can jump well past 80%, so say how far.
+fn warn_percent(spent: f64, cap: f64) -> u32 {
+    if !(spent.is_finite() && cap.is_finite() && cap > 0.0) {
+        return (WARN_AT * 100.0) as u32;
+    }
+    ((spent / cap * 100.0).floor().clamp(0.0, 99.0)) as u32
 }
 
 fn capitalize(s: &str) -> String {
@@ -1131,5 +1145,33 @@ mod tests {
         assert!(t.alerts(day(1), "a", "/work/renamed", &r).is_empty());
         // Other projects are untouched.
         assert_eq!(t.alerts(day(1), "b", "/work/other", &r).len(), 1);
+    }
+
+    #[test]
+    fn token_figures_round_into_the_next_unit() {
+        assert_eq!(fmt_tokens(999.0), "999");
+        assert_eq!(fmt_tokens(999.6), "1.0k");
+        assert_eq!(fmt_tokens(12_345.0), "12.3k");
+        assert_eq!(fmt_tokens(999_949.0), "999.9k");
+        assert_eq!(fmt_tokens(999_960.0), "1.0M");
+        assert_eq!(fmt_tokens(2_500_000.0), "2.5M");
+    }
+
+    #[test]
+    fn warnings_say_how_far_into_the_limit() {
+        let warn = |spent: f64, cap: f64| Alert {
+            scope: BudgetScope::Daily,
+            metric: BudgetMetric::Cost,
+            level: BudgetLevel::Warn,
+            spent,
+            cap,
+        };
+        let body = |a: Alert| a.text(BudgetAction::Notify, "t", "p", false).1;
+        assert!(body(warn(4.0, 5.0)).contains("(80% of the limit)"));
+        // One big turn jumped past 80%: say so, not "80%".
+        assert!(body(warn(4.7, 5.0)).contains("(94% of the limit)"));
+        // Still under: never "100%", even when the dollars round up to the cap.
+        let close = body(warn(4.999, 5.0));
+        assert!(close.contains("(99% of the limit)"), "{close}");
     }
 }
