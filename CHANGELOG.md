@@ -5,7 +5,9 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
-## Unreleased
+## v0.6.0 — 2026-11-17
+
+Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.
 
 - With many agents side by side, an approval or question above the message box is never cut off: its buttons always show in full, and other items there make room.
 - An approval, plan or question now shows once. While it waits above the message box, the conversation keeps a one-line note in its place; "Show plan" or "Show here" opens it in full.
