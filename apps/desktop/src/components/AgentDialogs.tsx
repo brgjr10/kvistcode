@@ -7,7 +7,7 @@ import type { Agent, CustomAgent, Provider } from "@/lib/types";
 
 const EMPTY_CUSTOM: CustomAgent[] = [];
 import { CONTINUE_PROMPT, deleteAgentWithUndo, switchAccount } from "@/lib/actions";
-import { cn, errorMessage } from "@/lib/utils";
+import { cn, errorMessage, modKey } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useUi } from "@/store/ui";
 import { AccountAvatar } from "./AccountAvatar";
@@ -17,6 +17,7 @@ import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Dialog, DialogBody, DialogContent, DialogFooter } from "./ui/dialog";
 import { Label, Textarea } from "./ui/input";
+import { Kbd } from "./ui/kbd";
 import { Spinner } from "./ui/misc";
 import { Segmented } from "./ui/segmented";
 import { Select } from "./ui/select";
@@ -190,12 +191,20 @@ function HandoffDialog({ agent, onClose }: { agent: Agent | null; onClose: () =>
               onChange={(e) => setInstruction(e.target.value)}
               className="min-h-24"
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
+                if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
+                // Never mid-IME composition, and a held key doesn't hand off twice.
+                if (e.nativeEvent.isComposing || e.keyCode === 229 || e.repeat) return;
+                e.preventDefault();
+                void submit();
               }}
             />
           </div>
         </DialogBody>
         <DialogFooter>
+          <span className="mr-auto hidden items-center gap-1 text-meta text-steel sm:flex">
+            <Kbd>{modKey}</Kbd>
+            <Kbd>⏎</Kbd> to hand off
+          </span>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

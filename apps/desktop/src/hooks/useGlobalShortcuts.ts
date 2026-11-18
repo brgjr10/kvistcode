@@ -1,9 +1,8 @@
 import { useEffect } from "react";
 import { shortcutOrder } from "@/store/shortcutOrder";
 import { onVaHotkey, onVaWake } from "@/lib/api";
-import { LIST_DOCK_QUERY } from "@/lib/layout";
 import { selectNextTriage, triageQueueNow } from "@/components/triage/useTriage";
-import { toggleAgentList } from "./useAgentListLayout";
+import { showOrHideAgentList } from "./useAgentListLayout";
 import { isEditableTarget, isMac } from "@/lib/utils";
 import { openShortcutHelp, toggleShortcutHelp } from "@/components/shell/ShortcutHelp";
 import { stepInterfaceScale } from "@/lib/zoom";
@@ -115,13 +114,7 @@ export function useGlobalShortcuts(enabled: boolean) {
       }
       if (key === "b" && !e.shiftKey) {
         e.preventDefault();
-        if (ui.view !== "agents") {
-          ui.setView("agents");
-          const layout = window.matchMedia(LIST_DOCK_QUERY).matches ? "wide" : "narrow";
-          ui.setAgentList(layout, true);
-        } else {
-          toggleAgentList();
-        }
+        showOrHideAgentList();
         return;
       }
       if (e.key === "`" && !e.shiftKey) {

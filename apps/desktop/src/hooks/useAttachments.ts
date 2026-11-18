@@ -9,6 +9,8 @@ import {
   isFileListPaste,
   imageFilesFrom,
   MAX_ATTACHMENTS,
+  mergeAttachments,
+  skippedNotes,
 } from "@/lib/attachments";
 import { setDraftAttachments } from "@/components/agent/drafts";
 import { api } from "@/lib/api";
@@ -23,51 +25,43 @@ export function useAttachments(initial: Attachment[] = [], agentId?: string) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const depth = useRef(0);
-  // Updated synchronously on every change (not from render), so two quick adds can't
-  // both see the same free room and silently overflow.
-  const liveCount = useRef(initial.length);
+  // The current list, updated synchronously on every change (not from render), so two quick adds
+  // can't both see the same free room and silently overflow, and a repeat is noticed at once.
+  const live = useRef(initial);
 
   const setAttachments = useCallback(
     (next: SetStateAction<Attachment[]>) => {
+      const v = typeof next === "function" ? next(live.current) : next;
+      live.current = v;
       // An agent's composer remembers its pictures while you look at another agent. Stored here
       // too, so a failed send hands them back even after the composer is gone.
-      if (agentId && typeof next !== "function") setDraftAttachments(agentId, next);
-      setRaw((cur) => {
-        const v = typeof next === "function" ? next(cur) : next;
-        liveCount.current = v.length;
-        if (agentId) setDraftAttachments(agentId, v);
-        return v;
-      });
+      if (agentId) setDraftAttachments(agentId, v);
+      setRaw(v);
     },
     [agentId],
+  );
+
+  /**
+   * Adds pictures already read (a paste, a screenshot, a message taken back): repeats are skipped and
+   * the per-message limit kept. Returns why some weren't added.
+   */
+  const merge = useCallback(
+    (read: Attachment[]): string[] => {
+      const { next, duplicates, dropped } = mergeAttachments(live.current, read);
+      if (next.length !== live.current.length) setAttachments(next);
+      return skippedNotes(duplicates, dropped);
+    },
+    [setAttachments],
   );
 
   const add = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
-      const { attachments: read, problems } = await filesToAttachments(files, liveCount.current);
-      // Re-check after the async read: another add may have used the room meanwhile.
-      const room = Math.max(0, MAX_ATTACHMENTS - liveCount.current);
-      const accepted = read.slice(0, room);
-      const dropped = read.length - accepted.length;
-      if (dropped > 0) problems.push(`Only ${MAX_ATTACHMENTS} images per message; ${dropped} not attached`);
-      if (accepted.length) {
-        liveCount.current += accepted.length;
-        setAttachments((cur) => [...cur, ...accepted]);
-      }
-      if (problems.length) {
-        toast.warning(problems.length === 1 ? problems[0] : `${problems.length} files weren't attached`, {
-          description:
-            problems.length > 1
-              ? problems.join(" · ")
-              : // Format problems already name the accepted formats.
-                problems[0].includes(ACCEPTED_IMAGE_LABEL)
-                ? `Up to 5 MB each, ${MAX_ATTACHMENTS} per message.`
-                : `${ACCEPTED_IMAGE_LABEL}, up to 5 MB each, ${MAX_ATTACHMENTS} per message.`,
-        });
-      }
+      const { attachments: read, problems } = await filesToAttachments(files, live.current.length);
+      // Merged after the async read: another add may have used the room meanwhile.
+      reportProblems(problems, merge(read), "files");
     },
-    [setAttachments],
+    [merge],
   );
 
   const remove = useCallback((i: number) => setAttachments((cur) => cur.filter((_, j) => j !== i)), [setAttachments]);
@@ -78,24 +72,11 @@ export function useAttachments(initial: Attachment[] = [], agentId?: string) {
   const addFromClipboard = useCallback(async () => {
     try {
       const { attachments: read, problems } = await api.readClipboardImages(agentId);
-      const room = Math.max(0, MAX_ATTACHMENTS - liveCount.current);
-      const accepted = read.slice(0, room);
-      if (read.length > accepted.length) {
-        problems.push(`Only ${MAX_ATTACHMENTS} images per message; ${read.length - accepted.length} not attached`);
-      }
-      if (accepted.length) {
-        liveCount.current += accepted.length;
-        setAttachments((cur) => [...cur, ...accepted]);
-      }
-      if (problems.length) {
-        toast.warning(problems.length === 1 ? problems[0] : `${problems.length} images weren't attached`, {
-          description: problems.length > 1 ? problems.join(" · ") : `${ACCEPTED_IMAGE_LABEL}, up to 5 MB each.`,
-        });
-      }
+      reportProblems(problems, merge(read), "images");
     } catch {
       /* no native clipboard support: the paste simply does nothing */
     }
-  }, [setAttachments, agentId]);
+  }, [merge, agentId]);
 
   const onPaste = useCallback(
     (e: ClipboardEvent) => {
@@ -157,5 +138,40 @@ export function useAttachments(initial: Attachment[] = [], agentId?: string) {
     },
   };
 
-  return { attachments, setAttachments, add, remove, clear, openPicker, onPaste, dropHandlers, dragging, inputProps };
+  return {
+    attachments,
+    setAttachments,
+    add,
+    merge,
+    remove,
+    clear,
+    openPicker,
+    onPaste,
+    dropHandlers,
+    dragging,
+    inputProps,
+  };
+}
+
+/**
+ * One toast for what wasn't attached. `problems` are files that couldn't be used (format, size, unreadable);
+ * `skipped` are pictures left out on purpose (already attached, over the limit).
+ */
+function reportProblems(problems: string[], skipped: string[], noun: "files" | "images") {
+  const all = [...problems, ...skipped];
+  if (all.length === 0) return;
+  if (problems.length === 0) {
+    // Nothing was wrong with the files themselves: no format reminder needed.
+    toast.info(all.join(". "));
+    return;
+  }
+  toast.warning(all.length === 1 ? all[0] : `${all.length} ${noun} weren't attached`, {
+    description:
+      all.length > 1
+        ? all.join(" · ")
+        : // Format problems already name the accepted formats.
+          all[0].includes(ACCEPTED_IMAGE_LABEL)
+          ? `Up to 5 MB each, ${MAX_ATTACHMENTS} per message.`
+          : `${ACCEPTED_IMAGE_LABEL}, up to 5 MB each, ${MAX_ATTACHMENTS} per message.`,
+  });
 }

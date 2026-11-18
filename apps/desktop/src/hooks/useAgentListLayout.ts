@@ -18,3 +18,14 @@ export function toggleAgentList() {
   const ui = useUi.getState();
   ui.setAgentList(layout, !ui.agentList[layout]);
 }
+
+/** ⌘B: on another screen, go to the agents with the list showing; there, show or hide it. */
+export function showOrHideAgentList() {
+  const ui = useUi.getState();
+  if (ui.view !== "agents") {
+    ui.setView("agents");
+    ui.setAgentList(window.matchMedia(LIST_DOCK_QUERY).matches ? "wide" : "narrow", true);
+  } else {
+    toggleAgentList();
+  }
+}

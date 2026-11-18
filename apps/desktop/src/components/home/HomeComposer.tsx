@@ -195,7 +195,9 @@ export function HomeComposer({ compact = false, autoFocus = true }: { compact?: 
           // Enter starts, as it sends in an agent's chat; Shift+Enter adds a new line.
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
             e.preventDefault();
-            void start();
+            // No folder yet: Enter opens the folder picker instead of doing nothing.
+            if (needsFolder && prompt.trim() && !busy) setFolderOpen(true);
+            else void start();
           }
         }}
         placeholder={

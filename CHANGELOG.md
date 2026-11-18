@@ -21,6 +21,13 @@ docs/RELEASING.md).
 - Schedules: a Duplicate button copies a schedule (the copy starts paused). A run that failed to start says "Didn't start" instead of linking an older agent or saying the agent was removed.
 - Settings → Keyboard lists Find and Search shortcuts and has a "See all shortcuts" button.
 - Setup: narrow windows show the current step's name, and the sound and sign-in rows wrap instead of overflowing.
+- Dropping, pasting or sending in the same image twice attaches it once, and Kvistcode tells you it was already there.
+- The New agent dialog keeps a prompt you typed and closed without launching, with a Clear link, and says why Launch is greyed out (no folder, no account, no model).
+- The command palette can now hand off or delete the open agent, show or hide the agent list, start the voice assistant, go back and forward, and change the interface scale. Its ⌘1–9 numbers match the sidebar's order.
+- Removing an attached image with the keyboard keeps focus in the message box area instead of losing it.
+- Template picker: arrow keys keep the highlighted template in view, and it fits narrow windows.
+- On Home, pressing Enter without a project folder opens the folder picker.
+- The keyboard shortcuts sheet lists the keys for starting agents; the Handoff dialog shows its ⌘⏎ shortcut.
 
 ## v0.6.0 — 2026-11-17
 
