@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccountDot, ProviderBadge, StatusText } from "@/components/Identity";
 import { AppMark, Icon } from "@/components/Icon";
 import { Sheet } from "@/components/Sheet";
@@ -52,6 +52,7 @@ export function Fleet() {
 
   const list = useMemo(() => Object.values(agents), [agents]);
   const [query, setQuery] = useState(savedQuery);
+  const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     savedQuery = query;
   }, [query]);
@@ -119,13 +120,34 @@ export function Fleet() {
             </label>
             <input
               id="fleet-search"
+              ref={searchRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && query) {
+                  e.preventDefault();
+                  setQuery("");
+                }
+              }}
               placeholder={owner ? "Search agents and conversations" : "Search agents"}
               autoComplete="off"
-              className="block h-11 w-full rounded-xl border border-line bg-panel pr-3 pl-10 text-[16px] text-fg outline-none placeholder:text-steel focus:border-accent/60"
+              enterKeyHint="search"
+              className="block h-11 w-full rounded-xl border border-line bg-panel pr-11 pl-10 text-[16px] text-fg outline-none placeholder:text-steel focus:border-accent/60 [&::-webkit-search-cancel-button]:appearance-none"
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  searchRef.current?.focus({ preventScroll: true });
+                }}
+                aria-label="Clear search"
+                className="press absolute top-0 right-0 inline-flex h-11 w-11 items-center justify-center rounded-xl text-steel active:text-fg"
+              >
+                <Icon name="x" size={17} />
+              </button>
+            )}
           </div>
         )}
         {query && !filtered.length && <p className="px-1 text-[14px] text-muted">No agents match "{query}".</p>}

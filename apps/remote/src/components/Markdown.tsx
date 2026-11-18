@@ -7,7 +7,7 @@ import { CARET, inlineText, linkHostHint, parseBlocksCached, parseInlineCached, 
 import { highlight } from "@/lib/highlight";
 import { markdownImagePath } from "@/lib/localImages";
 import { cn } from "@/lib/cn";
-import { CODE_PREVIEW_LINES, codeCollapses } from "@/lib/collapse";
+import { CODE_PREVIEW_LINES, codeCollapses, codeHasLongLines } from "@/lib/collapse";
 import { noteUserLayoutChange } from "@/lib/scroll";
 import { numericColumns } from "@/lib/tables";
 import { CopyButton } from "./CopyButton";
@@ -127,6 +127,9 @@ function CodeBlock({ lang, text: raw }: { lang: string; text: string }) {
   const lineCount = text.replace(/\n$/, "").split("\n").length;
   const foldable = !caret && codeCollapses(lineCount, watched);
   const [open, setOpen] = useState(false);
+  // Long lines scroll sideways by default (code keeps its shape); "Wrap" fits them to the screen.
+  const [wrap, setWrap] = useState(false);
+  const wrappable = useMemo(() => codeHasLongLines(text), [text]);
   const folded = foldable && !open;
   const shown = folded ? text.split("\n").slice(0, CODE_PREVIEW_LINES).join("\n") : text;
   // Only the language word of the info string ("rust,ignore" -> "rust"), as on the desktop.
@@ -136,9 +139,34 @@ function CodeBlock({ lang, text: raw }: { lang: string; text: string }) {
     <div className="md-pre group">
       <div className="flex h-8 items-center justify-between border-b border-line/70 bg-panel/50 pr-1 pl-3.5">
         <span className="font-mono text-[11px] tracking-wide text-steel/90 lowercase">{name || "text"}</span>
-        <CopyButton text={text} label="Copy code" />
+        <span className="flex items-center">
+          {wrappable && (
+            <button
+              type="button"
+              aria-pressed={wrap}
+              aria-label="Wrap long lines"
+              onClick={() => {
+                noteUserLayoutChange();
+                setWrap((v) => !v);
+              }}
+              className={cn(
+                "press hit relative -my-1 inline-flex h-10 items-center rounded-lg px-2 text-[11.5px] font-medium",
+                wrap ? "text-accent" : "text-steel active:text-fg",
+              )}
+            >
+              Wrap
+            </button>
+          )}
+          <CopyButton text={text} label="Copy code" />
+        </span>
       </div>
-      <pre className={cn("overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-[1.65] text-fg", folded && "fold-fade-code")}>
+      <pre
+        className={cn(
+          "overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-[1.65] text-fg",
+          wrap && "whitespace-pre-wrap [overflow-wrap:anywhere]",
+          folded && "fold-fade-code",
+        )}
+      >
         <code>
           {diff ? (
             shown.split("\n").map((l, i) => (

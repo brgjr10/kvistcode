@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/cn";
 import { isIOS, isStandalone } from "@/lib/platform";
 import { confirmAction } from "@/lib/confirm";
+import { blockedCopy, shouldAutoRetry } from "@/lib/blocked";
 import { useStore } from "@/lib/store";
 import {
   canScanQr,
@@ -332,14 +333,27 @@ export function Blocked() {
   const reason = useStore((s) => s.blockedReason);
   const message = useStore((s) => s.blockedMessage);
   const [retrying, setRetrying] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const copy = blockedCopy(reason, online);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   // Keep trying quietly while the computer is asleep / the network is down.
   useEffect(() => {
-    if (reason !== "unreachable" && reason !== "unavailable") return;
+    if (!copy.autoRetry) return;
     // One attempt at a time: a new one cancels the one before, so on a slow link none would land.
     let trying = false;
     const retry = () => {
-      if (trying || document.visibilityState !== "visible") return;
+      // No network on the phone: nothing to try until it comes back (the "online" event retries).
+      if (!shouldAutoRetry(document.visibilityState === "visible", navigator.onLine, trying)) return;
       trying = true;
       void retryConnect().finally(() => (trying = false));
     };
@@ -351,9 +365,10 @@ export function Blocked() {
       window.removeEventListener("online", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [reason]);
+  }, [copy.autoRetry]);
 
   const rate = reason === "rate_limited";
+  const offline = copy.offline;
   const unreachable = reason === "unreachable";
   const unavailable = reason === "unavailable";
   return (
@@ -377,7 +392,9 @@ export function Blocked() {
       <h1 className="mt-6 text-center text-[24px] leading-tight font-semibold tracking-[-0.02em] text-fg">
         {rate
           ? "Too many attempts"
-          : unreachable
+          : offline
+            ? "Your phone is offline"
+            : unreachable
             ? "Can't reach Kvistcode"
             : unavailable
               ? "Remote access is off"
@@ -388,14 +405,16 @@ export function Blocked() {
       <p className="mx-auto mt-2 max-w-[330px] text-center text-[15px] leading-relaxed text-muted">
         {rate
           ? (message ?? "Try again in a few minutes.")
-          : unreachable
+          : offline
+            ? "Connect to Wi-Fi or mobile data to reach Kvistcode on your computer."
+            : unreachable
             ? "Your phone couldn't connect to Kvistcode on your computer."
             : unavailable
               ? `${message ?? "Kvistcode isn't accepting connections."} Turn it on in Settings → Phone & remote; this page reconnects by itself.`
               : message}
       </p>
 
-      {unreachable && (
+      {unreachable && !offline && (
         <ul className="mt-7 space-y-3 rounded-2xl border border-line bg-panel p-4 text-[14px] text-fg edge">
           {[
             "Kvistcode is open and your computer is awake",
@@ -428,8 +447,11 @@ export function Blocked() {
           loading={retrying}
           onClick={async () => {
             setRetrying(true);
-            await retryConnect();
-            setRetrying(false);
+            try {
+              await retryConnect();
+            } finally {
+              setRetrying(false);
+            }
           }}
         >
           Try again
@@ -451,9 +473,9 @@ export function Blocked() {
           Pair a different computer
         </Button>
       </div>
-      {(unreachable || unavailable) && (
-        <p className="mt-4 text-center text-[12.5px] text-steel">
-          Retrying automatically…
+      {copy.retryNote && (
+        <p className="mt-4 text-center text-[12.5px] text-steel" role="status">
+          {copy.retryNote}
         </p>
       )}
     </Frame>

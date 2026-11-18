@@ -10,6 +10,17 @@ import { useEffect, useRef, type RefObject } from "react";
 
 let openCount = 0;
 let seq = 0;
+/** Open overlays, oldest first: only the top one answers Escape and traps Tab (a confirm over a sheet). */
+const stack: number[] = [];
+
+export function pushOverlay(token: number) {
+  stack.push(token);
+}
+export function dropOverlay(token: number) {
+  const i = stack.lastIndexOf(token);
+  if (i >= 0) stack.splice(i, 1);
+}
+export const isTopOverlay = (token: number) => stack.length > 0 && stack[stack.length - 1] === token;
 /**
  * An overlay closed by the UI leaves its history entry behind; we step back
  * over it on the next tick. If another overlay opens in the meantime (e.g. the
@@ -52,9 +63,12 @@ export function useOverlay(open: boolean, onClose: () => void, panel: RefObject<
     window.addEventListener("popstate", onPop);
 
     openCount++;
+    pushOverlay(token);
     setBackgroundInert(true);
 
     const onKey = (e: KeyboardEvent) => {
+      // A confirmation open over this sheet handles the key; Escape there must not close both.
+      if (!isTopOverlay(token)) return;
       const el = panel.current;
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -83,6 +97,7 @@ export function useOverlay(open: boolean, onClose: () => void, panel: RefObject<
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("popstate", onPop);
       openCount = Math.max(0, openCount - 1);
+      dropOverlay(token);
       if (!openCount) setBackgroundInert(false);
       // Closed by the UI: drop our history entry (if it's still the current one),
       // unless another overlay adopts it first.

@@ -5,6 +5,15 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## Unreleased
+
+- Phone: when the phone itself has no network, the "Can't reach Kvistcode" screen now says "Your phone is offline" and reconnects once you're back online, instead of pointing at your computer.
+- Phone: code blocks with long lines have a Wrap button, so you can read them without scrolling sideways.
+- Phone: the agent search has a clear button (Escape clears it too).
+- Phone: if a screen hits an error, "Back to agents" gets you out of it.
+- Phone: Escape on a confirmation now closes only the confirmation, not the panel behind it.
+- Phone: an approval you swiped is sent right away if you leave the app, and its Undo button goes away with it.
+
 ## v0.6.0 — 2026-11-17
 
 Two new looks, Clean and Terminal, plus find in a conversation and fewer duplicate cards.

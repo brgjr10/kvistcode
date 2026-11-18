@@ -63,3 +63,18 @@ export const CODE_PREVIEW_LINES = 14;
 export function codeCollapses(lineCount: number, watched: boolean): boolean {
   return !watched && lineCount > CODE_COLLAPSE_LINES;
 }
+
+/** About as many monospace characters as fit across a code block on a phone (12.5px font, ~330px wide). */
+export const CODE_WRAP_CHARS = 44;
+
+/** Offer "Wrap" on a code block only when some line would run off the side of a phone screen. */
+export function codeHasLongLines(text: string, max = CODE_WRAP_CHARS): boolean {
+  let run = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    if (ch === 10) run = 0;
+    // A tab is drawn two columns wide (tab-size: 2).
+    else if ((run += ch === 9 ? 2 : 1) > max) return true;
+  }
+  return false;
+}

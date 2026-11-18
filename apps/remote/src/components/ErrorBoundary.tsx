@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { getRoute, navigate } from "@/lib/router";
+import { getState } from "@/lib/store";
 import { Icon } from "./Icon";
 import { Button } from "./ui";
 
@@ -34,6 +36,9 @@ export class ErrorBoundary extends Component<Props, State> {
   override render() {
     const { error } = this.state;
     if (!error) return this.props.children;
+    // Reloading reopens the same screen (the address keeps it), so offer a way out of it too.
+    // Not on a read-only link: it only ever shows its one agent.
+    const canLeave = getState().phase === "ready" && getState().session?.scope !== "viewer" && getRoute().name !== "fleet";
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center px-safe pt-[var(--safe-top)] pb-[var(--safe-bottom)] text-center" role="alert">
         <span className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-[20px] border border-err/30 bg-err/10 text-err edge">
@@ -44,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
           This screen hit an unexpected error. Your agents on your computer are not affected.
         </p>
         <p className="mt-3 max-w-[340px] truncate font-mono text-[12px] text-steel">{error.message}</p>
-        <div className="mt-6 flex gap-2">
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="secondary" onClick={() => this.setState({ error: null })}>
             Try again
           </Button>
@@ -52,6 +57,11 @@ export class ErrorBoundary extends Component<Props, State> {
             Reload
           </Button>
         </div>
+        {canLeave && (
+          <Button variant="ghost" icon="chevronLeft" className="mt-2" onClick={() => navigate({ name: "fleet" }, { replace: true })}>
+            Back to agents
+          </Button>
+        )}
       </main>
     );
   }
