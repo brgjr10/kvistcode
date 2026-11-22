@@ -7,7 +7,7 @@
 It looks at the release's assets and its latest.json, the file the in-app updater reads:
 
   * every installer is there, and every updater bundle has its .sig;
-  * latest.json is for this version, covers macOS, Linux and Windows, and each entry has a
+  * latest.json is for this version, covers Linux and Windows, and each entry has a
     signature and points at an asset of this release (a missing platform means two matrix jobs
     overwrote each other's upload: re-run the failed release job);
   * its notes match the version's section in CHANGELOG.md;
@@ -69,7 +69,6 @@ def main() -> int:
         "AppImage": rf"Kvistcode_{re.escape(version)}_amd64\.AppImage",
         "deb": rf"Kvistcode_{re.escape(version)}_amd64\.deb",
         "rpm": rf"Kvistcode-{re.escape(version)}-1\.x86_64\.rpm",
-        "mac app": rf"Kvistcode_{re.escape(version)}_universal\.app\.tar\.gz",
     }
     for label, pat in bundles.items():
         found = [n for n in names if re.fullmatch(pat, n)]
@@ -77,8 +76,6 @@ def main() -> int:
             problems.append(f"missing {label} bundle (expected {pat})")
         elif found[0] + ".sig" not in names:
             problems.append(f"{found[0]} has no .sig")
-    if f"Kvistcode_{version}_universal.dmg" not in names:
-        problems.append("missing the macOS .dmg")
     if "latest.json" not in names:
         problems.append("missing latest.json")
     for n in names:
@@ -99,7 +96,7 @@ def main() -> int:
         if data.get("version") != version:
             problems.append(f"latest.json is for {data.get('version')}, not {version}")
         plat = data.get("platforms", {})
-        for prefix in ("darwin-", "linux-", "windows-"):
+        for prefix in ("linux-", "windows-"):
             if not any(k.startswith(prefix) for k in plat):
                 problems.append(f"latest.json has no {prefix}* platform")
         for k, v in plat.items():

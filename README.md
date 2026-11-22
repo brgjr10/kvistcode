@@ -12,7 +12,7 @@ across all your accounts, with every project isolated in its own git worktree.
 [![CI](https://github.com/pl0xuee/kvistcode/actions/workflows/ci.yml/badge.svg)](https://github.com/pl0xuee/kvistcode/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/pl0xuee/kvistcode?include_prereleases&sort=semver)](https://github.com/pl0xuee/kvistcode/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-lightgrey)
 [![Support](https://img.shields.io/badge/Support-the%20project-4FC3F7?logo=githubsponsors&logoColor=white)](https://kvistcode.com/support/)
 
 <img width="100%" src="docs/screenshots/mission-control.png" alt="Kvistcode's Mission Control: a grid of agents from several providers, some working, some waiting for an approval or an answer, with Allow, Deny and Answer buttons on the cards" />
@@ -142,10 +142,9 @@ Download the installer for your OS from the [latest release](https://github.com/
 | OS | Download |
 |---|---|
 | Windows | `-setup.exe` |
-| macOS | `.dmg` (universal: Apple Silicon and Intel) |
 | Linux | `.AppImage`, `.deb` or `.rpm` |
 
-Kvistcode checks GitHub Releases for updates (shortly after launch, then every 6 hours, and from Settings, About). Windows, macOS and AppImage installs update in place with signed updates; `.deb` and `.rpm` installs are told when a new version exists and link to the release page.
+Kvistcode checks GitHub Releases for updates (shortly after launch, then every 6 hours, and from Settings, About). Windows and AppImage installs update in place with signed updates; `.deb` and `.rpm` installs are told when a new version exists and link to the release page.
 
 Upgrading from Armada? Kvistcode is the same app under a new name: your agents, settings and sign-ins carry over, and updates keep working. The command is now `kvistcode` (on Linux, `kvistcode --new-agent` opens the New agent dialog, handy for a window-manager keybinding), and new agent branches start with `kvistcode/`.
 

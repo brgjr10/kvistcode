@@ -2,7 +2,7 @@
 
 Installed copies of Kvistcode check GitHub Releases for updates (15 seconds after launch, then every 6 hours, plus Settings → General → "Check for updates").
 
-- **Windows, macOS, Linux AppImage** install updates in place. The updater reads `latest.json` from the latest published release and verifies each download against the public key in `apps/desktop/src-tauri/tauri.conf.json` before installing.
+- **Windows, Linux AppImage** install updates in place. The updater reads `latest.json` from the latest published release and verifies each download against the public key in `apps/desktop/src-tauri/tauri.conf.json` before installing.
 - **deb / rpm** installs are owned by the system package manager. Kvistcode asks the GitHub Releases API whether a newer version exists and links to the release page.
 
 ## Release notes
@@ -19,7 +19,7 @@ Every release has notes, written in [`CHANGELOG.md`](../CHANGELOG.md). Add user-
 There is one workflow, `.github/workflows/ci.yml`, and it does the same thing on every run:
 
 1. **linux**: release notes check, command contract, the unix-test gate check, formatting, phone and desktop UI tests and builds, clippy, Rust tests.
-2. **macOS** and **Windows**: clippy and Rust tests, once linux passes.
+2. **Windows**: clippy and Rust tests, once linux passes. (macOS is not built or tested in CI.)
 3. **e2e**: builds the real app and drives it headless with WebDriver (`apps/desktop/e2e`), once linux passes. It walks every rail view (Projects, Mission Control, Compare, Schedules, Usage, Accounts), both Mission Control tabs, the command palette and its conversation search (`?`), every Settings page including Tools & instructions, and the welcome tour (opened from Settings → About, because the app never opens it by itself under WebDriver). It fails on any uncaught JS error, error toast or "state not managed" message.
 4. **draft**, then **release**: on a push to `main`, once 1–3 pass, if the version in `Cargo.toml` hasn't been tagged yet. `draft` creates a draft release for it; `release` builds and signs the installers into that draft (it uses the `release` repository environment, so required reviewers added there approve every release).
 
@@ -42,7 +42,7 @@ There's no tag to push: bumping the version on `main` is the release.
 
 ### Pre-release checklist
 
-- [ ] Everything you want in the release is merged, and CI on `main` is green on **all three OSes**. The Windows job is the one that catches Unix-only test code (see below).
+- [ ] Everything you want in the release is merged, and CI on `main` is green on **Linux and Windows**. The Windows job is the one that catches Unix-only test code (see below).
 - [ ] Open Dependabot pull requests are merged or consciously left for later (a merge after the bump restarts the draft).
 - [ ] `CHANGELOG.md` has a section for the new version, written for users, with the date. `python3 scripts/release_notes.py --check` passes.
 - [ ] All three versions agree (`Cargo.toml`, `apps/desktop/package.json`, `apps/remote/package.json`) and `Cargo.lock` / the npm lock files were refreshed.
@@ -57,7 +57,7 @@ There's no tag to push: bumping the version on `main` is the release.
    - `apps/desktop/package.json` and `apps/remote/package.json` → `version` (then `npm install` in each to update the lock files)
    - `tauri.conf.json` has no version on purpose: Tauri takes it from `Cargo.toml`.
 2. In `CHANGELOG.md`, rename `## Unreleased` to `## v0.2.0 — <date>` and review the notes.
-3. Commit and push to `main`. Once every check passes, CI creates a **draft** release `v0.2.0` with the notes as its body, builds macOS (universal), Windows and Linux installers, signs the update bundles and uploads everything plus `latest.json` to it.
+3. Commit and push to `main`. Once every check passes, CI creates a **draft** release `v0.2.0` with the notes as its body, builds Windows and Linux installers, signs the update bundles and uploads everything plus `latest.json` to it.
 4. [Verify the draft](#verifying-a-draft) below.
 5. Press **Publish**. Publishing creates the `v0.2.0` tag on the commit the draft was built from. Edits to the draft's notes change the GitHub page only: the in-app updater reads the copy already baked into `latest.json`, so fix notes in `CHANGELOG.md` and push. Only published releases are visible to the updater, so this is the moment the update rolls out.
 6. Run `python3 scripts/verify_release.py v0.2.0 --live` once more (see below) and check Settings → General → "Check for updates" from an older install if you can.
@@ -74,9 +74,9 @@ python3 scripts/verify_release.py v0.2.0
 
 It checks that:
 
-- the release has the installers: `…_x64-setup.exe`, `…_amd64.AppImage`, `…_amd64.deb`, `….x86_64.rpm`, `…_universal.dmg` and `…_universal.app.tar.gz`, named `Kvistcode…` (an `Armada…` name means a stale build);
-- every updater bundle (everything except the `.dmg`) has a matching `.sig`;
-- `latest.json` is for this version, has `darwin-*`, `linux-*` and `windows-*` entries (a missing platform means two upload jobs overwrote each other's `latest.json`: re-run the failed `release` job), every entry has a non-empty signature, and each URL is one of this release's assets;
+- the release has the installers: `…_x64-setup.exe`, `…_amd64.AppImage`, `…_amd64.deb`, and `….x86_64.rpm`, named `Kvistcode…` (an `Armada…` name means a stale build);
+- every updater bundle has a matching `.sig`;
+- `latest.json` is for this version, has `linux-*` and `windows-*` entries (a missing platform means two upload jobs overwrote each other's `latest.json`: re-run the failed `release` job), every entry has a non-empty signature, and each URL is one of this release's assets;
 - the notes in `latest.json` are the version's `CHANGELOG.md` section.
 
 By hand: `gh release view v0.2.0 --json isDraft,assets --jq '{draft: .isDraft, assets: [.assets[].name]}'`, then `gh release download v0.2.0 -p latest.json -D "$TMPDIR/draft"` and open the file. Also skim the release body, and download one installer for your OS and start it if you can.
@@ -139,7 +139,7 @@ Linux CI cannot see Windows-only lint failures. Real example: a test module's he
 
 ## Signing: OS code signing (optional)
 
-The release job in `ci.yml` has a placeholder comment for Apple notarization and Windows Authenticode secrets. Without them, macOS Gatekeeper and Windows SmartScreen show a warning on first install. Updates still verify through the updater key above.
+The release job in `ci.yml` has a placeholder comment for Windows Authenticode secrets. Without them, Windows SmartScreen shows a warning on first install. Updates still verify through the updater key above.
 
 ## Building locally
 

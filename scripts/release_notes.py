@@ -19,7 +19,6 @@ HEADING = re.compile(r"^## +(v?\d+\.\d+\.\d+\S*|Unreleased)\b.*$", re.MULTILINE)
 
 INSTALL = """### Install
 
-- **macOS**: `.dmg` (universal: Apple Silicon + Intel)
 - **Windows**: `-setup.exe`
 - **Linux**: `.AppImage`, `.deb` or `.rpm`
 

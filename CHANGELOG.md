@@ -16,6 +16,7 @@ Gemini joins Claude, Codex and Grok as a built-in agent.
 - Gemini keeps its sign-in in an encrypted file in the account's folder and never touches the system keyring.
 - In the New agent dialog, Alt+4 now picks Gemini and Alt+5 picks Local.
 - The "Gemini CLI" custom agent preset is gone; use the built-in Gemini instead.
+- No macOS build this release: Kvistcode now ships for Windows and Linux. Mac installs stay on v0.6.1.
 
 ## v0.6.1 — 2026-11-17
 
