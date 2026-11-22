@@ -572,10 +572,13 @@ mod gemini_tests {
             assert!(removed.contains(&var.to_string()), "{var}");
         }
         let env = account_env(&a);
+        let expected_profile = PathBuf::from("/tmp/kvistcode-gemini-profile")
+            .join(".gemini")
+            .to_string_lossy()
+            .into_owned();
         assert!(env
             .iter()
-            .any(|(key, value)| key == "KVISTCODE_GEMINI_PROFILE"
-                && value == "/tmp/kvistcode-gemini-profile/.gemini"));
+            .any(|(key, value)| key == "KVISTCODE_GEMINI_PROFILE" && value == &expected_profile));
         // The system account uses Antigravity's default data directory.
         let sys = gemini_account(true);
         assert!(env_to_remove(&sys).is_empty());
