@@ -13,6 +13,12 @@ Gemini agents now use Google's Antigravity CLI, which supports Google-account si
 - Kvistcode installs Antigravity CLI from Google's platform manifest and verifies the published SHA-512 checksum.
 - Gemini API-key accounts remain available, and Kvistcode sets Antigravity's API-key mode for them.
 
+## v0.7.2 — 2026-11-22
+
+Fixes Google sign-in for Gemini accounts.
+
+- Antigravity now receives its app-data directory in the relative form it requires, so the Google sign-in flow can start.
+
 ## v0.7.0 — 2026-11-22
 
 Gemini joins Claude, Codex and Grok as a built-in agent.

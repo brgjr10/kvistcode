@@ -20,7 +20,7 @@ const win = process.platform === "win32";
 const profile = process.env.KVISTCODE_GEMINI_PROFILE || path.join(os.homedir(), ".gemini");
 // Keep the server in its own process group so closing the sign-in window stops it.
 const appData = path.join(profile, "antigravity-cli");
-const child = spawn(cli, ["acp", "--app_data_dir", appData, "--gemini-dir", profile], {
+const child = spawn(cli, ["acp", "--app_data_dir", "antigravity-cli", "--gemini-dir", profile], {
   stdio: ["pipe", "pipe", "inherit"],
   shell: false,
   detached: !win,
@@ -76,6 +76,18 @@ pub fn config_dir(account: &Account) -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(providers::home_dir)
         .map(|h| h.join(".gemini"))
+}
+
+/// ACP arguments for a profile. Antigravity expects `--app_data_dir` to be a relative
+/// directory name under its Gemini data directory, not the absolute path it resolves to.
+pub(crate) fn acp_args(profile: &Path) -> Vec<String> {
+    vec![
+        "acp".into(),
+        "--app_data_dir".into(),
+        "antigravity-cli".into(),
+        "--gemini-dir".into(),
+        profile.to_string_lossy().into_owned(),
+    ]
 }
 
 /// Project instruction files a Kvistcode-made Gemini profile reads: AGENTS.md (what Codex,
@@ -250,6 +262,20 @@ mod tests {
         assert_ne!(
             config_dir(&account),
             Some(PathBuf::from("/profiles/g/.gemini"))
+        );
+    }
+
+    #[test]
+    fn acp_uses_a_relative_app_data_directory_for_each_profile() {
+        assert_eq!(
+            acp_args(Path::new("/profiles/g/.gemini")),
+            [
+                "acp",
+                "--app_data_dir",
+                "antigravity-cli",
+                "--gemini-dir",
+                "/profiles/g/.gemini"
+            ]
         );
     }
 }

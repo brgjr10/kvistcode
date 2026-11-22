@@ -357,7 +357,8 @@ pub fn set_data_dir(dir: &Path) {
 
 /// Kvistcode's own copy of a provider's CLI, installed by Kvistcode into its data folder
 /// (see `toolchain::install`): Claude Code ships inside the Claude Agent SDK package,
-/// Codex, Grok and Gemini are their pinned npm packages. `None` until it is installed.
+/// Codex and Grok are pinned npm packages; Gemini uses the managed Antigravity binary.
+/// `None` until the provider is installed.
 pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
     match provider {
         Provider::Claude => bundled_claude(data_dir),
@@ -558,19 +559,7 @@ pub fn launch_spec(provider: Provider, data_dir: &Path) -> anyhow::Result<(PathB
                         .unwrap_or_default()
                         .join(".gemini")
                 });
-            Ok((
-                cli,
-                vec![
-                    "acp".into(),
-                    "--app_data_dir".into(),
-                    profile
-                        .join("antigravity-cli")
-                        .to_string_lossy()
-                        .into_owned(),
-                    "--gemini-dir".into(),
-                    profile.to_string_lossy().into_owned(),
-                ],
-            ))
+            Ok((cli, crate::gemini::acp_args(&profile)))
         }
         Provider::Local => launch_spec(Provider::Codex, data_dir),
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
