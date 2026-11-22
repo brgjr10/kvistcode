@@ -36,7 +36,7 @@ const withValue = (list: { value: string; label: string }[], v: string) =>
 /**
  * "Choose your models": what new agents start with, per provider. Claude: the main agent's model and
  * effort and the helper agents' model and effort, with the recommended setup one click away. Codex,
- * Grok and custom agents (Gemini CLI, ...): the model and effort their agents offer. Shown when a
+ * Grok, Gemini and custom agents: the model and effort their agents offer. Shown when a
  * project is made (unless turned off) and from Settings.
  */
 export function ModelSetupDialog({

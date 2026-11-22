@@ -1,4 +1,5 @@
 //! Agent Client Protocol driver (Claude via claude-agent-acp, Grok via `grok agent stdio`,
+//! Gemini via `gemini --acp`,
 //! and any other ACP agent). Spec: https://agentclientprotocol.com
 
 use std::collections::HashMap;

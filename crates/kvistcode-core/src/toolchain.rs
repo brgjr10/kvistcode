@@ -468,6 +468,12 @@ fn packages_for(provider: Provider, data_dir: &Path) -> Vec<String> {
             providers::GROK_VERSION,
             data_dir,
         )),
+        Provider::Gemini => pkgs.extend(managed_pkg(
+            provider,
+            providers::GEMINI_PKG,
+            providers::GEMINI_VERSION,
+            data_dir,
+        )),
         Provider::Custom => {}
         Provider::Local => return packages_for(Provider::Codex, data_dir),
     }
@@ -482,8 +488,9 @@ pub fn needs_install(provider: Provider, data_dir: &Path) -> bool {
 /// Packages whose own install script is needed and trusted: Claude Code and Grok
 /// copy their native binary out of the platform optionalDependency in `postinstall`.
 /// Everything else (Codex and the Claude adapter ship plain files or script-less
-/// platform packages; Grok's only dependency, @iarna/toml, has no install script)
-/// is installed with scripts disabled, and transitive scripts never run.
+/// platform packages; Grok's only dependency, @iarna/toml, has no install script;
+/// Gemini CLI is a plain JavaScript bundle) is installed with scripts disabled, and
+/// transitive scripts never run.
 const SCRIPTED_PKGS: &[&str] = &[providers::CLAUDE_CODE_PKG, providers::GROK_PKG];
 
 fn pkg_name(spec: &str) -> &str {
@@ -813,6 +820,7 @@ pub fn tool_package(provider: Provider) -> Option<(&'static str, &'static str)> 
         )),
         Provider::Codex => Some((providers::CODEX_PKG, providers::CODEX_VERSION)),
         Provider::Grok => Some((providers::GROK_PKG, providers::GROK_VERSION)),
+        Provider::Gemini => Some((providers::GEMINI_PKG, providers::GEMINI_VERSION)),
         Provider::Local | Provider::Custom => None,
     }
 }

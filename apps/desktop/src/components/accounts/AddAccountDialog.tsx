@@ -23,12 +23,14 @@ const SUBSCRIPTION: Record<CloudProvider, string> = {
   claude: "Claude Pro or Max",
   codex: "ChatGPT Plus, Pro or Team",
   grok: "SuperGrok or X Premium+",
+  gemini: "Google account (free, or Google AI Pro)",
 };
 
 const KEY_HINT: Record<CloudProvider, { env: string; placeholder: string }> = {
   claude: { env: "ANTHROPIC_API_KEY", placeholder: "sk-ant-…" },
   codex: { env: "OPENAI_API_KEY", placeholder: "sk-proj-…" },
   grok: { env: "XAI_API_KEY", placeholder: "xai-…" },
+  gemini: { env: "GEMINI_API_KEY", placeholder: "AIza…" },
 };
 
 export function AddAccountDialog({

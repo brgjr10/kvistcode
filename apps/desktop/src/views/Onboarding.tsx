@@ -233,7 +233,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
         style={{ animationDelay: "90ms" }}
         className="ob-rise mt-3 max-w-[460px] text-pretty text-[14px] leading-relaxed text-muted"
       >
-        Run several AI coding agents at once, and stay in control. Use Claude, Codex and Grok side by side, on all your
+        Run several AI coding agents at once, and stay in control. Use Claude, Codex, Grok and Gemini side by side, on all your
         accounts. Approve, review and ship from one place.
       </p>
       <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
@@ -332,7 +332,7 @@ function ProvidersStep() {
         ) : (
           <div className="flex flex-col items-center rounded-xl border border-line bg-card px-4 py-8 text-center edge">
             <p className="text-[13.5px] font-medium">No tools found yet</p>
-            <p className="mt-1 text-small text-muted">Kvistcode couldn't look for Claude, Codex or Grok.</p>
+            <p className="mt-1 text-small text-muted">Kvistcode couldn't look for Claude, Codex, Grok or Gemini.</p>
             <Button className="mt-4" variant="primary" onClick={detect}>
               <RefreshCw /> Try again
             </Button>
@@ -446,7 +446,7 @@ function AccountsStep() {
           offers.length > 0
             ? "Sign in to the tool you just installed, so your first agent can start."
             : accounts.length === 0
-              ? "Add the login your agents will use: Claude, ChatGPT (Codex) or Grok."
+              ? "Add the login your agents will use: Claude, ChatGPT (Codex), Grok or Gemini."
               : "Kvistcode found sign-ins already on this computer. Add more accounts (a second Claude Max, a work ChatGPT) and run agents on all of them at once."
         }
       />
@@ -675,7 +675,7 @@ function DoneStep({
       {signedIn === 0 && (
         <div className="mt-4 flex w-full max-w-[420px] items-center gap-3 rounded-xl border border-warn/30 bg-warn/[0.06] px-4 py-3 text-left">
           <p className="min-w-0 flex-1 text-small leading-snug text-warn">
-            No account is signed in yet. Claude, Codex and Grok agents need one to start.
+            No account is signed in yet. Claude, Codex, Grok and Gemini agents need one to start.
           </p>
           <Button size="sm" variant="secondary" onClick={onAddAccount}>
             Add account

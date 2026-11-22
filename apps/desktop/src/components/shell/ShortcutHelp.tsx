@@ -84,7 +84,7 @@ const SECTIONS: { title: string; rows: Row[] }[] = [
     rows: [
       { keys: ["⏎"], label: "Home: start the agent (⇧⏎ for a new line)" },
       { keys: [modKey, "⏎"], label: "New agent: launch, from any field" },
-      { keys: [isMac ? "⌥" : "Alt", "1–5"], label: "New agent: pick Claude, Codex, Grok, Local or a custom agent" },
+      { keys: [isMac ? "⌥" : "Alt", "1–6"], label: "New agent: pick Claude, Codex, Grok, Gemini, Local or a custom agent" },
       { keys: [modKey, "⏎"], label: "Command palette: start an agent with what you typed" },
     ],
   },

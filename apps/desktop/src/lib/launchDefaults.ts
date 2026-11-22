@@ -9,7 +9,7 @@ import type { Account, Agent, CreateAgentRequest, CustomAgent, Provider, Provide
 
 const KEY = "armada.launchDefaults";
 
-/** "claude" | "codex" | "grok" | "custom:<id>" */
+/** "claude" | "codex" | "grok" | "gemini" | "custom:<id>" */
 export type LaunchChoice = string;
 
 export interface LaunchDefaults {

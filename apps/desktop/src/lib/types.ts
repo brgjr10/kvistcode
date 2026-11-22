@@ -2,7 +2,7 @@
 // Field names are camelCase on the wire; Rust uses #[serde(rename_all = "camelCase")].
 // Keep this file in sync with crates/kvistcode-core/src/model.rs.
 
-export type Provider = "claude" | "codex" | "grok" | "local" | "custom";
+export type Provider = "claude" | "codex" | "grok" | "gemini" | "local" | "custom";
 
 export type AuthKind = "default" | "oauth" | "api_key";
 
@@ -21,7 +21,7 @@ export interface Account {
   name: string; // user-facing, e.g. "Work", "Personal"
   color: string; // hex, used for avatar ring
   authKind: AuthKind;
-  /** true = uses the CLI's normal config dir (~/.claude, ~/.codex, ~/.grok) */
+  /** true = uses the CLI's normal config dir (~/.claude, ~/.codex, ~/.grok, ~/.gemini) */
   isSystem: boolean;
   configDir: string | null; // isolated dir for non-system profiles
   createdAt: number;
@@ -802,7 +802,7 @@ export interface VoiceAssistantUsage {
   sessions: number;
 }
 
-/** Any ACP agent the user configured (Gemini CLI, Goose, OpenCode, ...). */
+/** Any ACP agent the user configured (Goose, OpenCode, ...). */
 export interface CustomAgent {
   id: string;
   name: string;

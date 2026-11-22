@@ -19,6 +19,8 @@ pub const CODEX_PKG: &str = "@openai/codex";
 pub const CODEX_VERSION: &str = "0.166.0";
 pub const GROK_PKG: &str = "@xai-official/grok";
 pub const GROK_VERSION: &str = "1.0.70";
+pub const GEMINI_PKG: &str = "@google/gemini-cli";
+pub const GEMINI_VERSION: &str = "0.70.0";
 
 pub fn cli_name(provider: Provider) -> &'static str {
     provider.as_str()
@@ -357,11 +359,11 @@ pub fn set_data_dir(dir: &Path) {
 
 /// Kvistcode's own copy of a provider's CLI, installed by Kvistcode into its data folder
 /// (see `toolchain::install`): Claude Code ships inside the Claude Agent SDK package,
-/// Codex and Grok are their pinned npm packages. `None` until it is installed.
+/// Codex, Grok and Gemini are their pinned npm packages. `None` until it is installed.
 pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
     match provider {
         Provider::Claude => bundled_claude(data_dir),
-        Provider::Codex | Provider::Grok => {
+        Provider::Codex | Provider::Grok | Provider::Gemini => {
             let bin = crate::toolchain::tools_bin_dir(data_dir);
             which::which_in(cli_name(provider), Some(&bin), data_dir).ok()
         }
@@ -544,6 +546,17 @@ pub fn launch_spec(provider: Provider, data_dir: &Path) -> anyhow::Result<(PathB
             })?;
             Ok((cli, vec!["agent".into(), "stdio".into()]))
         }
+        Provider::Gemini => {
+            let cli = find_cli(Provider::Gemini).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Gemini CLI is not installed. Install it from Settings → Providers."
+                )
+            })?;
+            // `--skip-trust`: the agent's project counts as trusted for this session
+            // only (nothing is saved), like any project an agent is started in.
+            // Without it Gemini refuses its "yolo" mode, which "Run without asking" uses.
+            Ok((cli, vec!["--acp".into(), "--skip-trust".into()]))
+        }
         Provider::Local => launch_spec(Provider::Codex, data_dir),
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
     }
@@ -568,6 +581,7 @@ pub fn install_command(provider: Provider, data_dir: &Path) -> String {
         }
         Provider::Codex | Provider::Local => "npm install -g @openai/codex".into(),
         Provider::Grok => "npm install -g @xai-official/grok".into(),
+        Provider::Gemini => "npm install -g @google/gemini-cli".into(),
         Provider::Custom => String::new(),
     }
 }
@@ -578,6 +592,7 @@ pub fn docs_url(provider: Provider) -> &'static str {
         Provider::Codex => "https://developers.openai.com/codex/cli",
         Provider::Local => "https://ollama.com/download",
         Provider::Grok => "https://docs.x.ai",
+        Provider::Gemini => "https://github.com/google-gemini/gemini-cli",
         Provider::Custom => "https://agentclientprotocol.com/overview/agents",
     }
 }
@@ -595,7 +610,7 @@ async fn version_of(cli: PathBuf) -> Option<String> {
     .ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
     let line = s.lines().next()?.trim();
-    // "2.1.312 (Claude Code)", "codex-cli 0.164.0", "grok 1.0.70 (sha) [stable]"
+    // "2.1.312 (Claude Code)", "codex-cli 0.164.0", "grok 1.0.70 (sha) [stable]", "0.70.0"
     line.split_whitespace()
         .find(|t| t.chars().next().is_some_and(|c| c.is_ascii_digit()))
         .map(str::to_string)
@@ -664,7 +679,7 @@ mod tests {
     #[test]
     #[ignore]
     fn print_resolved_programs() {
-        for name in ["codex", "claude", "grok", "gh", "git"] {
+        for name in ["codex", "claude", "grok", "gemini", "gh", "git"] {
             println!("{name}: {:?}", resolve_program(name));
         }
     }

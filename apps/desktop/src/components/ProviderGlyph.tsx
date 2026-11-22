@@ -72,6 +72,15 @@ export function ProviderMark({
       </svg>
     );
   }
+  if (provider === "gemini") {
+    // Gemini: two linked rings (the twins).
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="12" r="5" />
+        <circle cx="15" cy="12" r="5" />
+      </svg>
+    );
+  }
   // Grok: angular "G".
   return (
     <svg {...common}>

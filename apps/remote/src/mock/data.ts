@@ -10,6 +10,7 @@ export const accounts: RemoteAccount[] = [
   { id: "acc-team", name: "Team", provider: "claude", color: "#F5B544", label: "Claude team", authKind: "oauth", plan: "team", loggedIn: true },
   { id: "acc-openai", name: "ChatGPT", provider: "codex", color: "#3DDC97", label: "Logged in using ChatGPT", authKind: "oauth", loggedIn: true },
   { id: "acc-grok", name: "xAI", provider: "grok", color: "#E5E7EB", label: "SuperGrok", authKind: "oauth", loggedIn: false, error: null },
+  { id: "acc-gemini", name: "Google", provider: "gemini", color: "#4285F4", label: "Google account", authKind: "oauth", loggedIn: true, error: null },
   { id: "custom-gemini", name: "Local agents", provider: "custom", color: "#B39DDB", label: null },
 ];
 
@@ -150,6 +151,19 @@ export function providerConfig(provider: Agent["provider"], modelValue?: string)
       ];
     case "grok":
       return [option("model", "Model", "model", "grok-code-fast", [["grok-code-fast", "Grok Code Fast"], ["grok-4", "Grok 4"]])];
+    case "gemini":
+      return [
+        option("model", "Model", "model", modelValue ?? "auto", [
+          ["auto", "Auto"],
+          ["gemini-2.5-pro", "gemini-2.5-pro"],
+        ]),
+        option("mode", "Mode", "mode", "yolo", [
+          ["default", "Default"],
+          ["autoEdit", "Auto Edit"],
+          ["yolo", "YOLO"],
+          ["plan", "Plan"],
+        ]),
+      ];
     default:
       return [option("mode", "Mode", "mode", "default", [["default", "Default"], ["yolo", "Auto-approve"]])];
   }

@@ -8,6 +8,8 @@ const PLAIN_MODE: Partial<Record<Agent["provider"], Record<string, "ask" | "auto
   codex: { untrusted: "ask", "on-request": "auto" },
   local: { untrusted: "ask", "on-request": "auto" },
   grok: { ask: "ask", auto: "auto" },
+  // Gemini's "YOLO" is what "Run without asking" starts it with.
+  gemini: { default: "ask", yolo: "auto" },
 };
 
 /**

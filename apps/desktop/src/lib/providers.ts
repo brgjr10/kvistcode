@@ -43,6 +43,15 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
     hex: "#E5E7EB",
     tagline: "Grok Build",
   },
+  gemini: {
+    id: "gemini",
+    name: "Gemini",
+    short: "Gemini",
+    vendor: "Google",
+    colorVar: "var(--gemini)",
+    hex: "#4285F4",
+    tagline: "Gemini CLI",
+  },
   local: {
     id: "local",
     name: "Local model",
@@ -63,7 +72,7 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
   },
 };
 
-export const PROVIDER_ORDER: BuiltinProvider[] = ["claude", "codex", "grok", "local"];
+export const PROVIDER_ORDER: BuiltinProvider[] = ["claude", "codex", "grok", "gemini", "local"];
 
 export const CUSTOM_ACCOUNT_ID = "system-custom";
 

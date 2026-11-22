@@ -95,7 +95,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
   const [project, setProject] = useState(preset?.projectPath ?? (initial.folder || recent[0] || ""));
   const [compare, setCompare] = useState(preset?.compare ?? false);
   const customAgents = useMemo(() => (settings?.customAgents ?? []).filter((c) => c.enabled), [settings?.customAgents]);
-  /** "claude" | "codex" | "grok" | "custom:<id>" */
+  /** "claude" | "codex" | "grok" | "gemini" | "custom:<id>" */
   const [choice, setChoice] = useState<string>(
     () =>
       preset?.provider ??
@@ -171,7 +171,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
     return () => clearTimeout(t);
   }, []);
 
-  // Alt+1..5 picks the agent: Claude, Codex, Grok, Local, then the first custom agent.
+  // Alt+1..6 picks the agent: Claude, Codex, Grok, Gemini, Local, then the first custom agent.
   const keyChoices = useMemo<string[]>(
     () => [...PROVIDER_ORDER, ...(customAgents[0] ? [`custom:${customAgents[0].id}`] : [])],
     [customAgents],
@@ -210,7 +210,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
       }
       if (!e.altKey || e.ctrlKey || e.metaKey || e.repeat || compare) return;
       // e.code: Alt+digit types symbols on macOS.
-      const m = /^Digit([1-5])$/.exec(e.code);
+      const m = /^Digit([1-6])$/.exec(e.code);
       const key = m ? keyChoices[Number(m[1]) - 1] : undefined;
       if (!key) return;
       e.preventDefault();

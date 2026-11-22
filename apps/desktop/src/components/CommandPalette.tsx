@@ -149,7 +149,7 @@ const SETTINGS_SECTIONS: { id: SettingsSection; label: string; keywords: string[
   { id: "notifications", label: "Alerts & sounds", keywords: ["notify", "quiet hours", "dnd", "audio", "volume"] },
   { id: "behavior", label: "New agents", keywords: ["permission mode", "worktree", "replies", "helpers"] },
   { id: "models", label: "Models & spending", keywords: ["opus", "sonnet", "save tokens", "failover", "budgets"] },
-  { id: "providers", label: "Providers", keywords: ["install", "cli", "claude", "codex", "grok"] },
+  { id: "providers", label: "Providers", keywords: ["install", "cli", "claude", "codex", "grok", "gemini"] },
   { id: "agents", label: "Custom agents", keywords: ["acp", "gemini", "goose"] },
   {
     id: "projects",

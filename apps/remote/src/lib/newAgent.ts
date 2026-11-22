@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import type { Attachment, CreateAgentRequest, PermissionMode, Provider, RemoteAccount, RemoteCustomAgent } from "./types";
 
 export interface AgentChoice {
-  /** "claude" | "codex" | "grok" | "custom:<id>" */
+  /** "claude" | "codex" | "grok" | "gemini" | "custom:<id>" */
   key: string;
   provider: Provider;
   customAgentId: string | null;
@@ -15,7 +15,7 @@ export interface AgentChoice {
   accounts: RemoteAccount[];
 }
 
-const BUILT_IN: Provider[] = ["claude", "codex", "grok", "local"];
+const BUILT_IN: Provider[] = ["claude", "codex", "grok", "gemini", "local"];
 
 /**
  * Built-in providers and each *enabled* custom agent, but only those that

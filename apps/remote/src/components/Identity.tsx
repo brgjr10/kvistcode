@@ -5,10 +5,11 @@ import { cn } from "@/lib/cn";
 
 /**
  * Original monogram marks, identical to the desktop app (an open "C" for
- * Claude, a hex "O" for Codex, an angular "G" for Grok); never vendor logos.
+ * Claude, a hex "O" for Codex, an angular "G" for Grok, two linked rings for
+ * Gemini); never vendor logos.
  * Custom agents get the first letter of their name.
  */
-export function ProviderMark({ provider, size }: { provider: "claude" | "codex" | "grok" | "local"; size: number }) {
+export function ProviderMark({ provider, size }: { provider: "claude" | "codex" | "grok" | "gemini" | "local"; size: number }) {
   const common = {
     width: size,
     height: size,
@@ -33,6 +34,14 @@ export function ProviderMark({ provider, size }: { provider: "claude" | "codex" 
       <svg {...common}>
         <path d="M12 3.2 19.6 7.6v8.8L12 20.8 4.4 16.4V7.6Z" />
         <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+  if (provider === "gemini") {
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="12" r="5" />
+        <circle cx="15" cy="12" r="5" />
       </svg>
     );
   }

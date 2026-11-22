@@ -249,6 +249,9 @@ pub fn looks_like_auth_error(text: &str) -> bool {
         "not logged in",
         "invalid api key",
         "invalid x api key",
+        // Gemini CLI: "API key not valid. …", "Gemini API key is missing or not configured."
+        "api key not valid",
+        "api key is missing",
     ]
     .iter()
     .any(|p| joined.contains(&format!(" {p} ")))
@@ -946,6 +949,12 @@ mod tests {
         assert!(looks_like_auth_error("HTTP 401 Unauthorized"));
         assert!(looks_like_auth_error("Please log in again"));
         assert!(looks_like_auth_error("auth_required"));
+        assert!(looks_like_auth_error(
+            "API key not valid. Please pass a valid API key."
+        ));
+        assert!(looks_like_auth_error(
+            "Gemini API key is missing or not configured."
+        ));
         assert!(!looks_like_auth_error("the author of the file"));
         assert!(!looks_like_auth_error("authority record not found"));
         assert!(!looks_like_auth_error("line 4012 is wrong"));

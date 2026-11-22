@@ -94,7 +94,7 @@ export function AccountsView() {
               className="pb-8 pt-4"
               icon={<Users />}
               title="No accounts yet"
-              description="Add a Claude, ChatGPT or Grok login so your agents can start."
+              description="Add a Claude, ChatGPT, Grok or Gemini login so your agents can start."
               action={
                 <Button variant="primary" onClick={() => setAddFor("claude")}>
                   <UserPlus /> Add account

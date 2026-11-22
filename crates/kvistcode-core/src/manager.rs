@@ -231,6 +231,7 @@ fn provider_color(p: Provider) -> &'static str {
         Provider::Claude => "#D97757",
         Provider::Codex => "#10A37F",
         Provider::Grok => "#E5E7EB",
+        Provider::Gemini => "#4285F4",
         Provider::Local => "#4FC3F7",
         Provider::Custom => "#B39DDB",
     }
@@ -1433,6 +1434,9 @@ impl Core {
                 ));
                 args.extend(local_args.iter().cloned());
             }
+            if agent.provider == Provider::Gemini {
+                crate::gemini::prepare_home(&account);
+            }
             (program, args, acct_env, acct_env_remove)
         };
         let mut env = env;
@@ -1519,25 +1523,27 @@ impl Core {
             )
             .await
             .map(Driver::Codex),
-            Provider::Claude | Provider::Grok | Provider::Custom => AcpDriver::start(
-                ctx.clone(),
-                acp::StartOptions {
-                    program: &program,
-                    args: &args,
-                    cwd: &cwd,
-                    env: &env,
-                    env_remove: &env_remove,
-                    label: &label,
-                    children_file: Some(&children_file),
-                    resume,
-                    version: VERSION,
-                    mcp_servers: &mcp_servers,
-                    guidance: &guidance,
-                    session_meta,
-                },
-            )
-            .await
-            .map(Driver::Acp),
+            Provider::Claude | Provider::Grok | Provider::Gemini | Provider::Custom => {
+                AcpDriver::start(
+                    ctx.clone(),
+                    acp::StartOptions {
+                        program: &program,
+                        args: &args,
+                        cwd: &cwd,
+                        env: &env,
+                        env_remove: &env_remove,
+                        label: &label,
+                        children_file: Some(&children_file),
+                        resume,
+                        version: VERSION,
+                        mcp_servers: &mcp_servers,
+                        guidance: &guidance,
+                        session_meta,
+                    },
+                )
+                .await
+                .map(Driver::Acp)
+            }
         };
         let driver = match started {
             Ok(d) => d,
@@ -1805,7 +1811,10 @@ impl Core {
         let Some((option_id, value)) = agent.config_options.iter().find_map(|o| {
             let is_mode = o.id == "mode" || o.category.as_deref() == Some("mode");
             let auto = o.options.iter().find(|c| {
-                c.value.eq_ignore_ascii_case("auto") || c.name.eq_ignore_ascii_case("auto")
+                c.value.eq_ignore_ascii_case("auto")
+                    || c.name.eq_ignore_ascii_case("auto")
+                    // Gemini has no "auto": "yolo" is its run-without-asking mode.
+                    || (agent.provider == Provider::Gemini && c.value == "yolo")
             })?;
             (is_mode && o.current_value != auto.value).then(|| (o.id.clone(), auto.value.clone()))
         }) else {

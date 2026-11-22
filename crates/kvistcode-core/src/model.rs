@@ -8,6 +8,8 @@ pub enum Provider {
     Claude,
     Codex,
     Grok,
+    /// Google's Gemini CLI (`gemini --acp`).
+    Gemini,
     /// A model running on this machine (or a LAN box) behind an OpenAI-compatible
     /// server. Driven by the Codex CLI, pointed at the server instead of OpenAI.
     Local,
@@ -17,13 +19,19 @@ pub enum Provider {
 
 impl Provider {
     /// The built-in providers (custom agents are configured separately).
-    pub const ALL: [Provider; 3] = [Provider::Claude, Provider::Codex, Provider::Grok];
+    pub const ALL: [Provider; 4] = [
+        Provider::Claude,
+        Provider::Codex,
+        Provider::Grok,
+        Provider::Gemini,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Provider::Claude => "claude",
             Provider::Codex => "codex",
             Provider::Grok => "grok",
+            Provider::Gemini => "gemini",
             Provider::Local => "local",
             Provider::Custom => "custom",
         }
@@ -34,6 +42,7 @@ impl Provider {
             "claude" => Some(Provider::Claude),
             "codex" => Some(Provider::Codex),
             "grok" => Some(Provider::Grok),
+            "gemini" => Some(Provider::Gemini),
             "local" => Some(Provider::Local),
             "custom" => Some(Provider::Custom),
             _ => None,
@@ -45,6 +54,7 @@ impl Provider {
             Provider::Claude => "Claude",
             Provider::Codex => "ChatGPT (Codex)",
             Provider::Grok => "Grok",
+            Provider::Gemini => "Gemini",
             Provider::Local => "Local model",
             Provider::Custom => "Custom agent",
         }

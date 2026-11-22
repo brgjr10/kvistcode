@@ -57,7 +57,7 @@ function HandoffDialog({ agent, onClose }: { agent: Agent | null; onClose: () =>
   const openAgent = useUi((s) => s.openAgent);
   const customAgents = useApp((s) => s.settings?.customAgents ?? EMPTY_CUSTOM);
   const enabledCustom = useMemo(() => customAgents.filter((c) => c.enabled), [customAgents]);
-  /** "claude" | "codex" | "grok" | "custom:<id>" */
+  /** "claude" | "codex" | "grok" | "gemini" | "custom:<id>" */
   const [choice, setChoice] = useState<string>("codex");
   const custom = choice.startsWith("custom:") ? enabledCustom.find((c) => `custom:${c.id}` === choice) : undefined;
   const provider: Provider = custom ? "custom" : (choice as Provider);

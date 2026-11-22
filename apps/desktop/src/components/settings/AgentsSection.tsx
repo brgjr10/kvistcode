@@ -44,14 +44,6 @@ interface Preset {
 
 const PRESETS: Preset[] = [
   {
-    id: "gemini",
-    name: "Gemini CLI",
-    command: "gemini",
-    args: ["--acp"],
-    color: ACCOUNT_COLORS[0],
-    blurb: "Google's coding agent",
-  },
-  {
     id: "goose",
     name: "Goose",
     command: "goose",
@@ -151,7 +143,7 @@ export function AgentsSection({ agents }: { agents: CustomAgent[] }) {
     <>
       <SectionHeader
         title="Custom agents"
-        description="Kvistcode can run any agent that speaks the Agent Client Protocol, side by side with Claude, Codex and Grok."
+        description="Kvistcode can run any agent that speaks the Agent Client Protocol, side by side with Claude, Codex, Grok and Gemini."
         right={<AddMenu onPick={(p) => setEditing(fromPreset(p))} />}
       />
 
@@ -486,7 +478,7 @@ function AgentDialog({ draft, agents, onClose }: { draft: Draft | null; agents: 
                   ref={nameRef}
                   value={name}
                   maxLength={40}
-                  placeholder="e.g. Gemini CLI"
+                  placeholder="e.g. Goose"
                   aria-invalid={show("name") && !!errors.name}
                   onChange={(e) => setName(e.target.value)}
                   onBlur={touch("name")}

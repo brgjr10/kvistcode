@@ -954,13 +954,14 @@ const C = {
 
 async function runLogin(t: MockTerminal) {
   const acc = db.accounts.find((a) => a.id === t.accountId);
-  const cli = acc?.provider === "codex" ? "codex" : acc?.provider === "grok" ? "grok" : "claude";
+  const cli =
+    acc?.provider === "codex" ? "codex" : acc?.provider === "grok" ? "grok" : acc?.provider === "gemini" ? "gemini" : "claude";
   await sleep(350);
   termOut(t.id, `${C.dim}$ ${cli} ${cli === "claude" ? "/login" : "login"}${C.reset}\r\n\r\n`);
   await sleep(500);
   termOut(
     t.id,
-    `${C.bold}Sign in to ${acc ? (cli === "codex" ? "ChatGPT" : cli === "grok" ? "Grok" : "Claude") : "provider"}${C.reset}\r\n\r\n`,
+    `${C.bold}Sign in to ${acc ? (cli === "codex" ? "ChatGPT" : cli === "grok" ? "Grok" : cli === "gemini" ? "Gemini" : "Claude") : "provider"}${C.reset}\r\n\r\n`,
   );
   await sleep(300);
   termOut(t.id, `Opening your browser to complete sign-in…\r\n`);
@@ -986,9 +987,23 @@ async function finishLogin(t: MockTerminal) {
   if (acc) {
     acc.status = {
       loggedIn: true,
-      label: acc.provider === "claude" ? "Claude Max" : acc.provider === "codex" ? "ChatGPT Plus" : "SuperGrok",
+      label:
+        acc.provider === "claude"
+          ? "Claude Max"
+          : acc.provider === "codex"
+            ? "ChatGPT Plus"
+            : acc.provider === "gemini"
+              ? "Google account"
+              : "SuperGrok",
       email: `sam+${acc.name.toLowerCase().replace(/\W+/g, "")}@fleet.dev`,
-      plan: acc.provider === "claude" ? "Max 5x" : acc.provider === "codex" ? "Plus" : "SuperGrok",
+      plan:
+        acc.provider === "claude"
+          ? "Max 5x"
+          : acc.provider === "codex"
+            ? "Plus"
+            : acc.provider === "gemini"
+              ? null
+              : "SuperGrok",
       checkedAt: Date.now(),
       error: null,
     };
@@ -1089,7 +1104,9 @@ async function runToolUpdate(t: MockTerminal, rollback: boolean) {
       ? "@agentclientprotocol/claude-agent-acp"
       : p.provider === "codex"
         ? "@openai/codex"
-        : "@xai-org/grok-build";
+        : p.provider === "gemini"
+          ? "@google/gemini-cli"
+          : "@xai-org/grok-build";
   await sleep(300);
   termOut(t.id, `${C.dim}$ npm install --prefix ~/.local/share/kvistcode/tools ${pkg}@${target}${C.reset}\r\n\r\n`);
   for (const s of [

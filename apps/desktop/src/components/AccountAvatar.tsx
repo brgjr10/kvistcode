@@ -51,7 +51,9 @@ export function AccountAvatar({
                 ? "var(--claude)"
                 : account.provider === "codex"
                   ? "var(--openai)"
-                  : "var(--grok)",
+                  : account.provider === "gemini"
+                    ? "var(--gemini)"
+                    : "var(--grok)",
           }}
         >
           <ProviderMark provider={account.provider} size={Math.max(7, size * 0.3)} />

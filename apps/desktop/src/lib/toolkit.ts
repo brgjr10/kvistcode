@@ -29,8 +29,8 @@ export const INSTRUCTION_INFO: Record<InstructionFileName, InstructionInfo> = {
     starter: "claude",
   },
   "AGENTS.md": {
-    readers: ["Codex", "Grok", "Others"],
-    blurb: "Codex, Grok and other agents that follow the AGENTS.md convention read this.",
+    readers: ["Codex", "Grok", "Gemini", "Others"],
+    blurb: "Codex, Grok, Gemini and other agents that follow the AGENTS.md convention read this.",
     starter: "codex",
   },
 };
@@ -94,7 +94,7 @@ export function scopeServers(servers: McpServer[], project: string | null): Scop
   };
 }
 
-const MCP_AGENTS = ["Claude", "Codex", "Grok", "Local models", "Custom agents"];
+const MCP_AGENTS = ["Claude", "Codex", "Grok", "Gemini", "Local models", "Custom agents"];
 
 /** Which agents start with this server, and a caveat when one applies. */
 export function mcpPickup(server: McpServer, shadowed = false): { agents: string[]; note: string | null } {

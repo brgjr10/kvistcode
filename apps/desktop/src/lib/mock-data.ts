@@ -133,6 +133,25 @@ export function seedAccounts(): Account[] {
       usage: null,
     },
     {
+      id: "acc-gemini-sys",
+      provider: "gemini",
+      name: "Personal",
+      color: "#4285F4",
+      authKind: "default",
+      isSystem: true,
+      configDir: null,
+      createdAt: min(60 * 24 * 12),
+      status: {
+        loggedIn: true,
+        label: "Google account",
+        email: "sam@fleet.dev",
+        plan: null,
+        checkedAt: min(6),
+        error: null,
+      },
+      usage: null,
+    },
+    {
       id: "acc-local-ollama",
       provider: "local",
       name: "Ollama",
@@ -218,6 +237,25 @@ export function seedProviders(): ProviderInfo[] {
       nodeAvailable: true,
       installCommand: "npm install -g @xai-org/grok-build",
       docsUrl: "https://x.ai",
+    },
+    {
+      provider: "gemini",
+      displayName: "Gemini",
+      cliName: "gemini",
+      installed: true,
+      managed: true,
+      managedVersion: "0.70.0",
+      testedVersion: "0.70.0",
+      latestVersion: "0.70.0",
+      updateAvailable: false,
+      updatesCheckedAt: Date.now() - 2.5 * 3600_000,
+      version: "0.70.0",
+      path: "~/.local/share/kvistcode/tools/node_modules/.bin/gemini",
+      adapterRequired: false,
+      adapterInstalled: false,
+      nodeAvailable: true,
+      installCommand: "npm install -g @google/gemini-cli",
+      docsUrl: "https://github.com/google-gemini/gemini-cli",
     },
   ];
 }
@@ -398,6 +436,34 @@ export function seedSettings(onboarded: boolean): Settings {
 
 export function configFor(provider: Provider, model?: string | null): ConfigOption[] {
   if (provider === "custom") return [];
+  if (provider === "gemini") {
+    return [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        currentValue: model ?? "auto",
+        options: [
+          { value: "auto", name: "Auto", description: "Let Gemini CLI decide the best model for the task" },
+          { value: "gemini-3.1-pro-preview-customtools", name: "gemini-3.1-pro-preview", description: null },
+          { value: "gemini-3-flash-preview", name: "gemini-3-flash-preview", description: null },
+          { value: "gemini-2.5-pro", name: "gemini-2.5-pro", description: null },
+        ],
+      },
+      {
+        id: "mode",
+        name: "Mode",
+        category: "mode",
+        currentValue: "yolo",
+        options: [
+          { value: "default", name: "Default", description: "Prompts for approval" },
+          { value: "autoEdit", name: "Auto Edit", description: "Auto-approves edit tools" },
+          { value: "yolo", name: "YOLO", description: "Auto-approves all tools" },
+          { value: "plan", name: "Plan", description: "Read-only mode" },
+        ],
+      },
+    ];
+  }
   if (provider === "local") {
     return [
       {

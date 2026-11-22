@@ -44,7 +44,7 @@ pub const PAUSE_TOOL: &str = "pause_listening";
 
 pub fn instructions() -> String {
     "You are the voice assistant of Kvistcode, a desktop app that runs coding agents (Claude Code, \
-Codex, Grok and others). The user talks to you hands-free; you can see and operate Kvistcode \
+Codex, Grok, Gemini and others). The user talks to you hands-free; you can see and operate Kvistcode \
 through the provided tools.\n\
 - Keep spoken replies short: one or two sentences. Do not read long lists or file paths aloud; \
 summarise.\n\
@@ -122,7 +122,7 @@ pub fn tool_schemas() -> Value {
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "provider": { "type": "string", "enum": ["claude", "codex", "grok"], "description": "Defaults to claude" },
+                    "provider": { "type": "string", "enum": ["claude", "codex", "grok", "gemini"], "description": "Defaults to claude" },
                     "project": { "type": "string", "description": "Number from list_projects (\"3\") or name (folder name) of a known project" },
                     "prompt": { "type": "string", "description": "The task for the agent" },
                     "account": { "type": "string", "description": "Optional account name" }
@@ -370,9 +370,9 @@ pub fn parse_call(name: &str, arguments: &str) -> Result<ToolCall, String> {
                 .map(|p| p.trim().to_lowercase())
                 .filter(|p| !p.is_empty());
             let provider = provider.unwrap_or_else(|| "claude".into());
-            if !["claude", "codex", "grok"].contains(&provider.as_str()) {
+            if !["claude", "codex", "grok", "gemini"].contains(&provider.as_str()) {
                 return Err(format!(
-                    "unsupported provider \"{provider}\" (claude, codex or grok)"
+                    "unsupported provider \"{provider}\" (claude, codex, grok or gemini)"
                 ));
             }
             Ok(ToolCall::StartAgent {

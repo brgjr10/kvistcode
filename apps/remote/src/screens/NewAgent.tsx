@@ -83,7 +83,7 @@ export function NewAgent() {
       <EmptyState
         icon="user"
         title="No accounts yet"
-        body="Add a Claude, Codex, Grok or custom agent account in Kvistcode on your computer, then come back to start agents from here."
+        body="Add a Claude, Codex, Grok, Gemini or custom agent account in Kvistcode on your computer, then come back to start agents from here."
         action={{ label: "Back to agents", onClick: () => navigate({ name: "fleet" }, { replace: true }) }}
       />
     );

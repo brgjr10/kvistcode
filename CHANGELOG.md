@@ -5,6 +5,18 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.7.0 — 2026-11-22
+
+Gemini joins Claude, Codex and Grok as a built-in agent.
+
+- Gemini CLI is now a built-in provider. Install and update Kvistcode's own copy from Settings → Providers, then start Gemini agents like any other, on the desktop or from your phone.
+- Add Gemini accounts that sign in with your Google account (free, or Google AI Pro) or with an API key. Each account keeps its own profile, so you can stay signed in to several at once.
+- Pick Gemini's model and mode in the message box. "Run without asking" uses Gemini's YOLO mode.
+- Gemini accounts made in Kvistcode read your project's AGENTS.md as well as GEMINI.md.
+- Gemini keeps its sign-in in an encrypted file in the account's folder and never touches the system keyring.
+- In the New agent dialog, Alt+4 now picks Gemini and Alt+5 picks Local.
+- The "Gemini CLI" custom agent preset is gone; use the built-in Gemini instead.
+
 ## v0.6.1 — 2026-11-17
 
 A wide sweep of fixes and polish: Find opens what hides a match, Mission Control gets a filter, Usage and Schedules fill out, and the phone app handles being offline.

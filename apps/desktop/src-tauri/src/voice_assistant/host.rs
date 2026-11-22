@@ -153,6 +153,7 @@ fn provider_label(p: Provider) -> &'static str {
         Provider::Claude => "Claude",
         Provider::Codex => "Codex",
         Provider::Grok => "Grok",
+        Provider::Gemini => "Gemini",
         Provider::Local => "Local",
         Provider::Custom => "Custom",
     }
@@ -628,6 +629,7 @@ impl KvistcodeTools {
         let provider = match provider {
             "codex" => Provider::Codex,
             "grok" => Provider::Grok,
+            "gemini" => Provider::Gemini,
             _ => Provider::Claude,
         };
         let known = self.known_projects().await;

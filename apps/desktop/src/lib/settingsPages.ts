@@ -162,7 +162,7 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   {
     label: "Providers",
     page: "providers",
-    keywords: ["claude", "codex", "grok", "install", "sign in", "cli"],
+    keywords: ["claude", "codex", "grok", "gemini", "install", "sign in", "cli"],
   },
   { label: "Agent tools", page: "providers", anchor: "tools", keywords: ["updates", "claude code", "codex"] },
   { label: "Custom agents", page: "providers", anchor: "agents", keywords: ["acp", "gemini", "goose"] },

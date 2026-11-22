@@ -33,6 +33,7 @@ mod codex;
 mod config_memory;
 mod db;
 mod files;
+mod gemini;
 mod git;
 pub mod guidance;
 mod helpers;

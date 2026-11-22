@@ -26,7 +26,7 @@ import type { ProviderInfo, Settings } from "@/lib/types";
 import { cn, errorMessage } from "@/lib/utils";
 import { useApp } from "@/store/app";
 
-/** Kvistcode's own copies of Claude Code, Codex and Grok: where they come from, their versions, and updating. */
+/** Kvistcode's own copies of Claude Code, Codex, Grok and Gemini CLI: where they come from, their versions, and updating. */
 export function ToolsSection({ settings }: { settings: Settings }) {
   const providers = useApp((s) => s.providers);
   const [checking, setChecking] = useState(false);
@@ -51,7 +51,7 @@ export function ToolsSection({ settings }: { settings: Settings }) {
     <>
       <SectionHeader
         title="Agent tools"
-        description="Kvistcode installs and updates its own copies of Claude Code, Codex and Grok, so signing in and running agents never depend on what is installed on this computer."
+        description="Kvistcode installs and updates its own copies of Claude Code, Codex, Grok and Gemini CLI, so signing in and running agents never depend on what is installed on this computer."
       />
       <SettingGroup className="mb-5">
         <SettingRow
@@ -80,7 +80,7 @@ export function ToolsSection({ settings }: { settings: Settings }) {
       </SettingGroup>
       <div className="space-y-3">
         {providers
-          .filter((p) => p.provider === "claude" || p.provider === "codex" || p.provider === "grok")
+          .filter((p) => p.provider !== "local" && p.provider !== "custom")
           .map((p) => (
             <ToolCard key={p.provider} info={p} />
           ))}

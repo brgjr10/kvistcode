@@ -1,5 +1,5 @@
 // The models new agents start with, set in one place. For Claude: the main agent's model and effort
-// and the helper agents' model and effort. For Codex, Grok and custom agents (Gemini CLI, ...): the
+// and the helper agents' model and effort. For Codex, Grok, Gemini and custom agents: the
 // model and effort their agents offer. Used by the model setup popup (shown when a project is made)
 // and Settings. The last change can be reverted.
 import { api } from "./api";
@@ -24,7 +24,7 @@ export interface ModelSetup {
   helperModel: string | null;
   /** `low` … `max`; null = Claude decides. */
   helperEffort: string | null;
-  /** Other providers by identity key (`codex`, `grok`, `custom:<id>`): option id -> value ("" = their default). */
+  /** Other providers by identity key (`codex`, `grok`, `gemini`, `custom:<id>`): option id -> value ("" = their default). */
   others: Record<string, Record<string, string>>;
 }
 
@@ -96,7 +96,7 @@ const isModel = (o: ConfigOption) => o.category === "model" || o.id === "model";
 const isEffort = (o: ConfigOption) => o.category === "thought_level" || /effort|reasoning|thinking/i.test(o.id);
 
 /**
- * Codex, Grok and the enabled custom agents (Gemini CLI, ...), each with the model and effort options
+ * Codex, Grok, Gemini and the enabled custom agents, each with the model and effort options
  * of its most recently active main agent: a provider's models are only known from one of its agents.
  * A built-in provider shows when it is installed or has agents. Local models belong to their server,
  * so they are left out.
@@ -114,7 +114,7 @@ export function otherProviders(
     if (!cur || a.lastActivityAt > cur.lastActivityAt) latest.set(key, a);
   }
   const list: { key: string; name: string }[] = [];
-  for (const p of ["codex", "grok"] as const)
+  for (const p of ["codex", "grok", "gemini"] as const)
     if (agents.some((a) => a.provider === p) || providers.some((x) => x.provider === p && x.installed))
       list.push({ key: p, name: identityFor(p, null, [...customAgents]).short });
   for (const c of customAgents) if (c.enabled) list.push({ key: `custom:${c.id}`, name: c.name });
