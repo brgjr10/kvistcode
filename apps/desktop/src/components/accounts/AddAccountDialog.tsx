@@ -23,7 +23,7 @@ const SUBSCRIPTION: Record<CloudProvider, string> = {
   claude: "Claude Pro or Max",
   codex: "ChatGPT Plus, Pro or Team",
   grok: "SuperGrok or X Premium+",
-  gemini: "Google account (free, or Google AI Pro)",
+  gemini: "Google account (Free, Pro or Ultra)",
 };
 
 const KEY_HINT: Record<CloudProvider, { env: string; placeholder: string }> = {
@@ -237,6 +237,8 @@ export function AddAccountDialog({
                   <p className="rounded-lg border border-line bg-base/50 px-3 py-2.5 text-caption leading-relaxed text-muted">
                     After you click <span className="text-fg">Add & sign in</span>, {PROVIDERS[provider].tagline}'s own
                     login runs in a terminal and opens your browser. Kvistcode never sees your password or tokens.
+                    {provider === "gemini" &&
+                      " Antigravity stores Google sign-in in your OS keychain and may share it with other local Antigravity apps."}
                   </p>
                 )}
               </>

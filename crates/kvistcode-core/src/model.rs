@@ -8,7 +8,7 @@ pub enum Provider {
     Claude,
     Codex,
     Grok,
-    /// Google's Gemini CLI (`gemini --acp`).
+    /// Google's Antigravity CLI (`agy acp`), which runs Gemini models.
     Gemini,
     /// A model running on this machine (or a LAN box) behind an OpenAI-compatible
     /// server. Driven by the Codex CLI, pointed at the server instead of OpenAI.

@@ -52,10 +52,12 @@ fn provider_env_vars(provider: Provider) -> &'static [&'static str] {
             "GEMINI_API_KEY",
             "GOOGLE_API_KEY",
             "GEMINI_CLI_HOME",
+            "GEMINI_HOME",
             "GOOGLE_GENAI_USE_VERTEXAI",
             "GOOGLE_GENAI_USE_GCA",
             "GOOGLE_CLOUD_ACCESS_TOKEN",
             "GOOGLE_GEMINI_BASE_URL",
+            "KVISTCODE_GEMINI_PROFILE",
         ],
         Provider::Custom => &[],
     }
@@ -88,16 +90,23 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
             Provider::Claude => Some("CLAUDE_CONFIG_DIR"),
             Provider::Codex | Provider::Local => Some("CODEX_HOME"),
             Provider::Grok => Some("GROK_HOME"),
-            Provider::Gemini => Some("GEMINI_CLI_HOME"),
+            Provider::Gemini => Some("KVISTCODE_GEMINI_PROFILE"),
             Provider::Custom => None,
         };
         if let Some(var) = var {
-            env.push((var.to_string(), dir.to_string()));
+            let value = if account.provider == Provider::Gemini {
+                PathBuf::from(dir)
+                    .join(".gemini")
+                    .to_string_lossy()
+                    .into_owned()
+            } else {
+                dir.to_string()
+            };
+            env.push((var.to_string(), value.clone()));
+            if account.provider == Provider::Gemini {
+                env.push(("GEMINI_HOME".into(), value));
+            }
         }
-    }
-    if account.provider == Provider::Gemini {
-        let (var, value) = crate::gemini::FORCE_FILE_STORAGE;
-        env.push((var.into(), value.into()));
     }
     if account.provider == Provider::Local {
         // The optional bearer token for the model server (never OpenAI's).
@@ -374,6 +383,10 @@ pub async fn check_status(account: &Account, data_dir: &Path) -> AccountStatus {
                 status.email = email;
                 if signed_in {
                     status.label = Some("Google account".into());
+                } else {
+                    status.error = Some(
+                        "Sign in with Google to use this Gemini account in Antigravity".into(),
+                    );
                 }
             }
         }
@@ -552,23 +565,22 @@ mod gemini_tests {
     }
 
     #[test]
-    fn gemini_accounts_get_their_own_home_and_never_the_keychain() {
+    fn gemini_accounts_get_their_own_data_directory() {
         let a = gemini_account(false);
         let removed = env_to_remove(&a);
         for var in ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_CLI_HOME"] {
             assert!(removed.contains(&var.to_string()), "{var}");
         }
         let env = account_env(&a);
-        assert!(env.contains(&(
-            "GEMINI_CLI_HOME".to_string(),
-            "/tmp/kvistcode-gemini-profile".to_string()
-        )));
-        assert!(env.contains(&("GEMINI_FORCE_FILE_STORAGE".into(), "true".into())));
-        // The system account uses ~/.gemini, but still keeps off the keychain.
+        assert!(env
+            .iter()
+            .any(|(key, value)| key == "KVISTCODE_GEMINI_PROFILE"
+                && value == "/tmp/kvistcode-gemini-profile/.gemini"));
+        // The system account uses Antigravity's default data directory.
         let sys = gemini_account(true);
         assert!(env_to_remove(&sys).is_empty());
         let env = account_env(&sys);
-        assert!(!env.iter().any(|(k, _)| k == "GEMINI_CLI_HOME"));
-        assert!(env.contains(&("GEMINI_FORCE_FILE_STORAGE".into(), "true".into())));
+        assert!(!env.iter().any(|(k, _)| k == "KVISTCODE_GEMINI_PROFILE"));
+        assert!(env.is_empty());
     }
 }

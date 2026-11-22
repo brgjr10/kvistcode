@@ -19,8 +19,6 @@ pub const CODEX_PKG: &str = "@openai/codex";
 pub const CODEX_VERSION: &str = "0.166.0";
 pub const GROK_PKG: &str = "@xai-official/grok";
 pub const GROK_VERSION: &str = "1.0.70";
-pub const GEMINI_PKG: &str = "@google/gemini-cli";
-pub const GEMINI_VERSION: &str = "0.70.0";
 
 pub fn cli_name(provider: Provider) -> &'static str {
     provider.as_str()
@@ -363,10 +361,11 @@ pub fn set_data_dir(dir: &Path) {
 pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
     match provider {
         Provider::Claude => bundled_claude(data_dir),
-        Provider::Codex | Provider::Grok | Provider::Gemini => {
+        Provider::Codex | Provider::Grok => {
             let bin = crate::toolchain::tools_bin_dir(data_dir);
             which::which_in(cli_name(provider), Some(&bin), data_dir).ok()
         }
+        Provider::Gemini => Some(crate::toolchain::agy_binary(data_dir)).filter(|p| p.is_file()),
         Provider::Local | Provider::Custom => None,
     }
 }
@@ -549,13 +548,29 @@ pub fn launch_spec(provider: Provider, data_dir: &Path) -> anyhow::Result<(PathB
         Provider::Gemini => {
             let cli = find_cli(Provider::Gemini).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Gemini CLI is not installed. Install it from Settings → Providers."
+                    "Antigravity CLI is not installed. Install it from Settings → Providers."
                 )
             })?;
-            // `--skip-trust`: the agent's project counts as trusted for this session
-            // only (nothing is saved), like any project an agent is started in.
-            // Without it Gemini refuses its "yolo" mode, which "Run without asking" uses.
-            Ok((cli, vec!["--acp".into(), "--skip-trust".into()]))
+            let profile = std::env::var_os("KVISTCODE_GEMINI_PROFILE")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    crate::providers::home_dir()
+                        .unwrap_or_default()
+                        .join(".gemini")
+                });
+            Ok((
+                cli,
+                vec![
+                    "acp".into(),
+                    "--app_data_dir".into(),
+                    profile
+                        .join("antigravity-cli")
+                        .to_string_lossy()
+                        .into_owned(),
+                    "--gemini-dir".into(),
+                    profile.to_string_lossy().into_owned(),
+                ],
+            ))
         }
         Provider::Local => launch_spec(Provider::Codex, data_dir),
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
@@ -581,7 +596,7 @@ pub fn install_command(provider: Provider, data_dir: &Path) -> String {
         }
         Provider::Codex | Provider::Local => "npm install -g @openai/codex".into(),
         Provider::Grok => "npm install -g @xai-official/grok".into(),
-        Provider::Gemini => "npm install -g @google/gemini-cli".into(),
+        Provider::Gemini => "curl -fsSL https://antigravity.google/cli/install.sh | bash".into(),
         Provider::Custom => String::new(),
     }
 }
@@ -592,7 +607,7 @@ pub fn docs_url(provider: Provider) -> &'static str {
         Provider::Codex => "https://developers.openai.com/codex/cli",
         Provider::Local => "https://ollama.com/download",
         Provider::Grok => "https://docs.x.ai",
-        Provider::Gemini => "https://github.com/google-gemini/gemini-cli",
+        Provider::Gemini => "https://antigravity.google/docs/cli/getting-started",
         Provider::Custom => "https://agentclientprotocol.com/overview/agents",
     }
 }

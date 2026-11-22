@@ -1,34 +1,28 @@
-//! Gemini CLI specifics: where an account's sign-in lives, and the Google sign-in.
+//! Google Antigravity CLI paths and Google sign-in.
 //!
-//! Gemini CLI keeps everything under `$GEMINI_CLI_HOME/.gemini` (`~/.gemini` without
-//! it): `oauth_creds.json` after a Google sign-in, `google_accounts.json` naming the
-//! signed-in address, and `settings.json` with the chosen sign-in method. It has no
-//! `login` command: the Google sign-in runs through ACP's `authenticate`, which (in
-//! ACP mode) opens the browser straight away and saves the choice. [`login_command`]
-//! runs a tiny Node script that does just that and exits.
+//! Antigravity accepts explicit app-data and Gemini-data directories. Google sign-in runs
+//! through ACP's `authenticate`, which opens a browser and saves the choice.
 
 use std::path::{Path, PathBuf};
 
 use crate::model::{Account, Provider};
 use crate::providers;
 
-/// Set for every Gemini process: secrets go to an encrypted file in the account's own
-/// folder, never the OS keychain (which Gemini CLI tries first when its keytar module
-/// loads). The keychain is shared by every profile, and touching it can pop a "create
-/// a keyring" dialog.
-pub const FORCE_FILE_STORAGE: (&str, &str) = ("GEMINI_FORCE_FILE_STORAGE", "true");
-
-/// The Node script behind the sign-in: starts `gemini --acp`, asks it to sign in with
+/// The Node script behind the sign-in: starts `agy acp`, asks it to sign in with
 /// Google, prints how it went and exits (0 when signed in).
 const LOGIN_SCRIPT: &str = r#"// Kvistcode: signs Gemini CLI in with Google, then exits.
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
 const cli = process.argv[2];
-const js = /\.[cm]?js$/i.test(cli);
 const win = process.platform === "win32";
-// Its own process group: Gemini CLI restarts itself in a child process, and both go.
-const child = spawn(js ? process.execPath : cli, js ? [cli, "--acp"] : ["--acp"], {
+const profile = process.env.KVISTCODE_GEMINI_PROFILE || path.join(os.homedir(), ".gemini");
+// Keep the server in its own process group so closing the sign-in window stops it.
+const appData = path.join(profile, "antigravity-cli");
+const child = spawn(cli, ["acp", "--app_data_dir", appData, "--gemini-dir", profile], {
   stdio: ["pipe", "pipe", "inherit"],
-  shell: !js && win,
+  shell: false,
   detached: !win,
 });
 const stop = () => {
@@ -46,8 +40,8 @@ const finish = (code, text) => {
   process.exit(code);
 };
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, () => { stop(); process.exit(1); });
-child.on("error", (e) => finish(1, "Couldn't start Gemini CLI: " + e.message));
-child.on("exit", () => finish(1, "Gemini CLI stopped before the sign-in finished."));
+child.on("error", (e) => finish(1, "Couldn't start Antigravity CLI: " + e.message));
+child.on("exit", () => finish(1, "Antigravity CLI stopped before the sign-in finished."));
 child.stdout.on("data", (chunk) => {
   buf += chunk;
   let i;
@@ -57,12 +51,14 @@ child.stdout.on("data", (chunk) => {
     let msg;
     try { msg = JSON.parse(line); } catch { continue; }
     if (msg.id === 1) {
-      if (msg.error) return finish(1, "Gemini CLI didn't start: " + msg.error.message);
+      if (msg.error) return finish(1, "Antigravity CLI didn't start: " + msg.error.message);
       console.log("Signing in to Gemini with your Google account.");
       console.log("A browser window opens; finish signing in there.\n");
       send(2, "authenticate", { methodId: "oauth-personal" });
     } else if (msg.id === 2) {
       if (msg.error) return finish(1, "Sign-in didn't finish: " + msg.error.message);
+      fs.mkdirSync(appData, { recursive: true });
+      fs.writeFileSync(path.join(appData, "kvistcode-authenticated"), "");
       finish(0, "Signed in. You can close this window.");
     }
   }
@@ -96,7 +92,7 @@ pub fn prepare_home(account: &Account) {
     let Some(dir) = config_dir(account) else {
         return;
     };
-    let path = dir.join("settings.json");
+    let path = dir.join("antigravity-cli").join("settings.json");
     let mut settings: serde_json::Value = match std::fs::read(&path) {
         Ok(bytes) => match serde_json::from_slice(&bytes) {
             Ok(v) => v,
@@ -115,36 +111,26 @@ pub fn prepare_home(account: &Account) {
         return;
     };
     if context.contains_key("fileName") {
+        if account.auth_kind == crate::model::AuthKind::ApiKey {
+            root.insert("modelProvider".into(), serde_json::json!("gemini"));
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(text) = serde_json::to_string_pretty(&settings) {
+                let _ = std::fs::write(&path, text);
+            }
+        }
         return;
     }
     context.insert("fileName".into(), serde_json::json!(CONTEXT_FILES));
-    if std::fs::create_dir_all(&dir).is_ok() {
+    if account.auth_kind == crate::model::AuthKind::ApiKey {
+        root.insert("modelProvider".into(), serde_json::json!("gemini"));
+    }
+    if std::fs::create_dir_all(path.parent().unwrap_or(&dir)).is_ok() {
         if let Ok(text) = serde_json::to_string_pretty(&settings) {
             let _ = std::fs::write(&path, text);
         }
     }
-}
-
-/// The script Gemini CLI runs from, so Node can start it directly. npm puts a symlink
-/// (Unix) or a `.cmd` shim (Windows) on PATH; both lead to the package's `gemini.js`.
-/// Falls back to the CLI itself (a native or wrapped install).
-fn cli_entry(cli: &Path) -> PathBuf {
-    if let Ok(real) = std::fs::canonicalize(cli) {
-        if real.extension().is_some_and(|e| e == "js") {
-            return real;
-        }
-    }
-    if let Some(dir) = cli.parent() {
-        let js = dir
-            .join("node_modules")
-            .join(providers::GEMINI_PKG)
-            .join("bundle")
-            .join("gemini.js");
-        if js.is_file() {
-            return js;
-        }
-    }
-    cli.to_path_buf()
 }
 
 /// `node <script> <gemini>`: the Google sign-in for the account the environment points at
@@ -163,27 +149,20 @@ pub fn login_command(data_dir: &Path) -> Option<(String, Vec<String>)> {
         node.to_string_lossy().into_owned(),
         vec![
             script.to_string_lossy().into_owned(),
-            cli_entry(&cli).to_string_lossy().into_owned(),
+            cli.to_string_lossy().into_owned(),
         ],
     ))
 }
 
-/// Signed in with Google: `oauth_creds.json` holds a token. Returns the address from
-/// `google_accounts.json` when there is one. Tokens are read, never kept or returned.
+/// The successful ACP authentication marker is non-sensitive. Antigravity keeps the
+/// actual OAuth token in the OS keyring, so Kvistcode never reads or copies it.
 pub fn google_sign_in(dir: &Path) -> (bool, Option<String>) {
-    let creds: serde_json::Value = std::fs::read(dir.join("oauth_creds.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default();
-    let signed_in = ["refresh_token", "access_token"]
-        .iter()
-        .any(|k| creds[k].as_str().is_some_and(|t| !t.is_empty()));
-    let email = std::fs::read(dir.join("google_accounts.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-        .and_then(|v| v["active"].as_str().map(str::to_string))
-        .filter(|e| !e.is_empty());
-    (signed_in, email)
+    (
+        dir.join("antigravity-cli")
+            .join("kvistcode-authenticated")
+            .is_file(),
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -191,27 +170,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn google_sign_in_reads_the_token_and_address_only() {
+    fn google_sign_in_checks_only_the_non_sensitive_marker() {
         let dir = crate::testutil::scratch("gemini-sign-in");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(google_sign_in(&dir), (false, None));
-        std::fs::write(dir.join("oauth_creds.json"), r#"{"access_token":""}"#).unwrap();
-        assert_eq!(google_sign_in(&dir), (false, None));
-        std::fs::write(
-            dir.join("oauth_creds.json"),
-            r#"{"refresh_token":"1//x","expiry_date":1}"#,
-        )
-        .unwrap();
-        std::fs::write(
-            dir.join("google_accounts.json"),
-            r#"{"active":"me@example.com","old":[]}"#,
-        )
-        .unwrap();
-        assert_eq!(
-            google_sign_in(&dir),
-            (true, Some("me@example.com".to_string()))
-        );
+        std::fs::create_dir_all(dir.join("antigravity-cli")).unwrap();
+        std::fs::write(dir.join("antigravity-cli/kvistcode-authenticated"), "").unwrap();
+        assert_eq!(google_sign_in(&dir), (true, None));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -220,7 +186,10 @@ mod tests {
         let root = crate::testutil::scratch("gemini-home");
         let _ = std::fs::remove_dir_all(&root);
         let mut account = account(&root);
-        let settings = root.join(".gemini").join("settings.json");
+        let settings = root
+            .join(".gemini")
+            .join("antigravity-cli")
+            .join("settings.json");
         prepare_home(&account);
         let v: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&settings).unwrap()).unwrap();

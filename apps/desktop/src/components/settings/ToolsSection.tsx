@@ -26,7 +26,7 @@ import type { ProviderInfo, Settings } from "@/lib/types";
 import { cn, errorMessage } from "@/lib/utils";
 import { useApp } from "@/store/app";
 
-/** Kvistcode's own copies of Claude Code, Codex, Grok and Gemini CLI: where they come from, their versions, and updating. */
+/** Kvistcode's own copies of Claude Code, Codex, Grok and Antigravity CLI: where they come from, their versions, and updating. */
 export function ToolsSection({ settings }: { settings: Settings }) {
   const providers = useApp((s) => s.providers);
   const [checking, setChecking] = useState(false);
@@ -51,7 +51,7 @@ export function ToolsSection({ settings }: { settings: Settings }) {
     <>
       <SectionHeader
         title="Agent tools"
-        description="Kvistcode installs and updates its own copies of Claude Code, Codex, Grok and Gemini CLI, so signing in and running agents never depend on what is installed on this computer."
+        description="Kvistcode installs and updates its own copies of Claude Code, Codex, Grok and Antigravity CLI, so signing in and running agents never depend on what is installed on this computer."
       />
       <SettingGroup className="mb-5">
         <SettingRow
@@ -65,7 +65,7 @@ export function ToolsSection({ settings }: { settings: Settings }) {
         <SettingRow
           title="Update automatically"
           htmlFor="t-auto"
-          description="Checks every few hours and installs new versions when no agent is mid-turn. A version that doesn't start is rolled back automatically."
+          description="Checks every few hours and installs new versions when no agent is mid-turn. Antigravity CLI updates itself through Google. A version that doesn't start is rolled back automatically."
         >
           <Switch
             id="t-auto"
@@ -86,8 +86,8 @@ export function ToolsSection({ settings }: { settings: Settings }) {
           ))}
       </div>
       <p className="mt-4 text-caption text-steel">
-        Updates come from the official npm registry. Kvistcode was tested with the versions shown as Tested and can go
-        back to them at any time.
+        Claude Code, Codex and Grok updates come from the npm registry. Antigravity CLI updates itself through Google.
+        Kvistcode was tested with the versions shown as Tested and can go back to them at any time.
       </p>
     </>
   );

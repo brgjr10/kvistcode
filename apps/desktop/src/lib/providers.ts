@@ -50,7 +50,7 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
     vendor: "Google",
     colorVar: "var(--gemini)",
     hex: "#4285F4",
-    tagline: "Gemini CLI",
+    tagline: "Antigravity CLI",
   },
   local: {
     id: "local",

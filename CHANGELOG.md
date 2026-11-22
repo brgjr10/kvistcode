@@ -5,6 +5,14 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.7.1 — 2026-11-22
+
+Gemini agents now use Google's Antigravity CLI, which supports Google-account sign-in for Gemini plans.
+
+- Sign in to Gemini through Antigravity's ACP flow. Google sign-in uses the OS keychain and may be shared with other local Antigravity apps; the sign-in dialog explains this.
+- Kvistcode installs Antigravity CLI from Google's platform manifest and verifies the published SHA-512 checksum.
+- Gemini API-key accounts remain available, and Kvistcode sets Antigravity's API-key mode for them.
+
 ## v0.7.0 — 2026-11-22
 
 Gemini joins Claude, Codex and Grok as a built-in agent.

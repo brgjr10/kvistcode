@@ -68,6 +68,12 @@ pub fn tools_bin_dir(data_dir: &Path) -> PathBuf {
     tools_dir(data_dir).join("node_modules").join(".bin")
 }
 
+pub fn agy_binary(data_dir: &Path) -> PathBuf {
+    runtime_dir(data_dir)
+        .join("agy")
+        .join(if cfg!(windows) { "agy.exe" } else { "agy" })
+}
+
 fn managed_node_home(data_dir: &Path) -> PathBuf {
     runtime_dir(data_dir).join("node")
 }
@@ -468,12 +474,13 @@ fn packages_for(provider: Provider, data_dir: &Path) -> Vec<String> {
             providers::GROK_VERSION,
             data_dir,
         )),
-        Provider::Gemini => pkgs.extend(managed_pkg(
-            provider,
-            providers::GEMINI_PKG,
-            providers::GEMINI_VERSION,
-            data_dir,
-        )),
+        Provider::Gemini => {
+            return if agy_binary(data_dir).is_file() {
+                Vec::new()
+            } else {
+                vec!["agy".into()]
+            }
+        }
         Provider::Custom => {}
         Provider::Local => return packages_for(Provider::Codex, data_dir),
     }
@@ -489,8 +496,8 @@ pub fn needs_install(provider: Provider, data_dir: &Path) -> bool {
 /// copy their native binary out of the platform optionalDependency in `postinstall`.
 /// Everything else (Codex and the Claude adapter ship plain files or script-less
 /// platform packages; Grok's only dependency, @iarna/toml, has no install script;
-/// Gemini CLI is a plain JavaScript bundle) is installed with scripts disabled, and
-/// transitive scripts never run.
+/// transitive scripts never run. Antigravity CLI is downloaded with its published
+/// SHA-512 check rather than through npm.
 const SCRIPTED_PKGS: &[&str] = &[providers::CLAUDE_CODE_PKG, providers::GROK_PKG];
 
 fn pkg_name(spec: &str) -> &str {
@@ -716,6 +723,113 @@ fn line_failed(name: &str, reason: &dyn std::fmt::Display) -> String {
     format!("✗ {name}: {reason}")
 }
 
+/// Installs Google's signed-by-manifest Antigravity CLI build. Google publishes a
+/// SHA-512 digest beside each platform artifact; the digest is checked before extraction.
+fn install_agy(data_dir: &Path, log: &Log) -> anyhow::Result<()> {
+    let os = if cfg!(windows) {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        "linux"
+    };
+    let arch = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else if cfg!(target_arch = "x86_64") {
+        "amd64"
+    } else {
+        bail!("Antigravity CLI does not support this CPU architecture")
+    };
+    let platform = format!("{os}_{arch}");
+    let base = "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app";
+    let manifest_url = format!("{base}/manifests/{platform}.json");
+    log(&format!("▸ Fetching Google's {platform} build details…"));
+    let manifest_text = http()
+        .get(&manifest_url)
+        .call()?
+        .body_mut()
+        .read_to_string()?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_text)?;
+    let version = manifest["version"]
+        .as_str()
+        .filter(|v| !v.is_empty())
+        .context("Google's Antigravity manifest has no version")?;
+    let url = manifest["url"]
+        .as_str()
+        .filter(|u| u.starts_with("https://storage.googleapis.com/antigravity-public/"))
+        .context("Google's Antigravity manifest has an unexpected download URL")?;
+    let expected = manifest["sha512"]
+        .as_str()
+        .context("Google's Antigravity manifest has no SHA-512")?
+        .to_ascii_lowercase();
+    let stage = runtime_dir(data_dir).join(format!(".agy-{}", short_id()));
+    std::fs::create_dir_all(&stage)?;
+    let result = (|| -> anyhow::Result<()> {
+        log(&format!("▸ Downloading Antigravity CLI {version}…"));
+        let mut response = http().get(url).call()?.into_body().into_reader();
+        let suffix = url
+            .rsplit('.')
+            .next()
+            .filter(|ext| ext.len() < 8)
+            .unwrap_or("bin");
+        let archive = stage.join(format!("payload.{suffix}"));
+        let mut file = std::fs::File::create(&archive)?;
+        let mut hash = sha2::Sha512::new();
+        let mut buf = [0u8; 128 * 1024];
+        loop {
+            let n = response.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hash.update(&buf[..n]);
+            file.write_all(&buf[..n])?;
+        }
+        drop(file);
+        if hex_lower(&hash.finalize()) != expected {
+            bail!("Antigravity CLI checksum mismatch; installation stopped");
+        }
+        log("✓ SHA-512 checksum verified");
+        let extract = stage.join("unpacked");
+        let source = if url.contains(".tar.gz") {
+            std::fs::create_dir(&extract)?;
+            tar::Archive::new(flate2::read::GzDecoder::new(std::fs::File::open(&archive)?))
+                .unpack(&extract)?;
+            ["antigravity", "agy", "agy.exe", "antigravity.exe"]
+                .iter()
+                .map(|name| extract.join(name))
+                .find(|path| path.is_file())
+                .context("Google's archive did not contain the Antigravity executable")?
+        } else if url.contains(".zip") {
+            std::fs::create_dir(&extract)?;
+            zip::ZipArchive::new(std::fs::File::open(&archive)?)?.extract(&extract)?;
+            ["agy.exe", "antigravity.exe", "agy", "antigravity"]
+                .iter()
+                .map(|name| extract.join(name))
+                .find(|path| path.is_file())
+                .context("Google's archive did not contain the Antigravity executable")?
+        } else {
+            archive.clone()
+        };
+        let dest = agy_binary(data_dir);
+        std::fs::create_dir_all(dest.parent().unwrap())?;
+        let temp = dest.with_file_name(if cfg!(windows) {
+            "agy.new.exe"
+        } else {
+            "agy.new"
+        });
+        std::fs::copy(source, &temp)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o755))?;
+        }
+        std::fs::rename(temp, dest)?;
+        Ok(())
+    })();
+    let _ = std::fs::remove_dir_all(stage);
+    result
+}
+
 /// Installs one provider, taking Node.js from `setup` (set up once for a run of installs).
 async fn install_with(
     provider: Provider,
@@ -724,6 +838,30 @@ async fn install_with(
     setup: &tokio::sync::Mutex<NodeSetup>,
 ) -> anyhow::Result<()> {
     let name = provider.display_name();
+    if provider == Provider::Gemini {
+        if agy_binary(data_dir).is_file() {
+            log("✓ Antigravity CLI is already installed.");
+            return Ok(());
+        }
+        log("Setting up Gemini");
+        let dir = data_dir.to_path_buf();
+        let log2 = log.clone();
+        tokio::task::spawn_blocking(move || install_agy(&dir, &log2)).await??;
+        let cli = agy_binary(data_dir);
+        let out = tokio::process::Command::new(cli)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .output()
+            .await?;
+        if !out.status.success() {
+            bail!("Antigravity CLI did not start");
+        }
+        log(&format!(
+            "✓ Gemini is ready ({})",
+            String::from_utf8_lossy(&out.stdout).trim()
+        ));
+        return Ok(());
+    }
     let pkgs = packages_for(provider, data_dir);
     if pkgs.is_empty() {
         log(&line_already(name));
@@ -820,13 +958,23 @@ pub fn tool_package(provider: Provider) -> Option<(&'static str, &'static str)> 
         )),
         Provider::Codex => Some((providers::CODEX_PKG, providers::CODEX_VERSION)),
         Provider::Grok => Some((providers::GROK_PKG, providers::GROK_VERSION)),
-        Provider::Gemini => Some((providers::GEMINI_PKG, providers::GEMINI_VERSION)),
+        Provider::Gemini => None,
         Provider::Local | Provider::Custom => None,
     }
 }
 
 /// The version of Kvistcode's own copy of a provider's agent package.
 pub fn installed_version(provider: Provider, data_dir: &Path) -> Option<String> {
+    if provider == Provider::Gemini {
+        if !agy_binary(data_dir).is_file() {
+            return None;
+        }
+        return std::process::Command::new(agy_binary(data_dir))
+            .arg("--version")
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    }
     let (pkg, _) = tool_package(provider)?;
     providers::managed_pkg_version(data_dir, pkg)
 }
@@ -895,6 +1043,10 @@ async fn registry_latest(pkg: &str) -> anyhow::Result<String> {
 /// ([`latest_known`]). A provider whose lookup fails keeps its earlier answer.
 pub async fn check_updates(log: &Log) -> anyhow::Result<()> {
     let mut failed = 0;
+    let checked = Provider::ALL
+        .into_iter()
+        .filter(|provider| tool_package(*provider).is_some())
+        .count();
     for provider in Provider::ALL {
         let Some((pkg, _)) = tool_package(provider) else {
             continue;
@@ -913,8 +1065,8 @@ pub async fn check_updates(log: &Log) -> anyhow::Result<()> {
         }
     }
     CHECKED_AT.store(crate::model::now_ms(), std::sync::atomic::Ordering::Relaxed);
-    if failed == Provider::ALL.len() {
-        bail!("couldn't check for updates (no answer from the npm registry)");
+    if failed == checked {
+        bail!("couldn't check for updates from the official registries");
     }
     Ok(())
 }
