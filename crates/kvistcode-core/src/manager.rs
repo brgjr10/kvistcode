@@ -166,6 +166,8 @@ struct Inner {
     budget: Mutex<budgets::BudgetState>,
     /// Agents waiting out a usage limit (see `limit_wait.rs`).
     limit_wait: Mutex<limit_wait::State>,
+    /// account id → unix ms of last background usage-limit poll (throttled per account).
+    usage_refresh_at: Mutex<HashMap<String, i64>>,
 }
 
 /// Marks a schedule as starting; released on drop.
@@ -316,6 +318,7 @@ impl Core {
                 cancel_watchdog_ms: AtomicU64::new(CANCEL_WATCHDOG_MS),
                 budget: Mutex::new(budgets::BudgetState::load(&budget_dir)),
                 limit_wait: Mutex::default(),
+                usage_refresh_at: Mutex::default(),
             }),
         };
         core.restore_queues();
@@ -1226,11 +1229,28 @@ impl Core {
         self.put_account(account)
     }
 
-    /// Runs `accounts::check_status` and persists the result.
+    /// Runs `accounts::check_status` (and refreshes usage limits where the provider
+    /// exposes a non-interactive check) and persists the result.
     pub async fn check_account(&self, account_id: &str) -> Result<Account> {
         let account = self.account(account_id)?;
         let status = accounts::check_status(&account, &self.inner.data_dir).await;
-        self.set_account_status(account_id, status)
+        let updated = self.set_account_status(account_id, status)?;
+        if updated.status.as_ref().is_some_and(|s| s.logged_in)
+            && updated.auth_kind != AuthKind::ApiKey
+        {
+            let usage = match updated.provider {
+                Provider::Gemini => crate::gemini::fetch_usage(&updated).await,
+                Provider::Codex => {
+                    crate::codex::fetch_rate_limits(&updated, &self.inner.data_dir).await
+                }
+                _ => None,
+            };
+            if let Some(usage) = usage {
+                self.set_account_usage(account_id, usage);
+                return self.account(account_id);
+            }
+        }
+        Ok(updated)
     }
 
     /// Fails if the account is a system account or still used by agents (archived
@@ -4032,17 +4052,55 @@ impl Core {
         })
     }
 
-    /// Records a provider-reported usage snapshot on the agent's account.
-    pub(crate) fn set_agent_account_usage(&self, agent_id: &str, usage: AccountUsage) {
-        let Ok(agent) = self.agent(agent_id) else {
-            return;
-        };
-        if let Ok(mut account) = self.account(&agent.account_id) {
+    /// Records a provider-reported usage snapshot on `account_id`.
+    pub(crate) fn set_account_usage(&self, account_id: &str, usage: AccountUsage) {
+        if let Ok(mut account) = self.account(account_id) {
             // Merge: providers report partial snapshots (e.g. only the window that
             // changed), so a missing window or plan keeps its previous value.
             let merged = merge_usage(account.usage.take(), usage, now_ms());
             account.usage = Some(merged);
             let _ = self.put_account(account);
+        }
+    }
+
+    /// Records a provider-reported usage snapshot on the agent's account.
+    pub(crate) fn set_agent_account_usage(&self, agent_id: &str, usage: AccountUsage) {
+        let Ok(agent) = self.agent(agent_id) else {
+            return;
+        };
+        self.set_account_usage(&agent.account_id, usage);
+    }
+
+    /// Refreshes account usage limits in the background after a turn ends for providers
+    /// that expose quota via a CLI check rather than streaming it in-band (Gemini/Antigravity).
+    /// Throttled to at most once per minute per account.
+    pub(crate) async fn refresh_account_usage_for_agent(&self, agent_id: &str) {
+        const MIN_POLL_GAP_MS: i64 = 60_000;
+        let Ok(agent) = self.agent(agent_id) else {
+            return;
+        };
+        if agent.provider != Provider::Gemini {
+            return;
+        }
+        let Ok(account) = self.account(&agent.account_id) else {
+            return;
+        };
+        if account.auth_kind == AuthKind::ApiKey {
+            return;
+        }
+        let now = now_ms();
+        {
+            let mut seen = self.inner.usage_refresh_at.lock();
+            if seen
+                .get(&account.id)
+                .is_some_and(|t| now.saturating_sub(*t) < MIN_POLL_GAP_MS)
+            {
+                return;
+            }
+            seen.insert(account.id.clone(), now);
+        }
+        if let Some(usage) = crate::gemini::fetch_usage(&account).await {
+            self.set_account_usage(&account.id, usage);
         }
     }
 }

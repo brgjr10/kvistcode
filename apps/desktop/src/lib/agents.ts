@@ -303,13 +303,19 @@ export function subagentRuns(items: TimelineItem[] | undefined, busy: boolean, c
   // A sub-agent that has called SubagentHandback has reported its result: it is finished, whatever
   // else the parent is still doing.
   const handedBack = new Set<string>();
-  // Background sub-agents the agent stopped (TaskStop names the id their launch reported).
+  // Background sub-agents the agent stopped (Claude TaskStop, Antigravity manage_subagents kill).
   const stopped = new Set<string>();
+  let killedAllBefore = -1;
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
-    if (it.kind === "tool_call" && it.status === "completed" && /^TaskStop\b/.test(it.title)) {
-      const id = /"task_id"\s*:\s*"([\w-]+)"/.exec(it.output)?.[1] ?? /stopped task:\s*([\w-]+)/i.exec(it.output)?.[1];
-      if (id) stopped.add(id);
+    if (it.kind === "tool_call" && it.status === "completed") {
+      if (/^TaskStop\b/.test(it.title)) {
+        const id = /"task_id"\s*:\s*"([\w-]+)"/.exec(it.output)?.[1] ?? /stopped task:\s*([\w-]+)/i.exec(it.output)?.[1];
+        if (id) stopped.add(id);
+      } else if (/^manage_subagents\b/i.test(it.title)) {
+        if (/\bkill_all\b|killed all/i.test(it.output)) killedAllBefore = i;
+        for (const m of it.output.matchAll(/"?conversationId"?\s*[:=]\s*"?([\w-]+)"?/gi)) stopped.add(m[1]);
+      }
     }
     if (it.kind === "tool_call" && it.parentToolCallId) {
       if (/^SubagentHandback\b/i.test(it.title)) handedBack.add(it.parentToolCallId);
@@ -339,8 +345,10 @@ export function subagentRuns(items: TimelineItem[] | undefined, busy: boolean, c
           (lastTs !== undefined && clock.now - lastTs < SUBAGENT_ACTIVE_WINDOW_MS) ||
           clock.now - it.ts < SUBAGENT_LAUNCH_GRACE_MS);
     }
-    const launchId = bg ? /\bagentId:\s*([\w-]+)/.exec(it.output)?.[1] : undefined;
-    if (reported || (launchId !== undefined && stopped.has(launchId))) running = false;
+    const launchId = bg
+      ? (/\bagentId:\s*([\w-]+)/.exec(it.output)?.[1] ?? /"conversationId"\s*:\s*"([\w-]+)"/.exec(it.output)?.[1])
+      : undefined;
+    if (reported || (launchId !== undefined && stopped.has(launchId)) || (bg && i < killedAllBefore)) running = false;
     if (!running && i <= turnStartIdx) continue;
     if (!running && unfinished(it.status)) continue; // stale: open call of an idle agent
     const child = lastChild.get(it.toolCallId);

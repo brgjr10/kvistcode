@@ -4,8 +4,12 @@
 //! through ACP's `authenticate`, which opens a browser and saves the choice.
 
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::Duration;
 
-use crate::model::{Account, Provider};
+use serde_json::Value;
+
+use crate::model::{now_ms, Account, AccountUsage, AuthKind, Provider, UsageWindow};
 use crate::providers;
 
 /// The Node script behind the sign-in: starts `agy acp`, asks it to sign in with
@@ -177,6 +181,231 @@ pub fn google_sign_in(dir: &Path) -> (bool, Option<String>) {
     )
 }
 
+const USAGE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Fetches Antigravity's subscription usage windows via `agy --print /usage --output-format json`.
+/// Returns `None` for API-key accounts, when the CLI isn't installed, or when the CLI doesn't
+/// report structured quota (best effort, never blocks sign-in or agents).
+pub async fn fetch_usage(account: &Account) -> Option<AccountUsage> {
+    if account.provider != Provider::Gemini || account.auth_kind == AuthKind::ApiKey {
+        return None;
+    }
+    let (program, base_args) = if let Ok(cmd) = std::env::var("KVISTCODE_GEMINI_USAGE_COMMAND") {
+        let mut parts = cmd.split_whitespace().map(str::to_string);
+        let prog = parts.next()?;
+        (
+            which::which(&prog).unwrap_or_else(|_| PathBuf::from(prog)),
+            parts.collect::<Vec<_>>(),
+        )
+    } else {
+        (providers::find_cli(Provider::Gemini)?, Vec::new())
+    };
+    let env = crate::accounts::account_env(account);
+    let env_remove = crate::accounts::env_to_remove(account);
+    let mut attempts: Vec<Vec<String>> = Vec::new();
+    if base_args.is_empty() {
+        if let Some(dir) = config_dir(account).filter(|_| !account.is_system) {
+            attempts.push(vec![
+                "--print".into(),
+                "/usage".into(),
+                "--output-format".into(),
+                "json".into(),
+                "--app_data_dir".into(),
+                "antigravity-cli".into(),
+                "--gemini-dir".into(),
+                dir.to_string_lossy().into_owned(),
+            ]);
+        }
+        attempts.push(vec![
+            "--print".into(),
+            "/usage".into(),
+            "--output-format".into(),
+            "json".into(),
+        ]);
+    } else {
+        attempts.push(base_args);
+    }
+    for args in attempts {
+        let mut cmd = crate::accounts::quiet_command(&program);
+        for var in &env_remove {
+            cmd.env_remove(var);
+        }
+        cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .args(&args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        let Ok(Ok(out)) = tokio::time::timeout(USAGE_TIMEOUT, cmd.output()).await else {
+            return None;
+        };
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if let Some(usage) = parse_usage_output(&stdout) {
+                return Some(usage);
+            }
+        }
+    }
+    None
+}
+
+/// Parses stdout from `agy --print /usage --output-format json`, tolerating log lines around JSON.
+pub fn parse_usage_output(raw: &str) -> Option<AccountUsage> {
+    let start = raw.find('{')?;
+    let v = serde_json::Deserializer::from_str(&raw[start..])
+        .into_iter::<Value>()
+        .next()?
+        .ok()?;
+    parse_quota_value(&v)
+}
+
+/// Converts an Antigravity / Google quota payload (`response.groups[].buckets[]`, `groups[].buckets[]`,
+/// or `buckets[]`) into an [`AccountUsage`] snapshot.
+pub(crate) fn parse_quota_value(v: &Value) -> Option<AccountUsage> {
+    let root = if v["response"].is_object() {
+        &v["response"]
+    } else {
+        v
+    };
+    let plan = root["plan"]
+        .as_str()
+        .or_else(|| root["planType"].as_str())
+        .or_else(|| root["tier"].as_str())
+        .or_else(|| v["plan"].as_str())
+        .or_else(|| v["planType"].as_str())
+        .map(str::to_string);
+
+    let buckets = select_quota_buckets(root)?;
+    let mut parsed: Vec<UsageWindow> = buckets.iter().filter_map(parse_quota_bucket).collect();
+    if parsed.is_empty() {
+        return None;
+    }
+    // Shortest window (e.g. 5h) first -> primary; longer window (e.g. weekly/daily) -> secondary.
+    parsed.sort_by_key(|w| w.window_mins.unwrap_or(i64::MAX));
+    let mut iter = parsed.into_iter();
+    let primary = iter.next();
+    let secondary = iter.next();
+    Some(AccountUsage {
+        primary,
+        secondary,
+        fable: None,
+        plan,
+        updated_at: now_ms(),
+    })
+}
+
+fn select_quota_buckets(root: &Value) -> Option<&[Value]> {
+    if let Some(groups) = root["groups"].as_array() {
+        // Prefer the Gemini model pool over third-party pools (e.g. 3p-models).
+        let is_gemini = |g: &&Value| {
+            let id = g["groupId"]
+                .as_str()
+                .or_else(|| g["id"].as_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let name = g["displayName"]
+                .as_str()
+                .or_else(|| g["name"].as_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            id.contains("gemini") || name.contains("gemini")
+        };
+        let chosen = groups
+            .iter()
+            .filter(|g| g["buckets"].as_array().is_some_and(|b| !b.is_empty()))
+            .find(is_gemini)
+            .or_else(|| {
+                groups
+                    .iter()
+                    .find(|g| g["buckets"].as_array().is_some_and(|b| !b.is_empty()))
+            });
+        if let Some(g) = chosen {
+            return g["buckets"].as_array().map(Vec::as_slice);
+        }
+    }
+    root["buckets"]
+        .as_array()
+        .or_else(|| root["quotas"].as_array())
+        .map(Vec::as_slice)
+}
+
+fn parse_quota_bucket(b: &Value) -> Option<UsageWindow> {
+    let used_percent = if let Some(rem) = b["remainingFraction"]
+        .as_f64()
+        .or_else(|| b["remaining_fraction"].as_f64())
+    {
+        ((1.0 - rem) * 100.0).clamp(0.0, 100.0)
+    } else if let Some(u) = b["usedPercent"]
+        .as_f64()
+        .or_else(|| b["used_percent"].as_f64())
+    {
+        u.clamp(0.0, 100.0)
+    } else {
+        let u = b["utilization"].as_f64()?;
+        let pct = if u <= 1.0 { u * 100.0 } else { u };
+        pct.clamp(0.0, 100.0)
+    };
+    let window_mins = b["windowDurationMins"]
+        .as_i64()
+        .or_else(|| b["windowMins"].as_i64())
+        .or_else(|| b["window_mins"].as_i64())
+        .or_else(|| {
+            b["window"]
+                .as_str()
+                .or_else(|| b["bucketId"].as_str())
+                .or_else(|| b["displayName"].as_str())
+                .and_then(parse_window_mins)
+        });
+    let resets_at = parse_reset_timestamp(
+        b.get("resetTime")
+            .or_else(|| b.get("reset_time"))
+            .or_else(|| b.get("resetsAt"))
+            .or_else(|| b.get("resets_at")),
+    );
+    Some(UsageWindow {
+        used_percent,
+        window_mins,
+        resets_at,
+    })
+}
+
+pub(crate) fn parse_window_mins(label: &str) -> Option<i64> {
+    let l = label.trim().to_ascii_lowercase();
+    if l.contains("5h") || l.contains("5-h") || l.contains("5 hour") || l.contains("five_hour") {
+        return Some(300);
+    }
+    if l.contains("week") || l.contains("7d") || l.contains("seven_day") {
+        return Some(10080);
+    }
+    if l.contains("daily") || l.contains("24h") || l.contains("1d") || l.contains("day") {
+        return Some(1440);
+    }
+    if let Some(hours) = l.strip_suffix('h').and_then(|n| n.parse::<i64>().ok()) {
+        return (hours > 0).then_some(hours.saturating_mul(60));
+    }
+    if let Some(mins) = l.strip_suffix('m').and_then(|n| n.parse::<i64>().ok()) {
+        return (mins > 0).then_some(mins);
+    }
+    None
+}
+
+pub(crate) fn parse_reset_timestamp(v: Option<&Value>) -> Option<i64> {
+    let v = v?;
+    if let Some(t) = v.as_i64() {
+        return Some(if t < 1_000_000_000_000 {
+            t.saturating_mul(1000)
+        } else {
+            t
+        });
+    }
+    let s = v.as_str()?.trim();
+    if s.is_empty() {
+        return None;
+    }
+    s.parse::<jiff::Timestamp>()
+        .ok()
+        .map(|ts| ts.as_millisecond())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,5 +506,35 @@ mod tests {
                 "/profiles/g/.gemini"
             ]
         );
+    }
+
+    #[test]
+    fn parses_antigravity_usage_json_and_prefers_gemini_pool() {
+        let raw = r#"log line before json
+{"response":{"groups":[
+  {"groupId":"3p-models","displayName":"Claude and GPT models","buckets":[
+    {"bucketId":"3p-5h","window":"5h","remainingFraction":0.10,"resetTime":"2026-11-23T15:00:00Z"}
+  ]},
+  {"groupId":"gemini-models","displayName":"Gemini Models","buckets":[
+    {"bucketId":"gemini-weekly","window":"weekly","remainingFraction":0.75,"resetTime":"2026-11-28T12:00:00Z"},
+    {"bucketId":"gemini-5h","window":"5h","remainingFraction":0.85,"resetTime":"2026-11-23T16:45:00Z"}
+  ]}
+]}}"#;
+        let usage = parse_usage_output(raw).expect("parsed usage");
+        let p = usage.primary.expect("primary 5h");
+        assert!((p.used_percent - 15.0).abs() < 1e-6);
+        assert_eq!(p.window_mins, Some(300));
+        assert!(p.resets_at.is_some());
+        let s = usage.secondary.expect("secondary weekly");
+        assert!((s.used_percent - 25.0).abs() < 1e-6);
+        assert_eq!(s.window_mins, Some(10080));
+        assert!(s.resets_at.is_some());
+    }
+
+    #[test]
+    fn ignores_non_quota_usage_output() {
+        assert!(parse_usage_output("").is_none());
+        assert!(parse_usage_output("not json").is_none());
+        assert!(parse_usage_output(r#"{"response":{"groups":[]}}"#).is_none());
     }
 }

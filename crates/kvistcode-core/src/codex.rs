@@ -299,6 +299,26 @@ impl CodexDriver {
         ));
         driver.publish_config().await;
         ctx.set_steerable(true);
+        // Fetch current account rate-limit windows right away (best effort, non-blocking) so
+        // Codex accounts show their limits as soon as an agent starts.
+        if opts.local_models.is_none() {
+            let d = driver.clone();
+            tokio::spawn(async move {
+                if let Ok(v) = d
+                    .peer
+                    .request_timeout(
+                        "account/rateLimits/read",
+                        json!({}),
+                        Some(Duration::from_secs(10)),
+                    )
+                    .await
+                {
+                    if let Some(usage) = parse_codex_rate_limits(&v) {
+                        d.ctx.account_usage(usage);
+                    }
+                }
+            });
+        }
         Ok(driver)
     }
 
@@ -906,8 +926,11 @@ impl CodexDriver {
                 });
             }
             "collabAgentToolCall" | "subAgentActivity" => {
-                let label = item["tool"]
+                let label = item["agentRole"]
                     .as_str()
+                    .or_else(|| item["role"].as_str())
+                    .or_else(|| item["nickname"].as_str())
+                    .or_else(|| item["tool"].as_str())
                     .or_else(|| item["kind"].as_str())
                     .unwrap_or("Sub-agent")
                     .to_string();
@@ -946,18 +969,23 @@ impl CodexDriver {
                     .map(str::to_string)
                     .collect();
                 let still_running = !control && self.any_running(&owned);
+                let result_text = collect_sub_agent_messages(&item["agentsStates"], &owned);
                 ctx.tool_call(id, |b| {
                     if let ItemBody::ToolCall {
                         title,
                         tool_kind,
                         status,
+                        output,
                         subagent,
                         ..
                     } = b
                     {
-                        let description = prompt
-                            .as_deref()
-                            .map(|p| short(p, 80))
+                        let description = item["description"]
+                            .as_str()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_string)
+                            .or_else(|| prompt.as_deref().map(|p| short(p, 80)))
                             .or_else(|| model.clone());
                         *title = description
                             .clone()
@@ -967,6 +995,11 @@ impl CodexDriver {
                         // The call completing only means the thread was created.
                         if still_running && *status == ToolStatus::Completed {
                             *status = ToolStatus::InProgress;
+                        }
+                        if let Some(ref text) = result_text {
+                            if !text.is_empty() {
+                                *output = text.clone();
+                            }
                         }
                         *subagent = Some(SubAgent {
                             kind: Some(label.clone()),
@@ -982,7 +1015,7 @@ impl CodexDriver {
                 });
                 // A `wait` (or any later call) can report that sub-agents started
                 // by earlier calls have now finished: close those calls.
-                self.close_finished_spawns(&finished, id);
+                self.close_finished_spawns(&finished, id, &item["agentsStates"]);
                 for child in adopted {
                     self.set_parent(&child, id.to_string());
                 }
@@ -1017,8 +1050,8 @@ impl CodexDriver {
     }
 
     /// Mark spawn calls (other than `current`) completed once every thread they
-    /// started has finished.
-    fn close_finished_spawns(&self, finished: &[String], current: &str) {
+    /// started has finished, copying any final message reported in `states`.
+    fn close_finished_spawns(&self, finished: &[String], current: &str, states: &Value) {
         if finished.is_empty() {
             return;
         }
@@ -1043,10 +1076,16 @@ impl CodexDriver {
             if self.any_running(&siblings) || !self.ctx.has_tool_call(&call) {
                 continue;
             }
+            let text = collect_sub_agent_messages(states, &siblings);
             self.ctx.tool_call(&call, |b| {
-                if let ItemBody::ToolCall { status, .. } = b {
+                if let ItemBody::ToolCall { status, output, .. } = b {
                     if matches!(status, ToolStatus::InProgress | ToolStatus::Pending) {
                         *status = ToolStatus::Completed;
+                    }
+                    if output.is_empty() {
+                        if let Some(ref t) = text {
+                            *output = t.clone();
+                        }
                     }
                 }
             });
@@ -1120,29 +1159,9 @@ impl CodexDriver {
                 }
             }
             "account/rateLimits/updated" => {
-                let r = &p["rateLimits"];
-                let window = |w: &Value| -> Option<UsageWindow> {
-                    let used = w["usedPercent"].as_f64()?;
-                    Some(UsageWindow {
-                        used_percent: used,
-                        window_mins: w["windowDurationMins"].as_i64(),
-                        // Codex reports seconds; normalize to ms.
-                        resets_at: w["resetsAt"].as_i64().map(|t| {
-                            if t < 1_000_000_000_000 {
-                                t.saturating_mul(1000)
-                            } else {
-                                t
-                            }
-                        }),
-                    })
-                };
-                ctx.account_usage(AccountUsage {
-                    primary: window(&r["primary"]),
-                    secondary: window(&r["secondary"]),
-                    fable: None,
-                    plan: r["planType"].as_str().map(str::to_string),
-                    updated_at: now_ms(),
-                });
+                if let Some(usage) = parse_codex_rate_limits(p) {
+                    ctx.account_usage(usage);
+                }
             }
             "turn/started" => {
                 // An event without an id says nothing new; never forget the running turn.
@@ -1592,6 +1611,131 @@ fn known_turn(current: Option<String>, reported: Option<&str>) -> Option<String>
     reported.map(str::to_string).or(current)
 }
 
+/// Parses Codex's `account/rateLimits/updated` notification or `account/rateLimits/read`
+/// reply (supporting both `rateLimitsByLimitId` and `rateLimits`, as well as generic
+/// `{ primary, secondary }` rate-limit envelopes).
+pub(crate) fn parse_codex_rate_limits(v: &Value) -> Option<AccountUsage> {
+    let bucket = v["rateLimitsByLimitId"]
+        .as_object()
+        .and_then(|map| {
+            map.get("codex").filter(|b| b.is_object()).or_else(|| {
+                map.values()
+                    .find(|b| b["primary"].is_object() || b["secondary"].is_object())
+            })
+        })
+        .or_else(|| v["rateLimits"].is_object().then_some(&v["rateLimits"]))
+        .unwrap_or(v);
+    if !bucket.is_object() {
+        return None;
+    }
+    let window = |w: &Value| -> Option<UsageWindow> {
+        let used = w["usedPercent"]
+            .as_f64()
+            .or_else(|| w["used_percent"].as_f64())
+            .or_else(|| {
+                w["utilization"]
+                    .as_f64()
+                    .map(|u| if u <= 1.0 { u * 100.0 } else { u })
+            })
+            .or_else(|| {
+                w["remainingFraction"]
+                    .as_f64()
+                    .or_else(|| w["remaining_fraction"].as_f64())
+                    .map(|rem| (1.0 - rem) * 100.0)
+            })?
+            .clamp(0.0, 100.0);
+        let window_mins = w["windowDurationMins"]
+            .as_i64()
+            .or_else(|| w["windowMins"].as_i64())
+            .or_else(|| w["window_mins"].as_i64());
+        let resets_at = crate::gemini::parse_reset_timestamp(
+            w.get("resetsAt")
+                .or_else(|| w.get("resets_at"))
+                .or_else(|| w.get("resetTime"))
+                .or_else(|| w.get("reset_time")),
+        );
+        Some(UsageWindow {
+            used_percent: used,
+            window_mins,
+            resets_at,
+        })
+    };
+    let primary = window(&bucket["primary"]);
+    let secondary = window(&bucket["secondary"]);
+    if primary.is_none() && secondary.is_none() {
+        return None;
+    }
+    Some(AccountUsage {
+        primary,
+        secondary,
+        fable: None,
+        plan: bucket["planType"]
+            .as_str()
+            .or_else(|| bucket["plan"].as_str())
+            .map(str::to_string),
+        updated_at: now_ms(),
+    })
+}
+
+/// Queries a Codex account's current rate-limit snapshot via `codex app-server`'s
+/// `account/rateLimits/read` RPC (best effort, short timeout, skipped for API-key accounts).
+pub async fn fetch_rate_limits(account: &Account, data_dir: &Path) -> Option<AccountUsage> {
+    if account.provider != Provider::Codex || account.auth_kind == AuthKind::ApiKey {
+        return None;
+    }
+    let (program, args) = crate::providers::launch_spec(Provider::Codex, data_dir).ok()?;
+    let env = crate::accounts::account_env(account);
+    let env_remove = crate::accounts::env_to_remove(account);
+    let cwd = std::env::temp_dir();
+    let (peer, _rx) = Peer::spawn(SpawnOptions {
+        program: &program,
+        args: &args,
+        cwd: &cwd,
+        env: &env,
+        env_remove: &env_remove,
+        label: "codex-limits",
+        children_file: None,
+    })
+    .ok()?;
+    let timeout = Duration::from_secs(8);
+    let res = async {
+        peer.request_timeout(
+            "initialize",
+            json!({ "clientInfo": { "name": "kvistcode", "title": "Kvistcode", "version": env!("CARGO_PKG_VERSION") } }),
+            Some(timeout),
+        )
+        .await
+        .ok()?;
+        let _ = peer.notify("initialized", json!({})).await;
+        let v = peer
+            .request_timeout("account/rateLimits/read", json!({}), Some(timeout))
+            .await
+            .ok()?;
+        parse_codex_rate_limits(&v)
+    }
+    .await;
+    peer.kill().await;
+    res
+}
+
+fn collect_sub_agent_messages(states: &Value, threads: &[String]) -> Option<String> {
+    let map = states.as_object()?;
+    let mut parts: Vec<String> = Vec::new();
+    for t in threads {
+        let Some(st) = map.get(t) else { continue };
+        if let Some(msg) = st["message"]
+            .as_str()
+            .or_else(|| st["output"].as_str())
+            .or_else(|| st["result"].as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            parts.push(msg.to_string());
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
+}
+
 fn sub_state_working(status: Option<&str>) -> bool {
     matches!(status, Some("pendingInit" | "running"))
 }
@@ -1720,5 +1864,35 @@ mod subagent_state_tests {
             assert!(!sub_state_working(Some(s)), "{s}");
         }
         assert!(!sub_state_working(None));
+    }
+
+    #[test]
+    fn parses_codex_rate_limits_from_multi_bucket_and_legacy_shapes() {
+        let multi = json!({
+            "rateLimits": {
+                "primary": {"usedPercent": 10, "windowDurationMins": 300, "resetsAt": 1793218200},
+                "planType": "plus"
+            },
+            "rateLimitsByLimitId": {
+                "codex": {
+                    "primary": {"usedPercent": 42, "windowDurationMins": 300, "resetsAt": 1793218200},
+                    "secondary": {"usedPercent": 18, "windowDurationMins": 10080, "resetsAt": 1793746800},
+                    "planType": "pro"
+                }
+            }
+        });
+        let u = parse_codex_rate_limits(&multi).expect("multi bucket");
+        assert!((u.primary.unwrap().used_percent - 42.0).abs() < 1e-6);
+        assert!((u.secondary.unwrap().used_percent - 18.0).abs() < 1e-6);
+        assert_eq!(u.plan.as_deref(), Some("pro"));
+
+        let legacy = json!({
+            "rateLimits": {
+                "primary": {"usedPercent": 25, "windowDurationMins": 300, "resetsAt": 1793218200}
+            }
+        });
+        let u2 = parse_codex_rate_limits(&legacy).expect("legacy");
+        assert!((u2.primary.unwrap().used_percent - 25.0).abs() < 1e-6);
+        assert!(u2.secondary.is_none());
     }
 }

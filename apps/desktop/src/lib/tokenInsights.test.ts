@@ -65,14 +65,16 @@ describe("tokenInsights", () => {
     expect(i.action).toEqual({ kind: "preset", label: "Save tokens" });
   });
 
-  it("offers to lower high effort on Claude agents only", () => {
+  it("offers to lower high effort across cloud providers", () => {
     const a = agent({ id: "h1", configOptions: effort("high") });
     const b = agent({ id: "h2", configOptions: effort("max") });
     const c = agent({ id: "m1", configOptions: effort("medium") });
     const x = agent({ id: "x1", provider: "codex", configOptions: effort("high") });
-    const out = tokenInsights({ agents: [a, b, c, x], accounts: [], settings: settings(), now: NOW });
+    const g = agent({ id: "g1", provider: "gemini", configOptions: effort("xhigh") });
+    const l = agent({ id: "l1", provider: "local", configOptions: effort("high") });
+    const out = tokenInsights({ agents: [a, b, c, x, g, l], accounts: [], settings: settings(), now: NOW });
     const e = out.find((i) => i.id === "effort")!;
-    expect(e.action).toMatchObject({ kind: "lower-effort", agentIds: ["h1", "h2"] });
+    expect(e.action).toMatchObject({ kind: "lower-effort", agentIds: ["h1", "h2", "x1", "g1"] });
   });
 
   it("flags an agent that costs far more per token", () => {

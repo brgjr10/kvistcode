@@ -42,13 +42,20 @@ export interface Insight {
 const live = (a: Agent) => !a.archived;
 const BUSY = new Set<Agent["status"]>(["working", "needs_permission", "starting"]);
 
-function effortOf(a: Agent): string | null {
-  return a.configOptions?.find((o) => o.id === "effort")?.currentValue ?? null;
+function effortOptionOf(a: Agent) {
+  return a.configOptions?.find(
+    (o) => o.id === "effort" || o.category === "thought_level" || /effort|reasoning|thinking/i.test(o.id),
+  );
 }
 
-function claudeEffortHigh(a: Agent): boolean {
-  const e = effortOf(a);
-  return a.provider === "claude" && (e === "high" || e === "xhigh" || e === "max");
+function effortHigh(a: Agent): boolean {
+  if (a.provider === "local") return false;
+  const opt = effortOptionOf(a);
+  if (!opt) return false;
+  const e = opt.currentValue.toLowerCase();
+  const isHigh = e === "high" || e === "xhigh" || e === "max";
+  if (!isHigh) return false;
+  return opt.options.length === 0 || opt.options.some((c) => c.value.toLowerCase() === "medium");
 }
 
 function windowText(percent: number, mins: number | null | undefined): string {
@@ -122,22 +129,24 @@ export function tokenInsights(input: {
     });
   }
 
-  // 4. High effort.
-  const high = agents.filter(claudeEffortHigh);
+  // 4. High effort across providers that expose an effort/reasoning option with a medium level.
+  const high = agents.filter(effortHigh);
   if (high.length) {
+    const allClaude = high.every((a) => a.provider === "claude");
+    const who = allClaude ? "Claude " : "";
     out.push({
       id: "effort",
       severity: "medium",
-      title: `${high.length} Claude ${high.length === 1 ? "agent runs" : "agents run"} at high effort or above`,
+      title: `${high.length} ${who}${high.length === 1 ? "agent runs" : "agents run"} at high effort or above`,
       detail:
-        "Higher effort means more thinking tokens on every step. Medium is Claude's own default for the 5.5 models and is enough for most routine work; raise it one step at a time for hard problems, and past High a bigger model is often the better buy. On the 5.5 models, changing effort keeps the cache.",
+        "Higher effort means more thinking tokens on every step. Medium is enough for most routine work; raise it one step at a time for hard problems, and past High a bigger model is often the better buy.",
       action: { kind: "lower-effort", agentIds: high.map((a) => a.id), label: "Set to medium" },
     });
   }
 
   // 5. An agent that costs far more per token than the rest (a pricier model).
   const rated = agents
-    .filter((a) => a.provider === "claude" && a.tokensUsed >= 1_000_000 && a.costUsd > 0)
+    .filter((a) => a.provider !== "local" && a.tokensUsed >= 1_000_000 && a.costUsd > 0)
     .map((a) => ({ a, perM: (a.costUsd / a.tokensUsed) * 1e6 }));
   const pricey = rated.filter((r) => r.perM >= PRICEY_PER_MTOK).sort((x, y) => y.a.costUsd - x.a.costUsd);
   if (pricey.length) {

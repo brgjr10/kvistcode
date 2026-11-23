@@ -63,23 +63,35 @@ export function hasBackgroundSubagent(items: TimelineItem[] | undefined): boolea
  * (by launcher toolCallId), and background ones the agent stopped with TaskStop (by the id their
  * launch reported).
  */
-function finishedSignals(items: readonly TimelineItem[]): { handedBack: Set<string>; stopped: Set<string> } {
+function finishedSignals(items: readonly TimelineItem[]): {
+  handedBack: Set<string>;
+  stopped: Set<string>;
+  killedAllBefore: number;
+} {
   const handedBack = new Set<string>();
   const stopped = new Set<string>();
-  for (const it of items) {
+  let killedAllBefore = -1;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
     if (it.kind !== "tool_call") continue;
     if (it.parentToolCallId && /^SubagentHandback\b/i.test(it.title)) handedBack.add(it.parentToolCallId);
-    if (it.status === "completed" && /^TaskStop\b/.test(it.title)) {
+    if (it.status === "completed") {
       const out = it.output ?? "";
-      const id = /"task_id"\s*:\s*"([\w-]+)"/.exec(out)?.[1] ?? /stopped task:\s*([\w-]+)/i.exec(out)?.[1];
-      if (id) stopped.add(id);
+      if (/^TaskStop\b/.test(it.title)) {
+        const id = /"task_id"\s*:\s*"([\w-]+)"/.exec(out)?.[1] ?? /stopped task:\s*([\w-]+)/i.exec(out)?.[1];
+        if (id) stopped.add(id);
+      } else if (/^manage_subagents\b/i.test(it.title)) {
+        if (/\bkill_all\b|killed all/i.test(out)) killedAllBefore = i;
+        for (const m of out.matchAll(/"?conversationId"?\s*[:=]\s*"?([\w-]+)"?/gi)) stopped.add(m[1]);
+      }
     }
   }
-  return { handedBack, stopped };
+  return { handedBack, stopped, killedAllBefore };
 }
 
-/** The id a background launch reported ("agentId: …"), which TaskStop names. */
-const launchId = (it: ToolCallItem) => /\bagentId:\s*([\w-]+)/.exec(it.output ?? "")?.[1];
+/** The id a background launch reported ("agentId: …" or Antigravity "conversationId"), which stop/kill tools name. */
+const launchId = (it: ToolCallItem) =>
+  /\bagentId:\s*([\w-]+)/.exec(it.output ?? "")?.[1] ?? /"conversationId"\s*:\s*"([\w-]+)"/.exec(it.output ?? "")?.[1];
 
 /** A step title on one line: a multi-line command shows only its first line. */
 export function stepLabel(title: string): string {
@@ -143,7 +155,7 @@ export function subagentRuns(items: TimelineItem[] | undefined, busy: boolean, c
       if (unfinished(it.status)) openChildTs.set(it.parentToolCallId, Math.max(it.ts, openChildTs.get(it.parentToolCallId) ?? 0));
     }
   }
-  const { handedBack, stopped } = finishedSignals(items);
+  const { handedBack, stopped, killedAllBefore } = finishedSignals(items);
   const runs: SubagentRun[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -162,7 +174,7 @@ export function subagentRuns(items: TimelineItem[] | undefined, busy: boolean, c
           clock.now - it.ts < SUBAGENT_LAUNCH_GRACE_MS);
     }
     const id = bg ? launchId(it) : undefined;
-    if (handedBack.has(it.toolCallId) || (id !== undefined && stopped.has(id))) running = false;
+    if (handedBack.has(it.toolCallId) || (id !== undefined && stopped.has(id)) || (bg && i < killedAllBefore)) running = false;
     if (!running && i <= turnStartIdx) continue;
     if (!running && unfinished(it.status)) continue; // stale: open call of an idle agent
     runs.push({ itemId: it.id, toolCallId: it.toolCallId, state: running ? "running" : it.status === "failed" ? "failed" : "done", background: bg, workflow: !!it.subagent?.workflow });
@@ -301,8 +313,12 @@ export function inheritedConfig(
 ): InheritedConfig {
   const opts = agent.configOptions ?? [];
   const pick = (o: ConfigOption | undefined) => (o?.currentValue ? choiceName(o) : null);
-  const model = pick(opts.find((o) => o.category === "model"));
-  const base = { model: model ?? agent.model ?? null, effort: pick(opts.find((o) => o.category === "thought_level")) };
+  const modelOpt = opts.find((o) => o.category === "model" || o.id === "model");
+  const effortOpt = opts.find(
+    (o) => o !== modelOpt && (o.category === "thought_level" || /effort|reasoning|thinking/i.test(o.id)),
+  );
+  const model = pick(modelOpt);
+  const base = { model: model ?? agent.model ?? null, effort: pick(effortOpt) };
   if (agent.provider !== "claude" || helperModel === undefined) return base;
   const helper = helperModel ? capitalize(helperModel) : null;
   return { ...base, claude: helperEffort ? { helper, helperEffort: capitalize(helperEffort) } : { helper } };

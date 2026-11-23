@@ -46,8 +46,15 @@ export function TokenInsights({ agents }: { agents: Agent[] }) {
         break;
       }
       case "lower-effort": {
+        const currentAgents = useApp.getState().agents;
         const results = await Promise.allSettled(
-          action.agentIds.map((id) => api.setAgentConfig(id, "effort", "medium")),
+          action.agentIds.map((id) => {
+            const opt = currentAgents[id]?.configOptions?.find(
+              (o) => o.id === "effort" || o.category === "thought_level" || /effort|reasoning|thinking/i.test(o.id),
+            );
+            const medium = opt?.options.find((c) => c.value.toLowerCase() === "medium")?.value ?? "medium";
+            return api.setAgentConfig(id, opt?.id ?? "effort", medium);
+          }),
         );
         const failed = results.filter((r) => r.status === "rejected").length;
         if (failed) toast.error(`Couldn't change effort on ${failed} of ${results.length} agents`);

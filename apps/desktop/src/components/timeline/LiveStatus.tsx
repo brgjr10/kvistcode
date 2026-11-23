@@ -95,8 +95,8 @@ export function LiveStatus({
   const saver = useApp((st) => st.settings?.tokenSaver);
   const { model: helperModel, effort: helperEffort } = agentHelpers(agent, saver);
   const inherited = useMemo(
-    () => inheritedOf(agent.configOptions, helperInfo(agent.provider, helperModel, helperEffort)),
-    [agent.configOptions, agent.provider, helperModel, helperEffort],
+    () => inheritedOf(agent.configOptions, helperInfo(agent.provider, helperModel, helperEffort), agent.model),
+    [agent.configOptions, agent.provider, agent.model, helperModel, helperEffort],
   );
   const starting = agent.status === "starting";
   const [verb, setVerb] = useState(0);

@@ -109,30 +109,36 @@ describe("availableWorkTypes", () => {
 });
 
 describe("hints", () => {
-  it("explains effort levels and models for Claude only", () => {
+  it("explains effort levels for every provider and Claude model aliases for Claude", () => {
     expect(choiceHint(agent(), option("effort", ["medium"]), "medium")).toMatch(/start/i);
     expect(choiceHint(agent(), option("model", ["fable"]), "fable")).toMatch(/refactor/i);
     expect(choiceHint(agent(), option("effort", ["weird"]), "weird")).toBeNull();
     expect(choiceHint(agent(), option("approval", ["a"]), "a")).toBeNull();
-    expect(choiceHint(agent({ provider: "codex" }), option("effort", ["medium"]), "medium")).toBeNull();
+    expect(choiceHint(agent({ provider: "codex" }), option("effort", ["medium"]), "medium")).toMatch(/start/i);
+    expect(choiceHint(agent({ provider: "gemini" }), option("effort", ["high"]), "high")).toMatch(/harder/i);
+    expect(choiceHint(agent({ provider: "codex" }), option("model", ["fable"]), "fable")).toBeNull();
   });
 
-  it("adds a note under the effort and model menus of Claude agents", () => {
+  it("adds a note under effort and model menus across non-local providers", () => {
     expect(menuNote(agent(), option("effort", ["low"]))).toMatch(/effort/i);
     expect(menuNote(agent(), option("model", ["opus"]))).toMatch(/break/i);
     expect(menuNote(agent(), option("mode", ["x"]))).toBeNull();
-    expect(menuNote(agent({ provider: "grok" }), option("model", ["x"]))).toBeNull();
+    expect(menuNote(agent({ provider: "grok" }), option("model", ["x"]))).toMatch(/break/i);
+    expect(menuNote(agent({ provider: "gemini" }), option("effort", ["medium"]))).toMatch(/effort/i);
+    expect(menuNote(agent({ provider: "local" }), option("model", ["x"]))).toBeNull();
   });
 });
 
 describe("switching models on a long conversation", () => {
   const model = option("model", ["opus", "sonnet"], "opus");
-  it("only warns for a Claude model change at 100k tokens or more", () => {
+  it("warns for a model change at 100k tokens or more across cloud providers", () => {
     expect(switchNeedsNote(agent({ contextUsed: 100_000 }), model, "sonnet")).toBe(true);
     expect(switchNeedsNote(agent({ contextUsed: 99_999 }), model, "sonnet")).toBe(false);
     expect(switchNeedsNote(agent({ contextUsed: 150_000 }), model, "opus")).toBe(false);
     expect(switchNeedsNote(agent({ contextUsed: 150_000 }), option("effort", ["low", "high"]), "high")).toBe(false);
-    expect(switchNeedsNote(agent({ provider: "codex", contextUsed: 150_000 }), model, "sonnet")).toBe(false);
+    expect(switchNeedsNote(agent({ provider: "codex", contextUsed: 150_000 }), model, "sonnet")).toBe(true);
+    expect(switchNeedsNote(agent({ provider: "gemini", contextUsed: 150_000 }), model, "sonnet")).toBe(true);
+    expect(switchNeedsNote(agent({ provider: "local", contextUsed: 150_000 }), model, "sonnet")).toBe(false);
   });
 });
 

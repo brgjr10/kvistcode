@@ -138,20 +138,26 @@ const MODEL_HINTS: Record<string, string> = {
   fable: "Big refactors, migrations and deep research",
 };
 
-/** A short "good for" line for a choice that Claude Code gave no description for (Claude agents only). */
+const isEffortOption = (option: Pick<ConfigOption, "id" | "category">) =>
+  option.id === "effort" ||
+  /effort|reasoning|thinking/i.test(option.id) ||
+  (option.category === "thought_level" && option.id !== "mode" && option.id !== "approval");
+const isModelOption = (option: Pick<ConfigOption, "id" | "category">) =>
+  option.id === "model" || option.category === "model";
+
+/** A short "good for" line for a choice the runtime gave no description for. */
 export function choiceHint(agent: Pick<Agent, "provider">, option: ConfigOption, value: string): string | null {
-  if (agent.provider !== "claude") return null;
-  if (option.id === "effort") return EFFORT_HINTS[value] ?? null;
-  if (option.id === "model") return MODEL_HINTS[value] ?? null;
+  if (isEffortOption(option)) return EFFORT_HINTS[value.toLowerCase()] ?? null;
+  if (agent.provider === "claude" && isModelOption(option)) return MODEL_HINTS[value] ?? null;
   return null;
 }
 
-/** A line under a Claude menu that says when to use the option (null for other options). */
+/** A line under an effort or model menu that says when to use the option (null for other options). */
 export function menuNote(agent: Pick<Agent, "provider">, option: ConfigOption): string | null {
-  if (agent.provider !== "claude") return null;
-  if (option.id === "effort")
+  if (isEffortOption(option))
     return "Before a bigger model, try one effort level higher. Past High, a bigger model is often the better buy.";
-  if (option.id === "model") return "Switch at a break: a new model re-reads the whole conversation once.";
+  if (agent.provider !== "local" && isModelOption(option))
+    return "Switch at a break: a new model re-reads the whole conversation once.";
   return null;
 }
 
@@ -160,11 +166,11 @@ export function menuNote(agent: Pick<Agent, "provider">, option: ConfigOption): 
 /** Conversation size (tokens) above which changing the model is worth a word first. */
 export const SWITCH_NOTE_TOKENS = 100_000;
 
-/** Whether picking `value` for this option should first offer to compact: a Claude model change on a long conversation. */
+/** Whether picking `value` for this option should first offer to compact: a model change on a long conversation. */
 export function switchNeedsNote(agent: Agent, option: ConfigOption, value: string): boolean {
   return (
-    agent.provider === "claude" &&
-    option.id === "model" &&
+    agent.provider !== "local" &&
+    isModelOption(option) &&
     value !== option.currentValue &&
     (agent.contextUsed ?? 0) >= SWITCH_NOTE_TOKENS
   );

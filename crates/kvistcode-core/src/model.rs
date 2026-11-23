@@ -92,7 +92,7 @@ pub struct Account {
     pub config_dir: Option<String>,
     pub created_at: i64,
     pub status: Option<AccountStatus>,
-    /// Latest usage-window snapshot, where the provider reports one (Codex, Claude).
+    /// Latest usage-window snapshot, where the provider reports one.
     #[serde(default)]
     pub usage: Option<AccountUsage>,
     /// For `Provider::Local`: the model server this account talks to.
@@ -823,10 +823,38 @@ pub enum ItemBody {
     },
 }
 
+/// Whether a sub-agent launch call's output reports an asynchronous/background start
+/// (Claude's "Async agent launched…", Antigravity's `invoke_subagent` conversationId stub, etc.).
+pub fn is_async_launch_output(output: &str) -> bool {
+    let trimmed = output.trim();
+    if trimmed.starts_with(ASYNC_LAUNCH_PREFIX) {
+        return true;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("launched ")
+        || lower.starts_with("subagent launched")
+        || lower.starts_with("sub-agent launched")
+        || lower.contains("running in the background")
+        || lower.contains("launched in background")
+        || lower.contains("runs in the background")
+    {
+        return true;
+    }
+    // Antigravity's `invoke_subagent` returns a short launch payload naming `conversationId`.
+    if trimmed.len() <= 512 && trimmed.contains("conversationId") {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if v.get("conversationId").and_then(|x| x.as_str()).is_some() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 impl ItemBody {
-    /// A sub-agent launch whose result says "Async agent launched" runs in the background even when
-    /// the request did not carry `run_in_background` (a custom agent that always runs that way, or
-    /// Claude Code backgrounding it): the call completes at once but the sub-agent keeps working.
+    /// A sub-agent launch whose result reports an async/background start runs in the background
+    /// even when the request did not carry `run_in_background`: the call completes at once but
+    /// the sub-agent keeps working.
     pub fn adopt_async_launch(&mut self) {
         if let ItemBody::ToolCall {
             subagent: Some(sa),
@@ -834,7 +862,7 @@ impl ItemBody {
             ..
         } = self
         {
-            if !sa.control && sa.workflow.is_none() && output.starts_with(ASYNC_LAUNCH_PREFIX) {
+            if !sa.control && sa.workflow.is_none() && is_async_launch_output(output) {
                 sa.background = true;
             }
         }

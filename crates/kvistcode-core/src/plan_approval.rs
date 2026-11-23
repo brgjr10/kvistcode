@@ -18,13 +18,45 @@ use serde_json::Value;
 /// Plans longer than this are cut; a plan is a page or two, not a log.
 const MAX_PLAN_BYTES: usize = 200 * 1024;
 
+/// Tool names that ask the user to approve a plan before coding.
+const PLAN_APPROVAL_TOOLS: &[&str] = &[
+    "exitplanmode",
+    "exit_plan_mode",
+    "approve_plan",
+    "approveplan",
+    "request_plan_approval",
+    "plan_approval",
+];
+
+fn is_plan_approval_call(tool_call: &Value) -> bool {
+    let kind = tool_call["kind"].as_str();
+    if kind == Some("switch_mode") {
+        return true;
+    }
+    if !matches!(kind, None | Some("" | "other" | "think")) {
+        return false;
+    }
+    let name = tool_call["_meta"]["claudeCode"]["toolName"]
+        .as_str()
+        .or_else(|| tool_call["_meta"]["toolName"].as_str())
+        .or_else(|| tool_call["name"].as_str())
+        .or_else(|| tool_call["toolName"].as_str());
+    name.is_some_and(|n| PLAN_APPROVAL_TOOLS.contains(&n.trim().to_ascii_lowercase().as_str()))
+}
+
 /// The plan of a plan-approval request, or `None` for any other permission
-/// request. Strict on purpose: the tool must be a mode switch *and* carry plan text.
+/// request. Strict on purpose: the tool must be a mode switch or plan-approval
+/// tool *and* carry plan text.
 pub fn plan_from_tool_call(tool_call: &Value) -> Option<String> {
-    if tool_call["kind"].as_str() != Some("switch_mode") {
+    if !is_plan_approval_call(tool_call) {
         return None;
     }
-    let plan = tool_call["rawInput"]["plan"].as_str()?.trim();
+    let raw = &tool_call["rawInput"];
+    let plan = raw["plan"]
+        .as_str()
+        .or_else(|| raw["planMarkdown"].as_str())
+        .or_else(|| raw["plan_markdown"].as_str())?
+        .trim();
     if plan.is_empty() {
         return None;
     }
@@ -77,6 +109,20 @@ mod tests {
             None
         );
         assert_eq!(plan_from_tool_call(&json!({})), None);
+    }
+
+    #[test]
+    fn extracts_plan_from_other_providers_plan_approval_tools() {
+        let tc = json!({
+            "toolCallId": "tc_2",
+            "name": "exit_plan_mode",
+            "kind": "other",
+            "rawInput": { "planMarkdown": "# Gemini plan\n- step 1" },
+        });
+        assert_eq!(
+            plan_from_tool_call(&tc).as_deref(),
+            Some("# Gemini plan\n- step 1")
+        );
     }
 
     #[test]

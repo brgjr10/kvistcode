@@ -53,6 +53,7 @@ export const SubagentCard = memo(function SubagentCard({
   const description = info.description?.trim() || null;
   const title = description ?? item.title;
   const configOptions = useApp((st) => st.agents[agentId]?.configOptions);
+  const agentModel = useApp((st) => st.agents[agentId]?.model);
   const provider = useApp((st) => st.agents[agentId]?.provider);
   const settingModel = useApp((st) => st.settings?.tokenSaver.subagentModel);
   const settingEffort = useApp((st) => st.settings?.tokenSaver.subagentEffort);
@@ -63,8 +64,8 @@ export const SubagentCard = memo(function SubagentCard({
     { subagentModel: settingModel, subagentEffort: settingEffort },
   );
   const chips = useMemo(
-    () => subagentChips(info, inheritedOf(configOptions, helperInfo(provider, helperModel, helperEffort))),
-    [info, configOptions, provider, helperModel, helperEffort],
+    () => subagentChips(info, inheritedOf(configOptions, helperInfo(provider, helperModel, helperEffort), agentModel)),
+    [info, configOptions, provider, helperModel, helperEffort, agentModel],
   );
   const latest = childCalls[childCalls.length - 1];
   const childrenRunning = childCalls.filter((c) => c.status === "in_progress" || c.status === "pending").length;

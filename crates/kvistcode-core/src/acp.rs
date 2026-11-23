@@ -531,8 +531,45 @@ impl AcpDriver {
 
     /// What a finished `session/prompt` means for the turn.
     fn reply_outcome(&self, v: &Value) -> TurnOutcome {
-        if let Some(t) = v["usage"]["totalTokens"].as_i64() {
-            self.ctx.add_tokens(t);
+        // Standard ACP reports `usage.totalTokens`; Grok and some ACP servers report
+        // `usage.{inputTokens, outputTokens}` or place metrics under `_meta`.
+        let usage = if v["usage"].is_object() {
+            &v["usage"]
+        } else {
+            &v["_meta"]["usage"]
+        };
+        let total = usage["totalTokens"]
+            .as_i64()
+            .or_else(|| v["_meta"]["totalTokens"].as_i64())
+            .or_else(|| {
+                let input = usage["inputTokens"].as_i64();
+                let output = usage["outputTokens"].as_i64();
+                match (input, output) {
+                    (Some(i), Some(o)) => Some(i.saturating_add(o)),
+                    (Some(i), None) => Some(i),
+                    (None, Some(o)) => Some(o),
+                    (None, None) => None,
+                }
+            });
+        if let Some(t) = total {
+            if v["_meta"]["totalTokens"].is_i64() && !v["usage"].is_object() {
+                // Grok reports a running conversation total in `_meta.totalTokens`.
+                self.ctx.set_tokens(t);
+            } else {
+                self.ctx.add_tokens(t);
+            }
+        }
+        if let Some(input) = usage["inputTokens"].as_i64() {
+            let size = usage["contextWindow"]
+                .as_i64()
+                .or_else(|| v["_meta"]["contextWindow"].as_i64());
+            let cost = v["cost"]["amount"]
+                .as_f64()
+                .or_else(|| v["_meta"]["costUsd"].as_f64());
+            self.ctx.usage(Some(input), size, cost);
+        }
+        if let Some(rate) = parse_acp_rate_limit(v, &v["_meta"]) {
+            self.ctx.account_usage(rate);
         }
         match v["stopReason"].as_str().unwrap_or("end_turn") {
             "cancelled" => TurnOutcome::Cancelled,
@@ -838,12 +875,14 @@ impl AcpDriver {
         self.generation
     }
 
-    fn handle_update(&self, u: &Value) {
+    fn handle_update(&self, u: &Value, params_meta: &Value) {
         let ctx = &self.ctx;
-        // A sub-agent's own text (Claude Code tags it with the Task call it runs
-        // under) isn't part of the main conversation; its result arrives as that
-        // call's output. Dropped here rather than merged into the main stream.
-        let from_subagent = u["_meta"]["claudeCode"]["parentToolUseId"].is_string();
+        // A sub-agent's own text isn't part of the main conversation; its result arrives
+        // as its parent call's output. Dropped here rather than merged into the main stream.
+        let from_subagent = extract_parent_tool_call_id(u).is_some();
+        if !ctx.replaying() {
+            apply_meta_usage(ctx, params_meta);
+        }
         match u["sessionUpdate"].as_str().unwrap_or("") {
             "agent_message_chunk" | "agent_thought_chunk" if from_subagent => {}
             "agent_message_chunk" => {
@@ -878,12 +917,29 @@ impl AcpDriver {
                 let cost = if ctx.replaying() {
                     None
                 } else {
-                    u["cost"]["amount"].as_f64()
+                    u["cost"]["amount"]
+                        .as_f64()
+                        .or_else(|| u["costUsd"].as_f64())
                 };
-                ctx.usage(u["used"].as_i64(), u["size"].as_i64(), cost);
-                // Claude Code's rate-limit snapshot rides along in `_meta`.
+                let used = u["used"]
+                    .as_i64()
+                    .or_else(|| u["usedTokens"].as_i64())
+                    .or_else(|| u["contextUsed"].as_i64())
+                    .or_else(|| u["usage"]["inputTokens"].as_i64());
+                let size = u["size"]
+                    .as_i64()
+                    .or_else(|| u["contextSize"].as_i64())
+                    .or_else(|| u["contextWindow"].as_i64());
+                ctx.usage(used, size, cost);
                 if !ctx.replaying() {
-                    if let Some(usage) = parse_claude_rate_limit(&u["_meta"]["_claude/rateLimit"]) {
+                    if let Some(total) = u["totalTokens"]
+                        .as_i64()
+                        .or_else(|| u["usage"]["totalTokens"].as_i64())
+                    {
+                        ctx.set_tokens(total);
+                    }
+                    // Rate-limit / quota snapshots ride along in `_meta` (Claude, Gemini, Grok, etc.).
+                    if let Some(usage) = parse_acp_rate_limit(u, params_meta) {
                         ctx.account_usage(usage);
                     }
                 }
@@ -1132,7 +1188,7 @@ async fn event_loop(
                     let skip = ctx.replaying() && is_timeline_update(&params["update"]);
                     if method == "session/update" && !skip {
                         if let Some(d) = driver.upgrade() {
-                            d.handle_update(&params["update"]);
+                            d.handle_update(&params["update"], &params["_meta"]);
                         }
                     } else if method == "$/cancel_request" {
                         // The agent gave up on a request it made (an approval or a question):
@@ -1349,6 +1405,224 @@ fn collect_diffs(content: &Value, out: &mut Vec<FileDiff>) {
     }
 }
 
+/// Extracts a parent sub-agent tool call id from an ACP update across providers:
+/// Claude (`_meta.claudeCode.parentToolUseId`), standard/Antigravity/Grok top-level
+/// or `_meta` `parentToolCallId` / `parent_tool_call_id` / `parentToolUseId`, or any
+/// provider-scoped `_meta.<provider>.parentTool*` field.
+fn extract_parent_tool_call_id(u: &Value) -> Option<&str> {
+    fn pick(obj: &Value) -> Option<&str> {
+        obj["parentToolUseId"]
+            .as_str()
+            .or_else(|| obj["parentToolCallId"].as_str())
+            .or_else(|| obj["parent_tool_call_id"].as_str())
+            .filter(|s| !s.is_empty())
+    }
+    pick(&u["_meta"]["claudeCode"])
+        .or_else(|| pick(u))
+        .or_else(|| pick(&u["_meta"]))
+        .or_else(|| {
+            u["_meta"]
+                .as_object()?
+                .values()
+                .filter(|v| v.is_object())
+                .find_map(pick)
+        })
+}
+
+/// Extracts the canonical tool name from an ACP `tool_call` / `tool_call_update` across
+/// providers (Claude `_meta.claudeCode.toolName`, Grok/Antigravity/generic `_meta.toolName`
+/// or `_meta.<provider>.toolName`, top-level `toolName`/`name`, or leading token of `title`).
+fn extract_tool_name(u: &Value) -> Option<&str> {
+    fn pick(obj: &Value) -> Option<&str> {
+        obj["toolName"]
+            .as_str()
+            .or_else(|| obj["tool_name"].as_str())
+            .or_else(|| obj["name"].as_str())
+            .filter(|s| !s.is_empty())
+    }
+    pick(&u["_meta"]["claudeCode"])
+        .or_else(|| pick(&u["_meta"]))
+        .or_else(|| {
+            u["_meta"]
+                .as_object()?
+                .values()
+                .filter(|v| v.is_object())
+                .find_map(pick)
+        })
+        .or_else(|| pick(u))
+        .or_else(|| {
+            let title = u["title"].as_str()?.trim();
+            let head = title
+                .split(|c: char| c.is_whitespace() || matches!(c, ':' | '(' | '·'))
+                .next()?
+                .trim();
+            (!head.is_empty()).then_some(head)
+        })
+}
+
+/// Exact (case-insensitive) tool names that launch a sub-agent across ACP providers:
+/// Claude (`Agent`/`Task`), Antigravity/Gemini (`invoke_subagent`, `delegate_to_agent`, …),
+/// Grok and custom ACP agents (`subagent`, `spawn_subagent`, `spawn_agent`, `delegate`, …).
+fn is_subagent_tool(name: &str, input: &Value) -> bool {
+    let lower = name.trim().to_ascii_lowercase();
+    if lower == "swarm" {
+        return input["action"]
+            .as_str()
+            .is_some_and(|a| a.eq_ignore_ascii_case("add"));
+    }
+    matches!(
+        lower.as_str(),
+        "agent"
+            | "task"
+            | "invoke_subagent"
+            | "run_subagent"
+            | "delegate_to_agent"
+            | "dispatch_agent"
+            | "subagent"
+            | "spawn_subagent"
+            | "spawn_agent"
+            | "delegate"
+            | "delegate_task"
+            | "codebase_investigator"
+            | "generalist"
+            | "run_workflow"
+    )
+}
+
+fn non_empty_str<'a>(v: &'a Value, keys: &[&str]) -> Option<&'a str> {
+    keys.iter()
+        .find_map(|k| v[*k].as_str().map(str::trim).filter(|s| !s.is_empty()))
+}
+
+fn short_line(s: &str, max: usize) -> String {
+    let first = s
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim();
+    if first.chars().count() <= max {
+        first.to_string()
+    } else {
+        let mut out: String = first.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
+}
+
+fn apply_subagent_fields(
+    tool_name: &str,
+    input: &Value,
+    meta_sub: &Value,
+    subagent: &mut Option<SubAgent>,
+    tool_kind: &mut ToolKind,
+) {
+    let sa = subagent.get_or_insert_with(SubAgent::default);
+    let lower = tool_name.trim().to_ascii_lowercase();
+    if let Some(k) = non_empty_str(
+        input,
+        &[
+            "subagent_type",
+            "subagentType",
+            "TypeName",
+            "type_name",
+            "agent_type",
+            "agentType",
+            "agent",
+        ],
+    )
+    .or_else(|| non_empty_str(meta_sub, &["kind", "type", "subagentType"]))
+    {
+        sa.kind = Some(k.to_string());
+    } else if sa.kind.is_none() {
+        match lower.as_str() {
+            "swarm" => sa.kind = Some("swarm".into()),
+            "run_workflow" => sa.kind = Some("workflow".into()),
+            "codebase_investigator" => sa.kind = Some("investigator".into()),
+            "generalist" => sa.kind = Some("generalist".into()),
+            _ => {
+                if let Some(r) = non_empty_str(input, &["Role", "role"]) {
+                    sa.kind = Some(r.to_string());
+                }
+            }
+        }
+    }
+    if let Some(d) = non_empty_str(
+        input,
+        &[
+            "description",
+            "Description",
+            "Role",
+            "role",
+            "summary",
+            "title",
+            "name",
+        ],
+    )
+    .or_else(|| non_empty_str(meta_sub, &["description", "title"]))
+    {
+        sa.description = Some(d.to_string());
+    }
+    if let Some(p) = non_empty_str(
+        input,
+        &[
+            "prompt",
+            "Prompt",
+            "brief",
+            "task",
+            "objective",
+            "instructions",
+            "query",
+        ],
+    )
+    .or_else(|| non_empty_str(meta_sub, &["prompt"]))
+    {
+        if sa.description.is_none() {
+            sa.description = Some(short_line(p, 80));
+        }
+        sa.prompt = Some(p.to_string());
+    }
+    if let Some(model) = non_empty_str(input, &["model", "Model"])
+        .or_else(|| non_empty_str(meta_sub, &["model"]))
+        .filter(|m| {
+            !matches!(
+                m.to_ascii_lowercase().as_str(),
+                "inherit" | "default" | "same" | "auto"
+            )
+        })
+    {
+        sa.model = Some(model.to_string());
+    }
+    if let Some(effort) = non_empty_str(
+        input,
+        &[
+            "effort",
+            "Effort",
+            "reasoning_effort",
+            "reasoningEffort",
+            "thinking_level",
+            "thinkingLevel",
+        ],
+    )
+    .or_else(|| non_empty_str(meta_sub, &["effort", "reasoningEffort"]))
+    .filter(|e| {
+        !matches!(
+            e.to_ascii_lowercase().as_str(),
+            "inherit" | "default" | "auto"
+        )
+    }) {
+        sa.effort = Some(effort.to_string());
+    }
+    // Background launch flag across conventions (Claude `run_in_background`, ACP `background`/`async`).
+    if input["run_in_background"].as_bool() == Some(true)
+        || input["background"].as_bool() == Some(true)
+        || input["async"].as_bool() == Some(true)
+        || meta_sub["background"].as_bool() == Some(true)
+    {
+        sa.background = true;
+    }
+    *tool_kind = ToolKind::Think;
+}
+
 fn apply_tool_fields(b: &mut ItemBody, u: &Value) {
     let ItemBody::ToolCall {
         title,
@@ -1369,38 +1643,19 @@ fn apply_tool_fields(b: &mut ItemBody, u: &Value) {
     if let Some(content) = u["content"].as_array() {
         collect_images(content, images);
     }
-    // Claude Code tags sub-agent launches (Agent/Task tool) and the tool calls a
-    // sub-agent makes (parentToolUseId) in `_meta`.
-    let meta = &u["_meta"]["claudeCode"];
-    if let Some(parent) = meta["parentToolUseId"].as_str() {
+    if let Some(parent) = extract_parent_tool_call_id(u) {
         *parent_tool_call_id = Some(parent.to_string());
     }
-    if matches!(meta["toolName"].as_str(), Some("Agent" | "Task")) {
-        let sa = subagent.get_or_insert_with(SubAgent::default);
-        let input = &u["rawInput"];
-        if let Some(k) = input["subagent_type"].as_str() {
-            sa.kind = Some(k.to_string());
-        }
-        if let Some(d) = input["description"].as_str() {
-            sa.description = Some(d.to_string());
-        }
-        if let Some(p) = input["prompt"].as_str() {
-            sa.prompt = Some(p.to_string());
-        }
-        if let Some(model) = input["model"].as_str() {
-            sa.model = Some(model.to_string());
-        }
-        if let Some(effort) = input["effort"]
-            .as_str()
-            .or_else(|| input["reasoning_effort"].as_str())
-        {
-            sa.effort = Some(effort.to_string());
-        }
-        // The adapter completes a background launch at once; the sub-agent runs on.
-        if input["run_in_background"].as_bool() == Some(true) {
-            sa.background = true;
-        }
-        *tool_kind = ToolKind::Think;
+    let tool_name = extract_tool_name(u);
+    let meta_sub = &u["_meta"]["subagent"];
+    if tool_name.is_some_and(|n| is_subagent_tool(n, &u["rawInput"])) || meta_sub.is_object() {
+        apply_subagent_fields(
+            tool_name.unwrap_or("subagent"),
+            &u["rawInput"],
+            meta_sub,
+            subagent,
+            tool_kind,
+        );
     }
     if let Some(t) = u["title"].as_str() {
         *title = t.to_string();
@@ -1445,22 +1700,22 @@ fn apply_tool_fields(b: &mut ItemBody, u: &Value) {
                     .and_then(Value::as_str)
                 {
                     *output = s.to_string();
+                } else if subagent.is_some() && o.contains_key("conversationId") {
+                    *output = Value::Object(o.clone()).to_string();
                 }
             }
             _ => {}
         }
     }
-    if subagent.is_none() && (meta["toolName"].as_str() == Some("Workflow") || title == "Workflow")
+    if subagent.is_none()
+        && (tool_name.is_some_and(|n| n.eq_ignore_ascii_case("Workflow")) || title == "Workflow")
     {
         adopt_workflow(output, subagent, tool_kind);
     }
     // A launch the adapter reports as asynchronous runs in the background even when the request
     // did not say so (see `ItemBody::adopt_async_launch`).
     if let Some(sa) = subagent {
-        if !sa.control
-            && sa.workflow.is_none()
-            && output.starts_with(crate::model::ASYNC_LAUNCH_PREFIX)
-        {
+        if !sa.control && sa.workflow.is_none() && crate::model::is_async_launch_output(output) {
             sa.background = true;
         }
     }
@@ -1584,6 +1839,89 @@ fn parse_config_option(o: &Value) -> Option<ConfigOption> {
         current_value: o["currentValue"].as_str().unwrap_or("").to_string(),
         options: choices,
     })
+}
+
+/// Applies token/context/rate-limit metadata carried in `params._meta` of `session/update`
+/// notifications (e.g. Grok's `_meta.totalTokens` / `_meta.usage.inputTokens`).
+fn apply_meta_usage(ctx: &AgentCtx, meta: &Value) {
+    if !meta.is_object() {
+        return;
+    }
+    if let Some(total) = meta["totalTokens"]
+        .as_i64()
+        .or_else(|| meta["usage"]["totalTokens"].as_i64())
+    {
+        ctx.set_tokens(total);
+    }
+    let used = meta["usage"]["inputTokens"]
+        .as_i64()
+        .or_else(|| meta["contextUsed"].as_i64());
+    let size = meta["contextWindow"]
+        .as_i64()
+        .or_else(|| meta["contextSize"].as_i64());
+    let cost = meta["costUsd"].as_f64();
+    if used.is_some() || size.is_some() || cost.is_some() {
+        ctx.usage(used, size, cost);
+    }
+    if let Some(rate) = parse_rate_limit_from_meta(meta) {
+        ctx.account_usage(rate);
+    }
+}
+
+/// Extracts account rate-limit / quota windows from an ACP update or prompt reply across
+/// providers (Claude `_meta["_claude/rateLimit"]`, Codex/generic `rateLimits`, Antigravity `quota`).
+fn parse_acp_rate_limit(u: &Value, params_meta: &Value) -> Option<AccountUsage> {
+    parse_rate_limit_from_meta(&u["_meta"])
+        .or_else(|| parse_rate_limit_from_meta(params_meta))
+        .or_else(|| parse_generic_rate_limit(u))
+}
+
+fn parse_rate_limit_from_meta(meta: &Value) -> Option<AccountUsage> {
+    if !meta.is_object() {
+        return None;
+    }
+    if let Some(u) = parse_claude_rate_limit(&meta["_claude/rateLimit"]) {
+        return Some(u);
+    }
+    for key in [
+        "rateLimit",
+        "rateLimits",
+        "rate_limits",
+        "usageLimits",
+        "quota",
+    ] {
+        if let Some(u) = parse_generic_rate_limit(&meta[key]) {
+            return Some(u);
+        }
+    }
+    // Provider-scoped envelopes (e.g. `_meta.antigravity.quota`, `_meta.grok.rateLimits`).
+    meta.as_object()?
+        .values()
+        .filter(|v| v.is_object())
+        .find_map(parse_generic_rate_limit)
+}
+
+fn parse_generic_rate_limit(v: &Value) -> Option<AccountUsage> {
+    if !v.is_object() {
+        return None;
+    }
+    if let Some(u) = parse_claude_rate_limit(v) {
+        return Some(u);
+    }
+    if let Some(u) = crate::codex::parse_codex_rate_limits(v) {
+        return Some(u);
+    }
+    if let Some(u) = crate::gemini::parse_quota_value(v) {
+        return Some(u);
+    }
+    for key in ["rateLimit", "rateLimits", "quota"] {
+        if v[key].is_object() {
+            if let Some(u) = parse_generic_rate_limit(&v[key]) {
+                return Some(u);
+            }
+        }
+    }
+    None
 }
 
 /// Converts Claude Code's `rate_limit_info` (forwarded by the ACP adapter in a
@@ -1884,6 +2222,156 @@ mod subagent_tests {
             }),
         );
         assert!(!sub(&b).unwrap().background);
+    }
+
+    #[test]
+    fn antigravity_invoke_subagent_and_parent_tool_call_id_are_recognized() {
+        let mut parent = blank_tool();
+        apply_tool_fields(
+            &mut parent,
+            &json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "call_sub_1",
+                "title": "invoke_subagent",
+                "status": "in_progress",
+                "rawInput": {
+                    "TypeName": "research",
+                    "Role": "Codebase Researcher",
+                    "Prompt": "Inspect all providers",
+                    "Model": "inherit"
+                }
+            }),
+        );
+        let sa = sub(&parent).expect("subagent");
+        assert_eq!(sa.kind.as_deref(), Some("research"));
+        assert_eq!(sa.description.as_deref(), Some("Codebase Researcher"));
+        assert_eq!(sa.prompt.as_deref(), Some("Inspect all providers"));
+        // "inherit" leaves model unset so the UI shows "inherits <parent model>".
+        assert_eq!(sa.model, None);
+        assert!(!sa.background);
+
+        // Completing with an async conversationId stub marks it running in the background.
+        apply_tool_fields(
+            &mut parent,
+            &json!({
+                "sessionUpdate": "tool_call_update",
+                "toolCallId": "call_sub_1",
+                "status": "completed",
+                "rawOutput": { "conversationId": "conv-abc-123" }
+            }),
+        );
+        assert!(sub(&parent).unwrap().background);
+
+        // Child tool calls nest via top-level or `_meta` parentToolCallId.
+        let mut child = blank_tool();
+        apply_tool_fields(
+            &mut child,
+            &json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "call_read_1",
+                "parentToolCallId": "call_sub_1",
+                "title": "Read src/lib.rs",
+                "kind": "read",
+                "status": "completed"
+            }),
+        );
+        assert!(matches!(
+            child,
+            ItemBody::ToolCall {
+                parent_tool_call_id: Some(ref p),
+                ..
+            } if p == "call_sub_1"
+        ));
+    }
+
+    #[test]
+    fn grok_subagent_and_swarm_add_are_recognized_without_false_positives() {
+        let mut grok_sub = blank_tool();
+        apply_tool_fields(
+            &mut grok_sub,
+            &json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "g_1",
+                "title": "subagent",
+                "status": "in_progress",
+                "_meta": { "grok": { "toolName": "spawn_subagent" } },
+                "rawInput": { "role": "reviewer", "prompt": "Check diffs", "model": "grok-4.5" }
+            }),
+        );
+        let sa = sub(&grok_sub).expect("grok subagent");
+        assert_eq!(sa.kind.as_deref(), Some("reviewer"));
+        assert_eq!(sa.model.as_deref(), Some("grok-4.5"));
+
+        // Swarm `add` launches a worker; `status` does not.
+        let mut swarm_add = blank_tool();
+        apply_tool_fields(
+            &mut swarm_add,
+            &json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "sw_1",
+                "title": "swarm",
+                "status": "in_progress",
+                "rawInput": { "action": "add", "name": "worker-1", "brief": "Audit tests" }
+            }),
+        );
+        assert_eq!(sub(&swarm_add).unwrap().kind.as_deref(), Some("swarm"));
+
+        let mut swarm_status = blank_tool();
+        apply_tool_fields(
+            &mut swarm_status,
+            &json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "sw_2",
+                "title": "swarm",
+                "status": "completed",
+                "rawInput": { "action": "status" }
+            }),
+        );
+        assert!(sub(&swarm_status).is_none());
+
+        // TaskCreate / manage_subagents are not subagent launches.
+        let mut manage = blank_tool();
+        apply_tool_fields(
+            &mut manage,
+            &json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "m_1",
+                "title": "manage_subagents",
+                "status": "completed",
+                "rawInput": { "Action": "kill", "ConversationIds": ["conv-abc-123"] }
+            }),
+        );
+        assert!(sub(&manage).is_none());
+    }
+
+    #[test]
+    fn acp_rate_limit_parses_gemini_quota_and_generic_rate_limits() {
+        let gemini = json!({
+            "_meta": {
+                "antigravity": {
+                    "quota": {
+                        "groups": [{
+                            "groupId": "gemini-models",
+                            "buckets": [
+                                {"bucketId": "gemini-5h", "window": "5h", "remainingFraction": 0.6, "resetTime": "2026-11-23T15:00:00Z"}
+                            ]
+                        }]
+                    }
+                }
+            }
+        });
+        let u = parse_acp_rate_limit(&gemini, &Value::Null).expect("gemini quota");
+        assert!((u.primary.unwrap().used_percent - 40.0).abs() < 1e-6);
+
+        let generic = json!({
+            "rateLimits": {
+                "primary": {"usedPercent": 33, "windowDurationMins": 300, "resetsAt": 1793218200},
+                "planType": "supergrok"
+            }
+        });
+        let u2 = parse_acp_rate_limit(&Value::Null, &generic).expect("generic limits");
+        assert!((u2.primary.unwrap().used_percent - 33.0).abs() < 1e-6);
+        assert_eq!(u2.plan.as_deref(), Some("supergrok"));
     }
 }
 

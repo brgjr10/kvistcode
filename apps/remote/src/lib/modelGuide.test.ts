@@ -58,21 +58,25 @@ describe("kind of work", () => {
 
 describe("hints and the switch note", () => {
   const model = { id: "model", currentValue: "opus" };
-  it("hints Claude's effort and model choices only", () => {
+  it("hints effort choices across providers and Claude model aliases for Claude", () => {
     expect(choiceHint(claude, { id: "effort" }, "medium")).toMatch(/start/i);
     expect(choiceHint(claude, { id: "model" }, "fable")).toMatch(/refactor/i);
     expect(choiceHint(claude, { id: "effort" }, "weird")).toBeNull();
-    expect(choiceHint({ provider: "codex" } as Agent, { id: "effort" }, "medium")).toBeNull();
+    expect(choiceHint({ provider: "codex" } as Agent, { id: "effort" }, "medium")).toMatch(/start/i);
+    expect(choiceHint({ provider: "gemini" } as Agent, { id: "model" }, "fable")).toBeNull();
     expect(optionNote(claude, { id: "model" })).toMatch(/break/i);
+    expect(optionNote({ provider: "gemini" } as Agent, { id: "model" })).toMatch(/break/i);
+    expect(optionNote({ provider: "local" } as Agent, { id: "model" })).toBeNull();
     expect(optionNote(claude, { id: "mode" })).toBeNull();
   });
 
-  it("asks only for a Claude model change at 100k tokens or more", () => {
+  it("asks for a model change at 100k tokens or more across cloud providers", () => {
     const long = { provider: "claude", contextUsed: 120_000 } as Agent;
     expect(switchNeedsNote(long, model, "sonnet")).toBe(true);
     expect(switchNeedsNote(long, model, "opus")).toBe(false);
     expect(switchNeedsNote({ provider: "claude", contextUsed: 50_000 } as Agent, model, "sonnet")).toBe(false);
     expect(switchNeedsNote(long, { id: "effort", currentValue: "low" }, "high")).toBe(false);
-    expect(switchNeedsNote({ provider: "codex", contextUsed: 120_000 } as Agent, model, "sonnet")).toBe(false);
+    expect(switchNeedsNote({ provider: "codex", contextUsed: 120_000 } as Agent, model, "sonnet")).toBe(true);
+    expect(switchNeedsNote({ provider: "local", contextUsed: 120_000 } as Agent, model, "sonnet")).toBe(false);
   });
 });

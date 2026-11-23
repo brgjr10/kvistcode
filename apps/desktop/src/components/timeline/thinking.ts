@@ -221,13 +221,19 @@ function optionName(opt: ConfigOption | undefined): string | null {
 export function inheritedOf(
   options: readonly ConfigOption[] | undefined,
   claude?: { helper: string | null; helperEffort?: string | null },
+  fallbackModel?: string | null,
 ): Inherited {
-  const base = options?.length
-    ? {
-        model: optionName(options.find((o) => o.category === "model")),
-        effort: optionName(options.find((o) => o.category === "thought_level")),
-      }
-    : NO_INHERIT;
+  const modelOpt = options?.find((o) => o.category === "model" || o.id === "model");
+  const effortOpt = options?.find(
+    (o) => o !== modelOpt && (o.category === "thought_level" || /effort|reasoning|thinking/i.test(o.id)),
+  );
+  const base =
+    options?.length || fallbackModel
+      ? {
+          model: optionName(modelOpt) ?? fallbackModel ?? null,
+          effort: optionName(effortOpt),
+        }
+      : NO_INHERIT;
   return claude ? { ...base, claude } : base;
 }
 

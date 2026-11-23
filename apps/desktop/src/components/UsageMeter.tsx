@@ -78,7 +78,7 @@ function Meter({ w, name, compact }: { w: UsageWindow; name: string; compact?: b
   );
 }
 
-/** Rate-limit window meters reported by the provider (Codex and Claude). Renders nothing without data. */
+/** Rate-limit window meters reported by the provider. Renders nothing without data. */
 export function UsageMeters({
   usage,
   compact,

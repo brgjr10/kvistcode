@@ -5,6 +5,15 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.7.3 — 2026-11-22
+
+Brings Gemini, Codex, Grok and custom agents closer to parity with Claude across sub-agents, usage limits, token tracking and guidance.
+
+- Sub-agents started by Gemini (Antigravity) and Grok show up as sub-agent cards with nested tool steps, background status and inherited model/effort labels, and Codex sub-agent cards show their role and output.
+- Usage and Accounts now track Gemini subscription limits (via Antigravity's `/usage`), read Codex rate limits right on connect and account check, and record active cooldown windows whenever a signed-in provider hits a timed rate limit.
+- Grok and custom ACP agents report token and context usage from protocol metadata, and plan-approval prompts work for non-Claude agents too.
+- Model/effort menu guidance and token-saving insights (such as spotting high effort or heavy turns) now work across Gemini, Codex and Grok, not only Claude.
+
 ## v0.7.1 — 2026-11-22
 
 Gemini agents now use Google's Antigravity CLI, which supports Google-account sign-in for Gemini plans.

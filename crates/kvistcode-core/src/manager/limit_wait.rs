@@ -385,6 +385,36 @@ impl Core {
             .map(|u| limit_reset::for_model(&u, running_model(&agent).as_deref()));
         let reported =
             limit_reset::best_reset(message, usage.as_ref(), now, &jiff::tz::TimeZone::system());
+        // For providers that don't stream pre-limit meters (e.g. Grok, or Gemini before a quota
+        // poll), record the active limit window on the account so Accounts/Usage/Phone show it.
+        if let Some(resets_at) = reported.filter(|r| *r > now) {
+            let already_exhausted = usage
+                .as_ref()
+                .and_then(|u| limit_reset::exhausted_reset(u, now))
+                .is_some();
+            if !already_exhausted {
+                if let Ok(acct) = self.account(&agent.account_id) {
+                    if !matches!(acct.provider, Provider::Local | Provider::Custom)
+                        && acct.auth_kind != AuthKind::ApiKey
+                    {
+                        self.set_account_usage(
+                            &acct.id,
+                            AccountUsage {
+                                primary: Some(UsageWindow {
+                                    used_percent: 100.0,
+                                    window_mins: None,
+                                    resets_at: Some(resets_at),
+                                }),
+                                secondary: None,
+                                fable: None,
+                                plan: None,
+                                updated_at: now,
+                            },
+                        );
+                    }
+                }
+            }
+        }
         let wait = limit_resume::next_wait(attempts, reported, now, div);
         let _ = self.update_agent(agent_id, |a| {
             a.limit_resets_at = wait.resets_at;
