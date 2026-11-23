@@ -85,13 +85,20 @@ enum RequestReply {
     Unsupported,
 }
 
+#[derive(Default)]
+struct TurnState {
+    id: Option<String>,
+    /// Cancel was requested before Codex told us the turn id.
+    cancel_requested: bool,
+}
+
 pub struct CodexDriver {
     peer: Arc<Peer>,
     ctx: Arc<AgentCtx>,
     /// Which process of this agent we drive (see `AgentCtx::retire_generation`).
     generation: u64,
     thread_id: String,
-    turn_id: Mutex<Option<String>>,
+    turn: Mutex<TurnState>,
     /// Sub-agent thread id → the collaborator item that started it.
     sub_threads: Mutex<HashMap<String, String>>,
     /// Sub-agent thread id → whether Codex last reported it still working. A
@@ -100,8 +107,6 @@ pub struct CodexDriver {
     sub_running: Mutex<HashMap<String, bool>>,
     /// Last turn Codex reported complete (its `turn/start` reply can arrive later).
     completed_turn: Mutex<Option<String>>,
-    /// Cancel was requested before Codex told us the turn id.
-    cancel_requested: std::sync::atomic::AtomicBool,
     perms: Mutex<HashMap<String, (Value, PermKind)>>,
     /// our request id → (JSON-RPC id, kind) of a question Codex asked
     questions: Mutex<HashMap<String, (Value, CodexQuestion)>>,
@@ -269,11 +274,10 @@ impl CodexDriver {
             ctx: ctx.clone(),
             generation,
             thread_id,
-            turn_id: Mutex::new(None),
+            turn: Mutex::default(),
             sub_threads: Mutex::default(),
             sub_running: Mutex::default(),
             completed_turn: Mutex::new(None),
-            cancel_requested: std::sync::atomic::AtomicBool::new(false),
             perms: Mutex::default(),
             questions: Mutex::default(),
             orphans: Mutex::default(),
@@ -438,9 +442,11 @@ impl CodexDriver {
 
     async fn start_turn_once(&self, prompt: Prompt) -> Option<Prompt> {
         // Reset before the turn begins: a cancel from here on must stick.
-        self.cancel_requested
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-        *self.turn_id.lock() = None;
+        {
+            let mut turn = self.turn.lock();
+            turn.id = None;
+            turn.cancel_requested = false;
+        }
         // Stopped, cancelled or replaced while waiting: never send it.
         if !self.ctx.is_current(self.generation) || !self.ctx.begin_turn(prompt.token) {
             return None;
@@ -448,8 +454,7 @@ impl CodexDriver {
         self.ctx.checkpoint_before_turn().await;
         // Cancelled while the checkpoint ran: the prompt is never sent.
         if self.ctx.cancel_was_requested() && self.ctx.is_current(self.generation) {
-            self.cancel_requested
-                .store(false, std::sync::atomic::Ordering::SeqCst);
+            self.turn.lock().cancel_requested = false;
             return self.ctx.turn_finished_for(
                 self.generation,
                 prompt.token,
@@ -486,14 +491,12 @@ impl CodexDriver {
                 let finished = id.is_some() && *self.completed_turn.lock() == id;
                 if !finished {
                     // A reply without an id must not erase the one `turn/started` gave.
-                    {
-                        let mut turn = self.turn_id.lock();
-                        *turn = known_turn(turn.take(), id.as_deref());
-                    }
-                    if self
-                        .cancel_requested
-                        .swap(false, std::sync::atomic::Ordering::SeqCst)
-                    {
+                    let should_interrupt = {
+                        let mut turn = self.turn.lock();
+                        turn.id = known_turn(turn.id.take(), id.as_deref());
+                        std::mem::take(&mut turn.cancel_requested)
+                    };
+                    if should_interrupt {
                         let _ = self.interrupt().await;
                     }
                 }
@@ -560,7 +563,7 @@ impl CodexDriver {
         if !self.steerable() {
             return Ok(Steer::Unsupported);
         }
-        let Some(turn_id) = self.turn_id.lock().clone() else {
+        let Some(turn_id) = self.turn.lock().id.clone() else {
             return Ok(Steer::NotRunning);
         };
         let input = self.input(prompt.text.clone(), &prompt.attachments).await;
@@ -585,7 +588,7 @@ impl CodexDriver {
                     return Ok(Steer::Unsupported);
                 }
                 // The turn ended (or moved on) while the request was in flight.
-                if self.turn_id.lock().as_deref() != Some(turn_id.as_str()) {
+                if self.turn.lock().id.as_deref() != Some(turn_id.as_str()) {
                     return Ok(Steer::NotRunning);
                 }
                 Err(e)
@@ -605,17 +608,19 @@ impl CodexDriver {
             let _ = self.peer.respond(rpc_id, q.reply(None, true)).await;
             self.ctx.question_resolved(&req, "cancelled", None);
         }
-        if self.turn_id.lock().is_none() {
-            // turn/start hasn't answered yet; interrupt as soon as it does.
-            self.cancel_requested
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-            return Ok(());
+        {
+            let mut turn = self.turn.lock();
+            if turn.id.is_none() {
+                // turn/start hasn't answered yet; interrupt as soon as it does.
+                turn.cancel_requested = true;
+                return Ok(());
+            }
         }
         self.interrupt().await
     }
 
     async fn interrupt(&self) -> anyhow::Result<()> {
-        let turn = self.turn_id.lock().clone();
+        let turn = self.turn.lock().id.clone();
         if let Some(turn_id) = turn {
             self.peer
                 .request_timeout(
@@ -1165,12 +1170,16 @@ impl CodexDriver {
             }
             "turn/started" => {
                 // An event without an id says nothing new; never forget the running turn.
-                let mut turn = self.turn_id.lock();
-                *turn = known_turn(turn.take(), p["turn"]["id"].as_str());
+                let mut turn = self.turn.lock();
+                turn.id = known_turn(turn.id.take(), p["turn"]["id"].as_str());
             }
             "turn/completed" => {
                 // Without an id it ended the turn we know of, so remember that one.
-                let ended = known_turn(self.turn_id.lock().take(), p["turn"]["id"].as_str());
+                let ended = {
+                    let mut turn = self.turn.lock();
+                    turn.cancel_requested = false;
+                    known_turn(turn.id.take(), p["turn"]["id"].as_str())
+                };
                 *self.completed_turn.lock() = ended;
                 // Spawn calls are kept open while their sub-agents run; none may outlive
                 // the turn, or its card would spin on an idle agent.

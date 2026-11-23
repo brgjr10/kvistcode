@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { AssistantBilling } from "@/components/usage/BillingSummary";
+import { inTerminal } from "@/hooks/useGlobalShortcuts";
 import { describeScreen } from "@/lib/describeScreen";
 import { tileIdsFor } from "@/lib/helpers";
 import { formatCost, formatElapsed, isLive, PHASE_LABEL } from "@/lib/voiceAssistant";
@@ -62,13 +63,14 @@ function PanelBody() {
   // (unless something else, like the composer, wants the key).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
+      if (e.defaultPrevented || e.isComposing) return;
       if (e.key !== "Escape" && e.key !== "Enter") return;
-      // Typing somewhere keeps its keys, except in an empty field where they'd do nothing.
+      // Typing somewhere keeps its keys, except in an empty field where they'd do nothing (never a terminal).
       const t = e.target;
+      if (inTerminal(t)) return;
       const emptyField = (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) && t.value === "";
       if (isEditableTarget(t) && !(firstConfirm && emptyField)) return;
-      if (document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]')) return;
       if (e.key === "Enter") {
         // A focused button or link handles Enter itself.
         if (!firstConfirm || (e.target instanceof Element && e.target.closest("button, a, [role='button']"))) return;

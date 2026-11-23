@@ -12,10 +12,12 @@ interface PermissionUiStore {
   docked: Record<string, boolean>;
   armed: Record<string, boolean>;
   reasonDraft: Record<string, string>;
+  reasonOpen: Record<string, boolean>;
   setVisible: (requestId: string, visible: boolean) => void;
   setDocked: (requestId: string, docked: boolean) => void;
   setArmed: (requestId: string, armed: boolean) => void;
   setReasonDraft: (requestId: string, text: string) => void;
+  setReasonOpen: (requestId: string, open: boolean) => void;
   /** Forget a resolved request. */
   clear: (requestId: string) => void;
 }
@@ -32,6 +34,7 @@ export const usePermissionUi = create<PermissionUiStore>((set) => ({
   docked: {},
   armed: {},
   reasonDraft: {},
+  reasonOpen: {},
   setVisible: (id, v) => set((s) => (s.visible[id] === v ? s : { visible: { ...s.visible, [id]: v } })),
   setDocked: (id, v) =>
     set((s) => (Boolean(s.docked[id]) === v ? s : { docked: v ? { ...s.docked, [id]: true } : without(s.docked, id) })),
@@ -39,12 +42,19 @@ export const usePermissionUi = create<PermissionUiStore>((set) => ({
     set((s) => (Boolean(s.armed[id]) === v ? s : { armed: v ? { ...s.armed, [id]: true } : without(s.armed, id) })),
   setReasonDraft: (id, text) =>
     set((s) => ({ reasonDraft: text ? { ...s.reasonDraft, [id]: text } : without(s.reasonDraft, id) })),
+  setReasonOpen: (id, open) =>
+    set((s) =>
+      Boolean(s.reasonOpen[id]) === open
+        ? s
+        : { reasonOpen: open ? { ...s.reasonOpen, [id]: true } : without(s.reasonOpen, id) },
+    ),
   clear: (id) =>
     set((s) => ({
       visible: without(s.visible, id),
       docked: without(s.docked, id),
       armed: without(s.armed, id),
       reasonDraft: without(s.reasonDraft, id),
+      reasonOpen: without(s.reasonOpen, id),
     })),
 }));
 

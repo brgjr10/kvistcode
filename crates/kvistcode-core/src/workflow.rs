@@ -844,7 +844,14 @@ fn shorten(text: &str, max: usize) -> String {
 /// `Last message: “…”`: what the agent last said, so an alert says what it did. None when it said nothing.
 fn last_said(said: Option<&str>) -> Option<String> {
     let line = one_line(said?);
-    (!line.is_empty()).then(|| format!("Last message: “{}”", shorten(&line, LAST_SAID_CHARS)))
+    if line.is_empty() {
+        return None;
+    }
+    let clean = crate::redact::redact_secrets(&line);
+    Some(format!(
+        "Last message: “{}”",
+        shorten(&clean, LAST_SAID_CHARS)
+    ))
 }
 
 /// One clean alert line: secrets removed, shortened.

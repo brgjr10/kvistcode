@@ -329,8 +329,9 @@ pub async fn run(
     let mut announce: Option<&'static str> = None;
     let mut request = cfg.first_request.clone();
     loop {
-        let ws = match connect(&cfg).await {
-            Ok(ws) => ws,
+        let ws = match connect_or_stop(&cfg, &mut control).await {
+            Ok(Some(ws)) => ws,
+            Ok(None) => return finish(started, EndReason::UserStopped, usage),
             Err(e) => {
                 let (msg, fatal) = describe_ws_error(&e);
                 warn!("realtime connect failed: {msg}");
@@ -342,7 +343,9 @@ pub async fn run(
                     state: VaState::Connecting,
                     message: Some("Reconnecting".into()),
                 });
-                tokio::time::sleep(cfg.reconnect_delay).await;
+                if !sleep_or_stop(cfg.reconnect_delay, &mut control).await {
+                    return finish(started, EndReason::UserStopped, usage);
+                }
                 continue;
             }
         };
@@ -377,7 +380,9 @@ pub async fn run(
                 });
                 emit_usage(&sink, started, &usage);
                 let paused_at = Instant::now();
-                if !wait_for_resume(&mut control, &mut request).await {
+                let resumed = wait_for_resume(&mut control, &mut request).await;
+                started += paused_at.elapsed();
+                if !resumed {
                     return finish(started, EndReason::UserStopped, usage);
                 }
                 sink.emit(VaEvent::State {
@@ -392,7 +397,6 @@ pub async fn run(
                     Some((_, Err(e))) => return finish(started, EndReason::Error(e), usage),
                     None => return finish(started, EndReason::Error(DEVICES_ERROR.into()), usage),
                 };
-                started += paused_at.elapsed();
                 attempt = 0;
                 announce = Some("Listening again \u{2014} earlier context was not kept");
             }
@@ -409,7 +413,44 @@ pub async fn run(
                     state: VaState::Connecting,
                     message: Some("Reconnecting".into()),
                 });
-                tokio::time::sleep(cfg.reconnect_delay).await;
+                if !sleep_or_stop(cfg.reconnect_delay, &mut control).await {
+                    return finish(started, EndReason::UserStopped, usage);
+                }
+            }
+        }
+    }
+}
+
+/// Connects to the Realtime API, returning `Ok(None)` if `Control::Stop` arrives (or the
+/// control channel closes) before the handshake completes.
+async fn connect_or_stop(
+    cfg: &SessionConfig,
+    control: &mut UnboundedReceiver<Control>,
+) -> Result<Option<Ws>, tokio_tungstenite::tungstenite::Error> {
+    let conn = connect(cfg);
+    tokio::pin!(conn);
+    loop {
+        tokio::select! {
+            res = &mut conn => return res.map(Some),
+            ctrl = control.recv() => match ctrl {
+                None | Some(Control::Stop) => return Ok(None),
+                Some(_) => {}
+            }
+        }
+    }
+}
+
+/// Sleeps for `delay`, returning `false` immediately if `Control::Stop` arrives or the
+/// control channel closes.
+async fn sleep_or_stop(delay: Duration, control: &mut UnboundedReceiver<Control>) -> bool {
+    let sleep = tokio::time::sleep(delay);
+    tokio::pin!(sleep);
+    loop {
+        tokio::select! {
+            _ = &mut sleep => return true,
+            ctrl = control.recv() => match ctrl {
+                None | Some(Control::Stop) => return false,
+                Some(_) => {}
             }
         }
     }

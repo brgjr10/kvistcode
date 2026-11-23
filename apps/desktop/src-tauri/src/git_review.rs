@@ -1688,7 +1688,15 @@ pub(crate) async fn commit_all(
             .map(|p| format!(":(literal){p}"))
             .collect();
         if !unstage.is_empty() {
-            git_with_pathspecs(cwd, &["restore", "--staged"], &unstage).await?;
+            // `git restore --staged` requires HEAD; on an unborn branch, remove from index directly.
+            let has_head = git(cwd, &["rev-parse", "--verify", "-q", "HEAD^{commit}"])
+                .await
+                .is_ok();
+            if has_head {
+                git_with_pathspecs(cwd, &["restore", "--staged"], &unstage).await?;
+            } else {
+                git_with_pathspecs(cwd, &["rm", "--cached", "--ignore-unmatch"], &unstage).await?;
+            }
         }
     }
     let files: Vec<String> = nul_split(

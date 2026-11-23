@@ -363,11 +363,26 @@ async fn prepare_repo(
         return Ok((None, Vec::new()));
     }
     let untracked = git(path, &["ls-files", "--others", "--exclude-standard", "-z"]).await?;
-    let left_out: Vec<String> = untracked
-        .split('\0')
-        .filter(|p| !p.is_empty() && looks_like_secret(p))
-        .map(str::to_string)
-        .collect();
+    let staged = git(
+        path,
+        &[
+            "diff",
+            "--cached",
+            "--no-renames",
+            "--no-ext-diff",
+            "--name-only",
+            "--diff-filter=A",
+            "-z",
+        ],
+    )
+    .await
+    .unwrap_or_default();
+    let mut left_out: Vec<String> = Vec::new();
+    for p in untracked.split('\0').chain(staged.split('\0')) {
+        if !p.is_empty() && looks_like_secret(p) && !left_out.iter().any(|x| x == p) {
+            left_out.push(p.to_string());
+        }
+    }
     match commit_all(path, "Initial commit", &left_out).await {
         Ok(summary) => Ok((Some(summary.hash), left_out)),
         Err(e) if e.is::<crate::git_review::NothingToCommit>() => {

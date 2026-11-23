@@ -49,11 +49,11 @@ export function AccountSwitcher({ agent, showName }: { agent: Agent; showName: b
         <DropdownMenuLabel>Run this agent on</DropdownMenuLabel>
         {options.map((a) => {
           const isCurrent = a.id === agent.accountId;
-          const signedIn = !!a.status?.loggedIn;
+          const signedOut = a.status?.loggedIn === false;
           return (
             <DropdownMenuItem
               key={a.id}
-              disabled={!isCurrent && (!signedIn || busy)}
+              disabled={!isCurrent && (signedOut || busy)}
               onSelect={() => {
                 if (!isCurrent) void switchAccount(agent, a, agent.rateLimited);
               }}
@@ -62,10 +62,12 @@ export function AccountSwitcher({ agent, showName }: { agent: Agent; showName: b
               <AccountAvatar account={a} size={20} showProvider={false} />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate">{a.name}</span>
-                <span className={cn("truncate text-xs", signedIn ? "text-steel" : "text-warn")}>
-                  {signedIn
-                    ? [a.status?.label, a.status?.email].filter(Boolean).join(" · ") || "Signed in"
-                    : "Not signed in"}
+                <span className={cn("truncate text-xs", signedOut ? "text-warn" : "text-steel")}>
+                  {a.status === null
+                    ? "Not checked"
+                    : a.status.loggedIn
+                      ? [a.status.label, a.status.email].filter(Boolean).join(" · ") || "Signed in"
+                      : "Not signed in"}
                 </span>
               </span>
               {isCurrent && <Check className="!text-accent" />}

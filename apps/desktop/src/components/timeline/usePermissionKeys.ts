@@ -73,7 +73,8 @@ export function usePermissionKeys(
       if (action === "deny_reason") {
         if (!opts.deny) return;
         e.preventDefault();
-        deny(p.requestId);
+        if (ui.docked[p.requestId]) usePermissionUi.getState().setReasonOpen(p.requestId, true);
+        else deny(p.requestId);
         return;
       }
       let pick: PermissionOption | undefined;

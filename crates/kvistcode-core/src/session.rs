@@ -1931,8 +1931,10 @@ impl AgentCtx {
                 if limited {
                     if let Some(core) = self.core.upgrade() {
                         core.limit_hit(&self.agent_id, msg, was_automatic);
-                        let id = self.agent_id.clone();
-                        tokio::spawn(async move { core.on_rate_limited(&id).await });
+                        if let Ok(rt) = tokio::runtime::Handle::try_current() {
+                            let id = self.agent_id.clone();
+                            rt.spawn(async move { core.on_rate_limited(&id).await });
+                        }
                     }
                 }
                 self.attention(

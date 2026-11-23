@@ -114,13 +114,14 @@ export interface Blockers {
   conflict: boolean;
 }
 
-type AgentLike = Pick<Agent, "status" | "rateLimited" | "costUsd" | "helperSync" | "parentId">;
+type AgentLike = Pick<Agent, "status" | "rateLimited" | "costUsd" | "helperSync" | "parentId"> &
+  Partial<Pick<Agent, "budget" | "budgetHold">>;
 
 /**
  * What is stopping the agent from going on, and can be acted on from the dock:
  * - the account hit its usage limit (switch account / retry);
  * - the turn failed (retry);
- * - the per-agent budget was reached and the setting pauses agents (raise it);
+ * - a spending limit paused the agent (raise it);
  * - a helper's merge is stuck (sync / ask the main agent).
  * A shut-down or interrupted agent shows the Resume banner instead of the composer, so nothing here.
  */
@@ -130,14 +131,16 @@ export function blockers(
 ): Blockers {
   const resumable = agent.status === "interrupted" || agent.status === "stopped";
   const working = agent.status === "working" || agent.status === "starting";
+  const effectiveCap = agent.budget?.usd ?? settings.agentBudgetUsd;
+  const budgetHit =
+    agent.budgetHold != null ||
+    (agent.budgetHold === undefined &&
+      settings.budgetAction === "pause" &&
+      budgetLevel(agent.costUsd, effectiveCap) === "hit");
   return {
     rateLimit: agent.rateLimited && !resumable,
     error: agent.status === "error" && !agent.rateLimited,
-    budget:
-      !resumable &&
-      !working &&
-      settings.budgetAction === "pause" &&
-      budgetLevel(agent.costUsd, settings.agentBudgetUsd) === "hit",
+    budget: !resumable && !working && budgetHit,
     conflict: Boolean(agent.parentId) && agent.helperSync?.state === "conflict",
   };
 }

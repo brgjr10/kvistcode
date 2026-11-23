@@ -848,11 +848,12 @@ async fn install_with(
         let log2 = log.clone();
         tokio::task::spawn_blocking(move || install_agy(&dir, &log2)).await??;
         let cli = agy_binary(data_dir);
-        let out = tokio::process::Command::new(cli)
-            .arg("--version")
-            .stdin(Stdio::null())
-            .output()
-            .await?;
+        let mut cmd = tokio::process::Command::new(&cli);
+        cmd.arg("--version").stdin(Stdio::null());
+        hidden(&mut cmd);
+        let out = tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output())
+            .await
+            .map_err(|_| anyhow!("`{} --version` timed out", cli.display()))??;
         if !out.status.success() {
             bail!("Antigravity CLI did not start");
         }
@@ -966,14 +967,24 @@ pub fn tool_package(provider: Provider) -> Option<(&'static str, &'static str)> 
 /// The version of Kvistcode's own copy of a provider's agent package.
 pub fn installed_version(provider: Provider, data_dir: &Path) -> Option<String> {
     if provider == Provider::Gemini {
-        if !agy_binary(data_dir).is_file() {
+        let bin = agy_binary(data_dir);
+        if !bin.is_file() {
             return None;
         }
-        return std::process::Command::new(agy_binary(data_dir))
-            .arg("--version")
-            .output()
-            .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+        let mut cmd = std::process::Command::new(bin);
+        crate::childenv::sanitize_std_command(&mut cmd);
+        cmd.arg("--version").stdin(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000);
+        }
+        let out = cmd.output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return (!text.is_empty()).then_some(text);
     }
     let (pkg, _) = tool_package(provider)?;
     providers::managed_pkg_version(data_dir, pkg)

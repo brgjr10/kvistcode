@@ -84,7 +84,12 @@ pub fn parse_target(raw: &str) -> Result<Target, String> {
     }
     let (host, port) = if let Some(after) = authority.strip_prefix('[') {
         let (h, tail) = after.split_once(']').ok_or("Invalid address")?;
-        (format!("[{h}]"), tail.strip_prefix(':'))
+        let port = if tail.is_empty() {
+            None
+        } else {
+            Some(tail.strip_prefix(':').ok_or("Invalid address")?)
+        };
+        (format!("[{h}]"), port)
     } else {
         match authority.split_once(':') {
             Some((h, p)) => (h.to_string(), Some(p)),
@@ -620,7 +625,7 @@ pub fn insertion_point(buf: &[u8], eof: bool) -> Option<usize> {
     };
     match tag_end(b"<head") {
         Some(Some(end)) => return Some(end),
-        Some(None) if !eof => return None,
+        Some(None) if !eof && buf.len() < SNIFF_LIMIT => return None,
         _ => {}
     }
     if let Some(i) = find(&lower, b"<body") {

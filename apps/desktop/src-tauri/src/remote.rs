@@ -1450,17 +1450,17 @@ impl Remote {
                 .and_then(lan_ip);
             lan_refresh_target(running, wanted, current)
         };
-        let Some(settings) = check(self) else {
+        if check(self).is_none() {
             return;
-        };
+        }
         let _serialized = self.apply_lock.lock().await;
         if self.is_shutting_down() {
             return;
         }
-        // Re-check under the lock: another apply may have handled it.
-        if check(self).is_none() {
+        // Re-check under the lock: another apply may have handled it or changed settings.
+        let Some(settings) = check(self) else {
             return;
-        }
+        };
         info!("LAN address changed or returned; (re)starting the remote server");
         let was_running = self.stop_and_wait().await;
         self.start_reporting(&settings, was_running).await;

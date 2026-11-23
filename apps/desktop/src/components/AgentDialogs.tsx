@@ -283,7 +283,7 @@ function MoveAccountDialog({ agent, onClose }: { agent: Agent | null; onClose: (
     const a = useUi.getState().moveAgent;
     const first = useApp
       .getState()
-      .accounts.find((x) => x.provider === a?.provider && x.id !== a?.accountId && x.status?.loggedIn);
+      .accounts.find((x) => x.provider === a?.provider && x.id !== a?.accountId && x.status?.loggedIn !== false);
     setTarget(first?.id ?? null);
     setCont(a?.rateLimited ?? false);
     busyRef.current = false;
@@ -336,7 +336,7 @@ function MoveAccountDialog({ agent, onClose }: { agent: Agent | null; onClose: (
           ) : (
             <div role="radiogroup" aria-label="Account" className="space-y-1.5">
               {options.map((a) => {
-                const signedIn = !!a.status?.loggedIn;
+                const signedOut = a.status?.loggedIn === false;
                 const on = target === a.id;
                 return (
                   <button
@@ -344,7 +344,7 @@ function MoveAccountDialog({ agent, onClose }: { agent: Agent | null; onClose: (
                     type="button"
                     role="radio"
                     aria-checked={on}
-                    disabled={!signedIn}
+                    disabled={signedOut}
                     onClick={() => setTarget(a.id)}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-45",
@@ -354,8 +354,12 @@ function MoveAccountDialog({ agent, onClose }: { agent: Agent | null; onClose: (
                     <AccountAvatar account={a} size={28} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-body font-medium">{a.name}</span>
-                      <span className={cn("block truncate text-meta", signedIn ? "text-steel" : "text-warn")}>
-                        {signedIn ? [a.status?.label, a.status?.email].filter(Boolean).join(" · ") : "Not signed in"}
+                      <span className={cn("block truncate text-meta", signedOut ? "text-warn" : "text-steel")}>
+                        {a.status === null
+                          ? "Not checked"
+                          : a.status.loggedIn
+                            ? [a.status.label, a.status.email].filter(Boolean).join(" · ") || "Signed in"
+                            : "Not signed in"}
                       </span>
                     </span>
                     <span

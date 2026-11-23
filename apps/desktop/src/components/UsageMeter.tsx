@@ -28,12 +28,14 @@ export function pctTextTone(pct: number) {
 }
 
 /** The windows an account reports, each with its name ("5-hour", "Weekly", "Fable weekly"). */
-export function usageWindows(usage: AccountUsage | null | undefined): { name: string; w: UsageWindow }[] {
+export function usageWindows(
+  usage: AccountUsage | null | undefined,
+): { key: "primary" | "secondary" | "fable"; name: string; w: UsageWindow }[] {
   if (!usage) return [];
-  const out: { name: string; w: UsageWindow }[] = [];
-  if (usage.primary) out.push({ name: windowLabel(usage.primary), w: usage.primary });
-  if (usage.secondary) out.push({ name: windowLabel(usage.secondary), w: usage.secondary });
-  if (usage.fable) out.push({ name: "Fable weekly", w: usage.fable });
+  const out: { key: "primary" | "secondary" | "fable"; name: string; w: UsageWindow }[] = [];
+  if (usage.primary) out.push({ key: "primary", name: windowLabel(usage.primary), w: usage.primary });
+  if (usage.secondary) out.push({ key: "secondary", name: windowLabel(usage.secondary), w: usage.secondary });
+  if (usage.fable) out.push({ key: "fable", name: "Fable weekly", w: usage.fable });
   return out;
 }
 
@@ -92,8 +94,8 @@ export function UsageMeters({
   if (windows.length === 0) return null;
   return (
     <div className={cn("flex gap-4", compact && "flex-col gap-2", className)}>
-      {windows.map(({ name, w }) => (
-        <Meter key={name} w={w} name={name} compact={compact} />
+      {windows.map(({ key, name, w }) => (
+        <Meter key={key} w={w} name={name} compact={compact} />
       ))}
     </div>
   );

@@ -187,13 +187,15 @@ async function scan(agentId: string, minGap: number) {
   if (scanning.has(agentId)) return;
   scanning.add(agentId);
   try {
+    const curBefore = previewOf(usePreview.getState(), agentId);
     const ranked = candidates(agentId);
-    const sig = ranked.map((r) => r.url).join(" ");
+    const sig = `${ranked.map((r) => r.url).join(" ")}|${curBefore.live.join(" ")}`;
     const prev = lastProbe.get(agentId);
     if (prev && prev.sig === sig && Date.now() - prev.at < minGap) return;
     lastProbe.set(agentId, { sig, at: Date.now() });
     const recent = ranked.slice(-16);
-    const up = new Set(recent.length ? await api.probePorts(recent.map((r) => r.port)) : []);
+    const ports = Array.from(new Set([...recent.map((r) => r.port), ...curBefore.live.map(urlPort)]));
+    const up = new Set(ports.length ? await api.probePorts(ports) : []);
     const cur = previewOf(usePreview.getState(), agentId);
     const live = rankLive(recent, up, cur.live);
     if (live.length !== cur.live.length || live.some((u, i) => u !== cur.live[i])) patchPreview(agentId, { live });

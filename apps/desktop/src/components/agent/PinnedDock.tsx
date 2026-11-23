@@ -5,6 +5,7 @@ import { useMinimal } from "@/hooks/useLook";
 import { useScrollFade } from "@/hooks/useScrollFade";
 import { retryLastPrompt } from "@/lib/actions";
 import { isBusy } from "@/lib/agents";
+import { costIsEquivalent, holdText } from "@/lib/budgetMeters";
 import { formatCost } from "@/lib/format";
 import { blockers, dockSections, latestNeedsYou, needsYouKind } from "@/lib/pinned";
 import { questionHeadline } from "@/lib/question";
@@ -293,8 +294,11 @@ function ErrorRow({ agent }: { agent: Agent }) {
   );
 }
 
-/** The agent reached its budget and the setting pauses agents: raise it to go on. */
+/** The agent reached a spending limit and is paused: raise it to go on. */
 function BudgetRow({ agent, cap }: { agent: Agent; cap: number | null | undefined }) {
+  const accounts = useApp((s) => s.accounts);
+  const hold = agent.budgetHold;
+  const effectiveCap = agent.budget?.usd ?? cap;
   return (
     <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-err/35 bg-err/10 text-err">
@@ -303,10 +307,18 @@ function BudgetRow({ agent, cap }: { agent: Agent; cap: number | null | undefine
       <div className="min-w-[160px] flex-1">
         <div className="text-body font-semibold">Budget reached</div>
         <div className="text-caption leading-snug text-muted">
-          <span className="tabular">
-            {formatCost(agent.costUsd)} of {cap != null ? formatCost(cap) : "its cap"}
-          </span>
-          . This agent is paused; raise the budget to keep going.
+          {hold ? (
+            <>
+              {holdText(hold, costIsEquivalent(agent, accounts))} This agent is paused; raise the budget to keep going.
+            </>
+          ) : (
+            <>
+              <span className="tabular">
+                {formatCost(agent.costUsd)} of {effectiveCap != null ? formatCost(effectiveCap) : "its cap"}
+              </span>
+              . This agent is paused; raise the budget to keep going.
+            </>
+          )}
         </div>
       </div>
       <Button size="sm" variant="secondary" onClick={() => useUi.getState().openSettings("budgets")}>

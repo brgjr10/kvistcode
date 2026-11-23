@@ -241,7 +241,7 @@ export function seedProviders(): ProviderInfo[] {
     {
       provider: "gemini",
       displayName: "Gemini",
-      cliName: "gemini",
+      cliName: "agy",
       installed: true,
       managed: true,
       managedVersion: "0.70.0",

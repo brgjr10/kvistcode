@@ -1376,9 +1376,9 @@ pub async fn update_settings(
     if previous.as_ref().map(|p| p.launch_at_login) != Some(saved.launch_at_login) {
         crate::apply_autostart(&app, saved.launch_at_login);
     }
-    // No-op when unchanged; retries a previously failed registration otherwise.
-    let hotkey = crate::hotkey::apply(&app, &saved.global_hotkey);
-    let va_hotkey = crate::hotkey::apply_voice_assistant(&app, &saved.voice_assistant.hotkey);
+    // No-op when unchanged; unregisters changed slots first so swapping them succeeds.
+    let (hotkey, va_hotkey) =
+        crate::hotkey::apply_both(&app, &saved.global_hotkey, &saved.voice_assistant.hotkey);
     // Starts, restarts or stops listening for the wake phrase (no-op when unchanged).
     crate::wake::apply(&app);
     app.state::<Arc<Remote>>().apply(&saved.remote).await;
@@ -1500,7 +1500,10 @@ pub async fn open_path(app: AppHandle, path: String) -> CmdResult<()> {
         ));
     }
     let meta = std::fs::metadata(p).map_err(|_| format!("{target} does not exist"))?;
-    if meta.is_dir() && !is_bundle(p) {
+    let is_symlink = std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink());
+    let canonical = std::fs::canonicalize(p).ok();
+    let bundle = is_bundle(p) || canonical.as_deref().is_some_and(is_bundle);
+    if meta.is_dir() && !bundle && (!is_symlink || canonical.is_some()) {
         app.opener()
             .open_path(target, None::<&str>)
             .map_err(|e| e.to_string())

@@ -21,7 +21,10 @@ pub const GROK_PKG: &str = "@xai-official/grok";
 pub const GROK_VERSION: &str = "1.0.70";
 
 pub fn cli_name(provider: Provider) -> &'static str {
-    provider.as_str()
+    match provider {
+        Provider::Gemini => "agy",
+        _ => provider.as_str(),
+    }
 }
 
 /// npm prefix the Claude adapter is installed into (shared with managed CLIs).
@@ -391,6 +394,11 @@ pub fn find_cli(provider: Provider) -> Option<PathBuf> {
         .get()
         .and_then(|d| managed_cli_in(provider, d))
         .or_else(|| resolve_program(cli_name(provider)))
+        .or_else(|| {
+            (provider == Provider::Gemini)
+                .then(|| resolve_program("antigravity"))
+                .flatten()
+        })
 }
 
 /// Whether the CLI [`find_cli`] returns is Kvistcode's own copy.
@@ -510,6 +518,16 @@ pub fn find_node() -> Option<PathBuf> {
 /// `KVISTCODE_<PROVIDER>_COMMAND` (e.g. `KVISTCODE_GROK_COMMAND="python3 mock.py"`) overrides
 /// the command, for development builds of an agent and for tests.
 pub fn launch_spec(provider: Provider, data_dir: &Path) -> anyhow::Result<(PathBuf, Vec<String>)> {
+    launch_spec_for_account(provider, None, data_dir)
+}
+
+/// Like [`launch_spec`], applying account-specific CLI arguments (such as Gemini's
+/// `--gemini-dir` for dedicated accounts).
+pub fn launch_spec_for_account(
+    provider: Provider,
+    account: Option<&crate::model::Account>,
+    data_dir: &Path,
+) -> anyhow::Result<(PathBuf, Vec<String>)> {
     let var = format!("KVISTCODE_{}_COMMAND", provider.as_str().to_uppercase());
     if let Ok(cmd) = std::env::var(&var) {
         let mut parts = cmd.split_whitespace().map(str::to_string);
@@ -552,8 +570,9 @@ pub fn launch_spec(provider: Provider, data_dir: &Path) -> anyhow::Result<(PathB
                     "Antigravity CLI is not installed. Install it from Settings → Providers."
                 )
             })?;
-            let profile = std::env::var_os("KVISTCODE_GEMINI_PROFILE")
-                .map(PathBuf::from)
+            let profile = account
+                .and_then(crate::gemini::config_dir)
+                .or_else(|| std::env::var_os("KVISTCODE_GEMINI_PROFILE").map(PathBuf::from))
                 .unwrap_or_else(|| {
                     crate::providers::home_dir()
                         .unwrap_or_default()
@@ -561,7 +580,7 @@ pub fn launch_spec(provider: Provider, data_dir: &Path) -> anyhow::Result<(PathB
                 });
             Ok((cli, crate::gemini::acp_args(&profile)))
         }
-        Provider::Local => launch_spec(Provider::Codex, data_dir),
+        Provider::Local => launch_spec_for_account(Provider::Codex, account, data_dir),
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
     }
 }
@@ -650,16 +669,31 @@ pub async fn detect(data_dir: &Path) -> Vec<ProviderInfo> {
             }
         }
         let adapter_required = provider == Provider::Claude;
+        let managed = is_managed(provider);
+        let managed_version = if provider == Provider::Gemini {
+            if managed {
+                version.clone()
+            } else {
+                None
+            }
+        } else {
+            crate::toolchain::installed_version(provider, data_dir)
+        };
+        let update_available = if provider == Provider::Gemini {
+            false
+        } else {
+            crate::toolchain::update_available(provider, data_dir)
+        };
         out.push(ProviderInfo {
             provider,
             display_name: provider.display_name().into(),
             cli_name: cli_name(provider).into(),
             installed: path.is_some(),
-            managed: is_managed(provider),
-            managed_version: crate::toolchain::installed_version(provider, data_dir),
+            managed,
+            managed_version,
             tested_version: crate::toolchain::tool_package(provider).map(|(_, v)| v.to_string()),
             latest_version: crate::toolchain::latest_known(provider),
-            update_available: crate::toolchain::update_available(provider, data_dir),
+            update_available,
             updates_checked_at: crate::toolchain::updates_checked_at(),
             version,
             path: path.map(|p| p.to_string_lossy().into_owned()),

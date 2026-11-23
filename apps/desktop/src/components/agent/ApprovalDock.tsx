@@ -39,8 +39,9 @@ export function ApprovalSection({
   const identity = useIdentity(agent.provider, agent.customAgentId);
   const singleKeys = useSingleKeys();
   const [busy, setBusy] = useState<string | null>(null);
-  const [reasonOpen, setReasonOpen] = useState(false);
   const requestId = item.requestId;
+  const reasonOpen = usePermissionUi((s) => Boolean(s.reasonOpen[requestId]));
+  const setReasonOpen = (open: boolean) => usePermissionUi.getState().setReasonOpen(requestId, open);
   const reason = usePermissionUi((s) => s.reasonDraft[requestId] ?? "");
   const armed = usePermissionUi((s) => Boolean(s.armed[requestId]));
 
@@ -50,7 +51,6 @@ export function ApprovalSection({
     usePermissionUi.getState().setDocked(requestId, true);
     return () => usePermissionUi.getState().setDocked(requestId, false);
   }, [requestId]);
-  useEffect(() => setReasonOpen(false), [requestId]);
 
   const reveal = (itemId: string) => useUi.getState().revealItem(agent.id, itemId);
 

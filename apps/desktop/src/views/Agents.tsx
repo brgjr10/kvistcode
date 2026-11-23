@@ -414,7 +414,7 @@ function AgentPane({ agentId, tileIds }: { agentId: string; tileIds?: string[] }
             />
           )}
           <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", drag !== null && "pointer-events-none")}>
-            <PreviewTab agent={agent} full={full} forced={forced} />
+            <PreviewTab key={agent.id} agent={agent} full={full} forced={forced} />
           </div>
         </aside>
       )}

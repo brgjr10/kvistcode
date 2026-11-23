@@ -95,6 +95,41 @@ pub fn apply_voice_assistant(app: &AppHandle, hotkey: &str) -> Result<(), String
     apply_slot(app, Slot::VoiceAssistant, hotkey)
 }
 
+/// Applies both shortcuts together: unregisters any changed slot before registering
+/// the new ones so swapping shortcuts between the two slots doesn't collide.
+pub fn apply_both(
+    app: &AppHandle,
+    global: &str,
+    voice_assistant: &str,
+) -> (Result<(), String>, Result<(), String>) {
+    let global = global.trim();
+    let voice_assistant = voice_assistant.trim();
+    unregister_if_changed(app, Slot::QuickLaunch, global);
+    unregister_if_changed(app, Slot::VoiceAssistant, voice_assistant);
+    (
+        apply_slot(app, Slot::QuickLaunch, global),
+        apply_slot(app, Slot::VoiceAssistant, voice_assistant),
+    )
+}
+
+fn unregister_if_changed(app: &AppHandle, slot: Slot, hotkey: &str) {
+    let shell = app.state::<Shell>();
+    let mut current = match slot {
+        Slot::QuickLaunch => shell.hotkey.lock(),
+        Slot::VoiceAssistant => shell.va_hotkey.lock(),
+    };
+    if current.as_deref() == Some(hotkey) {
+        return;
+    }
+    if let Some(gs) = app.try_state::<GlobalShortcut<crate::Rt>>() {
+        if let Some(old) = current.take() {
+            if let Err(e) = gs.unregister(old.as_str()) {
+                warn!(hotkey = %old, "could not unregister global hotkey: {e}");
+            }
+        }
+    }
+}
+
 /// Checked before settings are saved: the voice assistant hotkey must be a real
 /// shortcut and not the same keys as the quick-launch one (`Ctrl` and `CmdOrCtrl` count
 /// as the same on Linux and Windows). Empty means off.

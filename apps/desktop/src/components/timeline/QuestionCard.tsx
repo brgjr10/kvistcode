@@ -2,6 +2,7 @@ import { Check, MessageCircleQuestion, MessageCircleX, Plug } from "lucide-react
 import { m } from "motion/react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { inTerminal } from "@/hooks/useGlobalShortcuts";
 import { useIdentity } from "@/hooks/useIdentity";
 import { api } from "@/lib/api";
 import {
@@ -170,6 +171,7 @@ export const QuestionCard = memo(function QuestionCard({
       )
         return;
       const t = e.target instanceof HTMLElement ? e.target : null;
+      if (inTerminal(t)) return;
       const inCard = Boolean(t && cardRef.current?.contains(t));
       const typing = Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)));
       const s = live.current;
@@ -185,7 +187,8 @@ export const QuestionCard = memo(function QuestionCard({
           ? Boolean(s.draft.picks[g.field.id]?.includes(options[i].value))
           : Boolean(s.draft.otherOn[g.field.id]);
       const force = e.ctrlKey || e.metaKey;
-      if (e.key === "Enter" && (force || (!e.shiftKey && (typing ? inCard : !t?.closest("button, a, [role=menu]"))))) {
+      const enterTargetOk = typing ? inCard : inCard || !t?.closest("button, a, [role=menu]");
+      if (e.key === "Enter" && enterTargetOk && (force || !e.shiftKey)) {
         if (e.repeat) return;
         e.preventDefault();
         // Enter on a highlighted single-choice option that isn't chosen yet chooses it.

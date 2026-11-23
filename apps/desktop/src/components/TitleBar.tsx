@@ -290,27 +290,37 @@ function AccountsPopover({ accounts, stacked }: { accounts: Account[]; stacked: 
           </span>
         </div>
         <ul className="max-h-[360px] overflow-y-auto p-1.5">
-          {accounts.map((a) => (
-            <li key={a.id} className="rounded-lg px-2 py-2">
-              <div className="flex items-center gap-2.5">
-                <AccountAvatar account={a} size={26} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-small font-medium">
-                    {a.name} <span className="font-normal text-steel">· {PROVIDERS[a.provider].short}</span>
+          {accounts.map((a) => {
+            const signedOut = a.status?.loggedIn === false;
+            return (
+              <li key={a.id} className="rounded-lg px-2 py-2">
+                <div className="flex items-center gap-2.5">
+                  <AccountAvatar account={a} size={26} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-small font-medium">
+                      {a.name} <span className="font-normal text-steel">· {PROVIDERS[a.provider].short}</span>
+                    </div>
+                    <div className={cn("truncate text-micro", signedOut ? "text-warn" : "text-steel")}>
+                      {a.status === null
+                        ? "Not checked"
+                        : a.status.loggedIn
+                          ? (a.status.label ?? "Signed in")
+                          : "Not signed in"}
+                      {a.authKind === "api_key" && a.status?.loggedIn && " · billed per token"}
+                    </div>
                   </div>
-                  <div className={cn("truncate text-micro", a.status?.loggedIn ? "text-steel" : "text-warn")}>
-                    {a.status?.loggedIn ? (a.status.label ?? "Signed in") : "Not signed in"}
-                    {a.authKind === "api_key" && a.status?.loggedIn && " · billed per token"}
-                  </div>
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                      a.status === null ? "bg-steel/50" : a.status.loggedIn ? "bg-ok" : "bg-warn",
+                    )}
+                    aria-hidden
+                  />
                 </div>
-                <span
-                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", a.status?.loggedIn ? "bg-ok" : "bg-warn")}
-                  aria-hidden
-                />
-              </div>
-              <UsageMeters usage={a.usage} compact className="mt-2 pl-[36px]" />
-            </li>
-          ))}
+                <UsageMeters usage={a.usage} compact className="mt-2 pl-[36px]" />
+              </li>
+            );
+          })}
         </ul>
         <div className="border-t border-line p-1.5">
           <PopoverClose asChild>

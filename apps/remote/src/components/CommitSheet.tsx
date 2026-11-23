@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { askToResolveConflict, commitWork, secretFilesFor } from "@/lib/controller";
 import { baseSyncLine, changeSummaryLine, isWarning, pushCommand, type GitResult } from "@/lib/gitResult";
 import { plural } from "@/lib/format";
@@ -46,12 +46,18 @@ export function CommitSheet({
   // Prefilled with the title each time the sheet opens; a rename while it's open
   // (e.g. the agent's auto-title) mustn't overwrite what you typed.
   const title = agent.title;
+  const openGen = useRef(0);
   useEffect(() => {
+    openGen.current += 1;
+    setChecking(false);
     if (mode) {
       setMessage(title);
       setResult(null);
       setSecrets(null);
     }
+    return () => {
+      openGen.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open
   }, [mode]);
   const blocked = commitBlocked(agent);
@@ -74,8 +80,10 @@ export function CommitSheet({
   // Look for secret-looking files first (the desktop asks too); the server refuses them otherwise.
   // If the look-ahead itself fails, go ahead: the server checks again and a refusal brings the list up.
   const start = async () => {
+    const gen = openGen.current;
     setChecking(true);
     const found = await secretFilesFor(agent.id);
+    if (openGen.current !== gen) return;
     setChecking(false);
     if (found && found.length > 0) setSecrets(found);
     else await commit();

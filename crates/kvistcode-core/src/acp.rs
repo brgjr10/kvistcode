@@ -35,6 +35,8 @@ enum ConfigSource {
 /// `AcpDriver::deliver_next`). The turn ends when the agent has answered all of them.
 #[derive(Default)]
 struct Extras {
+    /// Identifies the turn so a late reply from a timed-out previous turn cannot corrupt a newer one.
+    turn_seq: u64,
     /// Sent, not answered yet.
     pending: usize,
     /// The turn is over (or none started): nothing more can join it.
@@ -587,6 +589,7 @@ impl AcpDriver {
     /// A new turn starts: messages may join it.
     fn open_extras(&self) {
         let mut st = self.extras.lock();
+        st.turn_seq = st.turn_seq.wrapping_add(1);
         st.pending = 0;
         st.closed = false;
         st.outcome = None;
@@ -631,13 +634,14 @@ impl AcpDriver {
     /// `_session/steering` is no substitute here: claude-agent-acp delivers it at
     /// priority `now`, which aborts the response being generated.
     async fn deliver_next(self: &Arc<Self>, prompt: &Prompt) -> anyhow::Result<Steer> {
-        {
+        let seq = {
             let mut st = self.extras.lock();
             if st.closed {
                 return Ok(Steer::NotRunning);
             }
             st.pending += 1;
-        }
+            st.turn_seq
+        };
         let blocks = self.blocks(prompt.text.clone(), &prompt.attachments);
         let me = self.clone();
         let mark = self.peer.stderr_mark();
@@ -665,15 +669,22 @@ impl AcpDriver {
                     TurnOutcome::Failed(format!("{:#}", auth_hint(me.peer.with_stderr(e, mark))))
                 }
             };
-            {
+            let notify = {
                 let mut st = me.extras.lock();
-                st.pending = st.pending.saturating_sub(1);
-                st.outcome = Some(match st.outcome.take() {
-                    Some(o) => worse(o, outcome),
-                    None => outcome,
-                });
+                if st.turn_seq != seq {
+                    false
+                } else {
+                    st.pending = st.pending.saturating_sub(1);
+                    st.outcome = Some(match st.outcome.take() {
+                        Some(o) => worse(o, outcome),
+                        None => outcome,
+                    });
+                    true
+                }
+            };
+            if notify {
+                me.extras_wake.notify_one();
             }
-            me.extras_wake.notify_one();
         });
         Ok(Steer::Injected)
     }

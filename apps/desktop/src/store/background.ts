@@ -298,7 +298,12 @@ export function installBackgroundTracker(): () => void {
     const agents = s.agents;
     const items = s.items;
     for (const id of Object.keys(agents)) {
-      if (items[id] !== prevItems[id] || agents[id]?.status !== prevAgents[id]?.status) recompute(id);
+      if (
+        items[id] !== prevItems[id] ||
+        agents[id]?.status !== prevAgents[id]?.status ||
+        agents[id]?.archived !== prevAgents[id]?.archived
+      )
+        recompute(id);
     }
     for (const id of Object.keys(prevAgents)) if (!agents[id]) recompute(id);
     prevAgents = agents;

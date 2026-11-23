@@ -190,6 +190,7 @@ function RemoteImageChip({ url, alt }: { url: string; alt: string }) {
 function textOf(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
   return "";
 }
 
@@ -274,7 +275,7 @@ const components: Components = {
       onClick={(e) => {
         e.preventDefault();
         if (!href) return;
-        const host = linkMismatchHost(textOf(children), href);
+        const host = linkMismatchHost(e.currentTarget.textContent ?? textOf(children), href);
         if (!host) return void openLink(href, e.nativeEvent, resolveAgentId(e.currentTarget));
         toast(`This link goes to ${host}`, {
           description: "The link text shows a different address.",

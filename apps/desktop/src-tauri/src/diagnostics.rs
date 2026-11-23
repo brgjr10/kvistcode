@@ -166,6 +166,26 @@ pub fn settings_section(settings: &Settings) -> String {
                 *slot = format!("{n} configured (hidden)").into();
             }
         }
+        if let Some(layout) = o.get_mut("projectLayout") {
+            let sections = layout
+                .get("sections")
+                .and_then(|s| s.as_array())
+                .map_or(0, Vec::len);
+            let order = layout
+                .get("order")
+                .and_then(|s| s.as_array())
+                .map_or(0, Vec::len);
+            *layout = format!("{sections} sections, {order} ordered (hidden)").into();
+        }
+        if let Some(sounds) = o.get_mut("sounds").and_then(|x| x.as_object_mut()) {
+            for key in ["customPermission", "customDone", "customError"] {
+                if let Some(slot) = sounds.get_mut(key) {
+                    if !slot.is_null() {
+                        *slot = "set (hidden)".into();
+                    }
+                }
+            }
+        }
         if let Some(va) = o.get_mut("voiceAssistant").and_then(|x| x.as_object_mut()) {
             va.remove("accountId");
         }

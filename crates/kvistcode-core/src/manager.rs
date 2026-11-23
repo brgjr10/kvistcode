@@ -1029,7 +1029,8 @@ impl Core {
         let path = crate::token_saver::live_subagents_path(&self.inner.data_dir, &agent.id);
         let write = || -> Result<()> {
             std::fs::create_dir_all(path.parent().unwrap_or(&self.inner.data_dir))?;
-            let tmp = path.with_extension("json.tmp");
+            let suffix = &uuid::Uuid::new_v4().simple().to_string()[..8];
+            let tmp = path.with_extension(format!("json.{suffix}.tmp"));
             std::fs::write(&tmp, serde_json::to_vec(&live)?)?;
             std::fs::rename(&tmp, &path)?;
             Ok(())
@@ -1100,6 +1101,30 @@ impl Core {
             account: account.clone(),
         });
         Ok(account)
+    }
+
+    /// Atomically updates an existing account under the accounts lock so concurrent
+    /// status/usage/name updates cannot overwrite each other or resurrect a deleted account.
+    fn update_account_locked(
+        &self,
+        account_id: &str,
+        f: impl FnOnce(&mut Account),
+    ) -> Result<Account> {
+        let updated = {
+            let mut accounts = self.inner.accounts.lock();
+            let account = accounts
+                .get_mut(account_id)
+                .ok_or_else(|| anyhow!("Account not found"))?;
+            let mut candidate = account.clone();
+            f(&mut candidate);
+            self.inner.db.put_account(&candidate)?;
+            *account = candidate.clone();
+            candidate
+        };
+        self.emit(KvistcodeEvent::AccountUpdated {
+            account: updated.clone(),
+        });
+        Ok(updated)
     }
 
     /// Creates the profile dir, stores the API key in the keychain (and runs
@@ -1183,7 +1208,7 @@ impl Core {
     /// Replaces an API-key account's key. Running agents keep the old key until
     /// they restart.
     pub async fn update_account_key(&self, account_id: &str, key: &str) -> Result<Account> {
-        let mut account = self.account(account_id)?;
+        let account = self.account(account_id)?;
         if account.auth_kind != AuthKind::ApiKey {
             bail!("This account signs in with a browser login, not an API key");
         }
@@ -1209,24 +1234,24 @@ impl Core {
             }
             return Err(e);
         }
-        account.status = Some(accounts::check_status(&account, &self.inner.data_dir).await);
-        self.put_account(account)
+        let status = accounts::check_status(&account, &self.inner.data_dir).await;
+        self.update_account_locked(account_id, |a| a.status = Some(status))
     }
 
     pub fn update_account(&self, account_id: &str, name: &str, color: &str) -> Result<Account> {
-        let mut account = self.account(account_id)?;
-        if !name.trim().is_empty() {
-            account.name = name.trim().to_string();
-        }
-        account.color = color.to_string();
-        self.put_account(account)
+        self.update_account_locked(account_id, |account| {
+            if !name.trim().is_empty() {
+                account.name = name.trim().to_string();
+            }
+            account.color = color.to_string();
+        })
     }
 
     /// Persists a fresh status for the account and emits `account_updated`.
     pub fn set_account_status(&self, account_id: &str, status: AccountStatus) -> Result<Account> {
-        let mut account = self.account(account_id)?;
-        account.status = Some(status);
-        self.put_account(account)
+        self.update_account_locked(account_id, |account| {
+            account.status = Some(status);
+        })
     }
 
     /// Runs `accounts::check_status` (and refreshes usage limits where the provider
@@ -1235,17 +1260,41 @@ impl Core {
         let account = self.account(account_id)?;
         let status = accounts::check_status(&account, &self.inner.data_dir).await;
         let updated = self.set_account_status(account_id, status)?;
-        if updated.status.as_ref().is_some_and(|s| s.logged_in)
-            && updated.auth_kind != AuthKind::ApiKey
-        {
+        if updated.auth_kind != AuthKind::ApiKey {
+            let logged_in = updated.status.as_ref().is_some_and(|s| s.logged_in);
             let usage = match updated.provider {
-                Provider::Gemini => crate::gemini::fetch_usage(&updated).await,
-                Provider::Codex => {
+                // System Gemini accounts may already be signed in via `agy` outside Kvistcode
+                // (without our marker file); probing `/usage` also confirms sign-in.
+                Provider::Gemini if logged_in || updated.is_system => {
+                    crate::gemini::fetch_usage(&updated).await
+                }
+                Provider::Codex if logged_in => {
                     crate::codex::fetch_rate_limits(&updated, &self.inner.data_dir).await
                 }
                 _ => None,
             };
             if let Some(usage) = usage {
+                if updated.provider == Provider::Gemini && !logged_in {
+                    let plan = usage.plan.clone();
+                    let _ = self.update_account_locked(account_id, |a| {
+                        let st = a.status.get_or_insert(AccountStatus {
+                            logged_in: true,
+                            label: Some("Google account".into()),
+                            email: None,
+                            plan: plan.clone(),
+                            checked_at: now_ms(),
+                            error: None,
+                        });
+                        st.logged_in = true;
+                        if st.label.is_none() {
+                            st.label = Some("Google account".into());
+                        }
+                        if st.plan.is_none() {
+                            st.plan = plan;
+                        }
+                        st.error = None;
+                    });
+                }
                 self.set_account_usage(account_id, usage);
                 return self.account(account_id);
             }
@@ -1430,7 +1479,11 @@ impl Core {
                 .collect();
             (program, args, env, Vec::new())
         } else {
-            let (program, mut args) = providers::launch_spec(agent.provider, &self.inner.data_dir)?;
+            let (program, mut args) = providers::launch_spec_for_account(
+                agent.provider,
+                Some(&account),
+                &self.inner.data_dir,
+            )?;
             // The OS keychain can block (prompts, locked), so keep it off the runtime.
             let acct = account.clone();
             let (has_key, acct_env, acct_env_remove) = tokio::task::spawn_blocking(move || {
@@ -1641,6 +1694,13 @@ impl Core {
             }
         })
         .ok_or_else(|| anyhow!("The agent no longer exists"))?;
+        if agent.provider == Provider::Gemini {
+            let core = self.clone();
+            let id = agent_id.to_string();
+            tokio::spawn(async move {
+                core.refresh_account_usage_for_agent(&id).await;
+            });
+        }
         Ok(driver)
     }
 
@@ -3417,6 +3477,17 @@ impl Core {
                 Err(e) => tracing::warn!("checking failover account {}: {e:#}", account.id),
             }
         }
+        // Re-check after awaiting candidate account checks: the user may have deleted,
+        // stopped, switched, or resumed the agent meanwhile.
+        let Ok(current) = self.agent(agent_id) else {
+            return;
+        };
+        if !current.rate_limited
+            || current.account_id != agent.account_id
+            || current.status != AgentStatus::Error
+        {
+            return;
+        }
         let ctx = self.ctx(agent_id);
         let Some(next) = candidate else {
             ctx.notice(
@@ -3437,7 +3508,7 @@ impl Core {
         }
         // A paused spending limit outranks the automatic switch: carrying on with another
         // account would spend past it without asking.
-        if agent.budget_hold.is_some() || self.budget_gate(agent_id, false).is_some() {
+        if current.budget_hold.is_some() || self.budget_gate(agent_id, false).is_some() {
             ctx.notice(
                 NoticeLevel::Warn,
                 format!(
@@ -4054,13 +4125,12 @@ impl Core {
 
     /// Records a provider-reported usage snapshot on `account_id`.
     pub(crate) fn set_account_usage(&self, account_id: &str, usage: AccountUsage) {
-        if let Ok(mut account) = self.account(account_id) {
+        let _ = self.update_account_locked(account_id, |account| {
             // Merge: providers report partial snapshots (e.g. only the window that
             // changed), so a missing window or plan keeps its previous value.
             let merged = merge_usage(account.usage.take(), usage, now_ms());
             account.usage = Some(merged);
-            let _ = self.put_account(account);
-        }
+        });
     }
 
     /// Records a provider-reported usage snapshot on the agent's account.

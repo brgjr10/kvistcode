@@ -245,21 +245,13 @@ pub(crate) fn write_atomic(path: &Path, content: &str) -> Result<()> {
     }
     let dir = path.parent().ok_or_else(|| anyhow!("Invalid path"))?;
     std::fs::create_dir_all(dir).with_context(|| format!("Can't create {}", dir.display()))?;
-    let tmp = dir.join(format!(".{}.kvistcode-tmp", file_label(path)));
-    let open = || {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&tmp)
-    };
-    let mut file = match open() {
-        Ok(f) => f,
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = std::fs::remove_file(&tmp);
-            open().with_context(|| format!("Can't write {}", file_label(path)))?
-        }
-        Err(e) => return Err(anyhow!("Can't write {}: {e}", file_label(path))),
-    };
+    let suffix = &uuid::Uuid::new_v4().simple().to_string()[..8];
+    let tmp = dir.join(format!(".{}.kvistcode-{suffix}.tmp", file_label(path)));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .with_context(|| format!("Can't write {}", file_label(path)))?;
     let result = (|| -> std::io::Result<()> {
         use std::io::Write;
         file.write_all(content.as_bytes())?;

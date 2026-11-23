@@ -1791,6 +1791,19 @@ impl Settings {
             self.remote.port = defaults.remote.port;
             reset.push("remote.port");
         }
+        if self.remote.lan && self.remote.tailscale {
+            self.remote.lan = false;
+            reset.push("remote.lan");
+        }
+        if self
+            .remote
+            .lan_address
+            .as_deref()
+            .is_some_and(|a| a.parse::<std::net::IpAddr>().is_err())
+        {
+            self.remote.lan_address = None;
+            reset.push("remote.lanAddress");
+        }
         if self
             .voice
             .input_device

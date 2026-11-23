@@ -167,6 +167,14 @@ describe("blockers", () => {
     expect(blockers({ ...hit, status: "working" }, settings).budget).toBe(false);
     expect(blockers({ ...hit, costUsd: 2.5 }, settings).budget).toBe(false);
     expect(blockers(hit, { ...settings, agentBudgetUsd: null }).budget).toBe(false);
+    // Raising this agent's own cap clears the blocker, and a budgetHold flags any metric/scope.
+    expect(blockers({ ...hit, budget: { usd: 10, tokens: null }, budgetHold: null }, settings).budget).toBe(false);
+    expect(
+      blockers(
+        { ...base, status: "idle", budgetHold: { scope: "agent", metric: "turns", spent: 10, cap: 10, since: 0 } },
+        { agentBudgetUsd: null, budgetAction: "pause" },
+      ).budget,
+    ).toBe(true);
   });
   it("flags a helper's merge conflict, and only for a helper", () => {
     const sync = { state: "conflict" } as never;

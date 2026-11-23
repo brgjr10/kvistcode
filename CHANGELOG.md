@@ -5,6 +5,19 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.7.5 — 2026-11-23
+
+Fixes Gemini usage bars and dedicated Gemini profiles, along with a sweep of stability, keyboard, privacy and phone-app fixes.
+
+- Gemini usage bars now show up reliably on Accounts, Usage, the title bar and the phone app: Kvistcode now reads Antigravity's `/usage` JSON and text responses, finds manually installed `agy` binaries, checks pre-signed-in system Gemini accounts, and refreshes Gemini usage when an agent starts.
+- Dedicated Gemini accounts now launch in their own isolated profile folder instead of sharing `~/.gemini`, and never fall back to the system account's usage limits.
+- Voice assistant: paused time is no longer counted toward session length or cost when you stop while paused, Stop cancels connecting/reconnecting immediately, and pressing Enter in a terminal or confirmation dialog no longer triggers a pending voice confirmation.
+- Budgets and accounts: the paused-budget banner respects per-agent raised limits and token/turn holds, unchecked accounts show "Not checked" instead of "Not signed in", and concurrent account checks can no longer overwrite updates or bring back a deleted account.
+- Preview and approvals: live dev servers stay visible in Preview after their startup output scrolls out of recent history, switching tiled agents resets Preview to that agent's server, and Shift+D / Shift+N opens "Deny with reason" when an approval is docked above the message box.
+- Security and privacy: diagnostic exports hide your sidebar project layout and custom sound paths, publishing a brand-new repo also excludes already-staged secret files, links with formatted text can no longer bypass the mismatched-address warning, and symlinks to macOS app bundles are revealed instead of opened.
+- Phone app: cancelling a commit while Kvistcode checks for secret files no longer goes ahead and commits, and searching when you only have archived agents no longer traps you on "No agents yet".
+- Reliability: swapping the global and voice-assistant hotkeys now works in one save, cancelling a Codex or ACP turn cleanly settles without leaking into the next turn, mic-open timeouts no longer hang, and archiving an idle agent stops its background watcher.
+
 ## v0.7.4 — 2026-11-23
 
 - "Run without asking" now really runs without asking for Gemini and Codex. Kvistcode approves the actions Antigravity's Auto mode and Codex's sandbox would still stop to ask about, the way it already works for Claude. Plans to approve and questions the agent asks still wait for you.

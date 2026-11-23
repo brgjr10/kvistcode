@@ -30,17 +30,27 @@ export function Review({ agentId }: { agentId: string }) {
   const shown = useRef(false);
   shown.current = diff !== null;
 
+  const reqId = useRef(0);
   const load = useCallback(() => {
+    const id = ++reqId.current;
     setError(null);
     loadDiff(agentId)
-      .then((d) => setDiff(d))
+      .then((d) => {
+        if (reqId.current === id) setDiff(d);
+      })
       .catch((e: unknown) => {
+        if (reqId.current !== id) return;
         setError(errorMessage(e));
         // With changes already on screen the error has nowhere to show.
         if (shown.current) toastError("Couldn't reload the changes", e);
       });
   }, [agentId]);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    return () => {
+      reqId.current += 1;
+    };
+  }, [load]);
 
   const files = useMemo(() => (diff?.patch ? parseUnified(diff.patch, "patch") : []), [diff?.patch]);
   // A file tapped in a turn summary: open and scroll to it once the patch is there.

@@ -99,7 +99,7 @@ export function Fleet() {
       ) : (
         <FleetSkeleton />
       );
-  } else if (active === 0 && archived.length === 0) {
+  } else if (list.length === 0) {
     body = (
       <EmptyState
         icon="sparkle"

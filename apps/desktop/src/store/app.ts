@@ -174,6 +174,7 @@ export function suppressAgent(id: string, on: boolean) {
  * bring them back.
  */
 const removed = new Set<string>();
+const removedAccounts = new Set<string>();
 
 export function markRemoved(id: string) {
   removed.add(id);
@@ -301,6 +302,27 @@ export const useApp = create<AppStore>((set, get) => ({
       }
       // Agents created while getState was in flight aren't in the snapshot: keep them.
       for (const [id, a] of Object.entries(live)) if (!(id in agents) && !removed.has(id)) agents[id] = a;
+      // Events may have arrived while getState was in flight: keep whichever copy is newer.
+      const liveAccounts = new Map(get().accounts.map((a) => [a.id, a]));
+      const accounts: Account[] = [];
+      const seenAccounts = new Set<string>();
+      for (const a of s.accounts) {
+        if (a.provider === "custom" || removedAccounts.has(a.id)) continue;
+        seenAccounts.add(a.id);
+        const cur = liveAccounts.get(a.id);
+        if (!cur) {
+          accounts.push(a);
+        } else {
+          const status =
+            (cur.status?.checkedAt ?? -1) > (a.status?.checkedAt ?? -1) ? cur.status : a.status;
+          const usage =
+            (cur.usage?.updatedAt ?? -1) > (a.usage?.updatedAt ?? -1) ? cur.usage : a.usage;
+          accounts.push({ ...a, status, usage });
+        }
+      }
+      for (const [id, a] of liveAccounts) {
+        if (!seenAccounts.has(id) && a.provider !== "custom" && !removedAccounts.has(id)) accounts.push(a);
+      }
       set({
         booted: true,
         bootError: null,
@@ -308,7 +330,7 @@ export const useApp = create<AppStore>((set, get) => ({
         platform: s.platform,
         agents,
         // The implicit "system-custom" account backs custom ACP agents; it has no sign-in, so it isn't listed.
-        accounts: s.accounts.filter((a) => a.provider !== "custom"),
+        accounts,
         // An empty list is get_state timing out on detection: keep one a providers_changed already set.
         providers: s.providers.length ? s.providers : get().providers,
         settings: s.settings,
@@ -438,13 +460,16 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   upsertAccount: (a) => {
-    if (a.provider === "custom") return;
+    if (a.provider === "custom" || removedAccounts.has(a.id)) return;
     const list = get().accounts;
     const idx = list.findIndex((x) => x.id === a.id);
     set({ accounts: idx >= 0 ? list.map((x) => (x.id === a.id ? a : x)) : [...list, a] });
   },
 
-  removeAccount: (id) => set({ accounts: get().accounts.filter((a) => a.id !== id) }),
+  removeAccount: (id) => {
+    removedAccounts.add(id);
+    set({ accounts: get().accounts.filter((a) => a.id !== id) });
+  },
   setProviders: (providers) => set({ providers }),
   setUpdate: (update) => set({ update, updateDismissed: false }),
 
@@ -546,12 +571,13 @@ export const useApp = create<AppStore>((set, get) => ({
           break;
         }
         case "account_updated": {
-          if (e.account.provider === "custom") break;
+          if (e.account.provider === "custom" || removedAccounts.has(e.account.id)) break;
           const idx = accounts.findIndex((x) => x.id === e.account.id);
           accounts = idx >= 0 ? accounts.map((x) => (x.id === e.account.id ? e.account : x)) : [...accounts, e.account];
           break;
         }
         case "account_removed":
+          removedAccounts.add(e.accountId);
           accounts = accounts.filter((a) => a.id !== e.accountId);
           break;
         case "providers_changed":

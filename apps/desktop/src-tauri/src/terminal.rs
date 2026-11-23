@@ -617,12 +617,13 @@ impl Terminals {
                     1
                 }
             };
-            tasks.lock().remove(&task_id);
-            core.emit(KvistcodeEvent::TerminalExit {
-                terminal_id: task_id,
-                code: Some(code),
-            });
-            fire(&hook, Some(code));
+            if tasks.lock().remove(&task_id).is_some() {
+                core.emit(KvistcodeEvent::TerminalExit {
+                    terminal_id: task_id,
+                    code: Some(code),
+                });
+                fire(&hook, Some(code));
+            }
         });
         map.insert(
             id.clone(),

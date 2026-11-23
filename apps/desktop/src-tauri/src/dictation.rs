@@ -523,12 +523,14 @@ pub async fn voice_start(
     };
     // Wait for the microphone to open so permission/device errors surface right away.
     let opened = tauri::async_runtime::spawn_blocking(move || {
-        rx.recv_timeout(Duration::from_secs(15))
-            .unwrap_or_else(|_| Err("Timed out opening the microphone".into()))
+        match rx.recv_timeout(Duration::from_secs(15)) {
+            Ok(res) => (res, false),
+            Err(_) => (Err("Timed out opening the microphone".into()), true),
+        }
     })
     .await
     .map_err(|e| e.to_string());
-    let opened = match opened {
+    let (opened, timed_out) = match opened {
         Ok(o) => o,
         Err(e) => {
             dict.recording.lock().release(&stop);
@@ -539,7 +541,13 @@ pub async fn voice_start(
     if let Err(e) = opened {
         dict.recording.lock().release(&stop);
         stop.store(true, Ordering::Relaxed);
-        let _ = thread.join();
+        // Never block on a hung OS audio driver after a timeout; for normal open errors, join off-runtime.
+        if !timed_out {
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let _ = thread.join();
+            })
+            .await;
+        }
         return Err(e);
     }
     let rec = Recording {
@@ -550,7 +558,10 @@ pub async fn voice_start(
     if let Err(rec) = activated {
         // Stopped or cancelled while the microphone was opening.
         rec.stop.store(true, Ordering::Relaxed);
-        let _ = rec.thread.join();
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let _ = rec.thread.join();
+        })
+        .await;
         return Err("Recording cancelled".into());
     }
     Ok(())
