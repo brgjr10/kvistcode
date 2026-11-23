@@ -8,8 +8,9 @@ const PLAIN_MODE: Partial<Record<Agent["provider"], Record<string, "ask" | "auto
   codex: { untrusted: "ask", "on-request": "auto" },
   local: { untrusted: "ask", "on-request": "auto" },
   grok: { ask: "ask", auto: "auto" },
-  // Gemini's "YOLO" is what "Run without asking" starts it with.
-  gemini: { default: "ask", yolo: "auto" },
+  // Antigravity's "auto" is what "Run without asking" starts Gemini with (Kvistcode answers
+  // the approvals it would still ask for); "yolo" is the older Gemini CLI's.
+  gemini: { default: "ask", auto: "auto", yolo: "auto" },
 };
 
 /**

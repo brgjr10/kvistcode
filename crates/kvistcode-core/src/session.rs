@@ -320,6 +320,17 @@ impl AgentCtx {
         })
     }
 
+    /// The agent is in a mode the user picked as "Run without asking" but whose agent still
+    /// asks for some actions (Antigravity's "auto"), so Kvistcode answers those for the user.
+    pub fn answers_permissions_itself(&self) -> bool {
+        self.agent_snapshot().is_some_and(|a| {
+            a.provider == crate::model::Provider::Gemini
+                && a.config_options
+                    .iter()
+                    .any(|o| o.id == "mode" && matches!(o.current_value.as_str(), "auto" | "yolo"))
+        })
+    }
+
     fn agent_snapshot(&self) -> Option<Agent> {
         self.core.upgrade()?.agent(&self.agent_id).ok()
     }
@@ -2409,6 +2420,18 @@ pub fn preview_of(text: &str) -> String {
     } else {
         flat
     }
+}
+
+/// The option that allows a request once (else for the session), for approvals Kvistcode
+/// answers itself while an agent runs without asking.
+pub fn auto_allow_option(options: &[PermissionOption]) -> Option<String> {
+    [
+        PermissionOptionKind::AllowOnce,
+        PermissionOptionKind::AllowAlways,
+    ]
+    .iter()
+    .find_map(|kind| options.iter().find(|o| o.kind == *kind))
+    .map(|o| o.id.clone())
 }
 
 #[cfg(test)]

@@ -1063,7 +1063,8 @@ impl AcpDriver {
         }
     }
 
-    fn on_permission_request(&self, rpc_id: Value, params: &Value) -> bool {
+    /// Shows an approval, or answers it right away: `Some(reply)` goes back to the agent now.
+    fn on_permission_request(&self, rpc_id: Value, params: &Value) -> Option<Value> {
         let tc = &params["toolCall"];
         let request_id = uuid::Uuid::new_v4().to_string();
         let title = tc["title"]
@@ -1097,14 +1098,20 @@ impl AcpDriver {
                 NoticeLevel::Warn,
                 format!("The agent asked to \u{201c}{title}\u{201d} without offering any choices, so Kvistcode declined it."),
             );
-            return false;
+            return Some(json!({ "outcome": { "outcome": "cancelled" } }));
+        }
+        let plan = crate::plan_approval::plan_from_tool_call(tc);
+        // A plan to approve always waits for the user.
+        if plan.is_none() && self.ctx.answers_permissions_itself() {
+            if let Some(allow) = crate::session::auto_allow_option(&options) {
+                return Some(json!({ "outcome": { "outcome": "selected", "optionId": allow } }));
+            }
         }
         let mut diffs = Vec::new();
         collect_diffs(&tc["content"], &mut diffs);
         let command = raw_command(&tc["rawInput"]);
         let kind = tc["kind"].as_str().map(ToolKind::parse);
         self.perms.lock().insert(request_id.clone(), rpc_id);
-        let plan = crate::plan_approval::plan_from_tool_call(tc);
         self.ctx.permission_requested_with_plan(
             &request_id,
             title,
@@ -1114,7 +1121,7 @@ impl AcpDriver {
             options,
             plan,
         );
-        true
+        None
     }
 }
 
@@ -1202,15 +1209,13 @@ async fn event_loop(
             Incoming::Request { id, method, params } => match method.as_str() {
                 "session/request_permission" => {
                     // None: the process was retired meanwhile; nobody waits for a reply.
-                    let shown = ctx.with_current_generation(generation, || {
-                        driver
-                            .upgrade()
-                            .is_some_and(|d| d.on_permission_request(id.clone(), &params))
-                    });
-                    if shown == Some(false) {
-                        let _ = peer
-                            .respond(id, json!({ "outcome": { "outcome": "cancelled" } }))
-                            .await;
+                    let reply =
+                        ctx.with_current_generation(generation, || match driver.upgrade() {
+                            Some(d) => d.on_permission_request(id.clone(), &params),
+                            None => Some(json!({ "outcome": { "outcome": "cancelled" } })),
+                        });
+                    if let Some(Some(reply)) = reply {
+                        let _ = peer.respond(id, reply).await;
                     }
                 }
                 "elicitation/create" => {

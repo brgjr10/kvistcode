@@ -5,6 +5,11 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.7.4 — 2026-11-23
+
+- "Run without asking" now really runs without asking for Gemini and Codex. Kvistcode approves the actions Antigravity's Auto mode and Codex's sandbox would still stop to ask about, the way it already works for Claude. Plans to approve and questions the agent asks still wait for you.
+- Gemini's mode menu calls this mode "Run without asking", like the other agents.
+
 ## v0.7.3 — 2026-11-22
 
 Brings Gemini, Codex, Grok and custom agents closer to parity with Claude across sub-agents, usage limits, token tracking and guidance.

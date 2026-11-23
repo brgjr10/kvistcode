@@ -146,7 +146,7 @@ const APPROVAL_CHOICES: [(&str, &str, &str); 3] = [
     (
         "on-request",
         "Auto",
-        "Works freely inside the workspace sandbox; asks only to go beyond it",
+        "Runs without asking; Kvistcode approves anything beyond the workspace sandbox",
     ),
     (
         "untrusted",
@@ -1262,8 +1262,7 @@ impl CodexDriver {
                     command,
                     Vec::new(),
                     options(true),
-                );
-                RequestReply::Deferred
+                )
             }
             "item/fileChange/requestApproval" => {
                 let (diffs, locations) = match self.ctx.tool_call_body(item_id) {
@@ -1285,8 +1284,7 @@ impl CodexDriver {
                     None,
                     diffs,
                     options(false),
-                );
-                RequestReply::Deferred
+                )
             }
             "item/permissions/requestApproval" => {
                 let requested = p["permissions"].clone();
@@ -1302,8 +1300,7 @@ impl CodexDriver {
                     None,
                     Vec::new(),
                     opts,
-                );
-                RequestReply::Deferred
+                )
             }
             "execCommandApproval" => {
                 let command = match &p["command"] {
@@ -1329,8 +1326,7 @@ impl CodexDriver {
                     command,
                     Vec::new(),
                     options(true),
-                );
-                RequestReply::Deferred
+                )
             }
             "applyPatchApproval" => {
                 let mut diffs = Vec::new();
@@ -1364,8 +1360,7 @@ impl CodexDriver {
                     None,
                     diffs,
                     options(false),
-                );
-                RequestReply::Deferred
+                )
             }
             "item/tool/requestUserInput" => {
                 let questions = p["questions"].as_array().cloned().unwrap_or_default();
@@ -1436,11 +1431,19 @@ impl CodexDriver {
         command: Option<String>,
         diffs: Vec<FileDiff>,
         options: Vec<PermissionOption>,
-    ) {
+    ) -> RequestReply {
+        // "Run without asking" (on-request): Kvistcode allows it for the user, like
+        // Claude's bypass mode, so nothing waits on a click.
+        if *self.approval_policy.lock() == "on-request" {
+            if let Some(allow) = crate::session::auto_allow_option(&options) {
+                return RequestReply::Now(kind.response(&allow));
+            }
+        }
         let request_id = uuid::Uuid::new_v4().to_string();
         self.perms.lock().insert(request_id.clone(), (rpc_id, kind));
         self.ctx
             .permission_requested(&request_id, title, tool_kind, command, diffs, options);
+        RequestReply::Deferred
     }
 }
 

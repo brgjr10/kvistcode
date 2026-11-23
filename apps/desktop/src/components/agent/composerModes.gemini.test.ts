@@ -22,3 +22,23 @@ describe("plainConfigOptions for Gemini", () => {
     expect(o.options[2].description).toBe("Auto-approves all tools (“YOLO”)");
   });
 });
+
+describe("plainConfigOptions for Antigravity", () => {
+  it("names Antigravity's Auto mode Run without asking", () => {
+    const mode: ConfigOption = {
+      id: "mode",
+      name: "Mode",
+      category: "mode",
+      currentValue: "auto",
+      options: [
+        { value: "default", name: "Default", description: null },
+        { value: "accept-edits", name: "Accept edits", description: null },
+        { value: "auto", name: "Auto", description: null },
+        { value: "plan", name: "Plan", description: null },
+      ],
+    };
+    const [o] = plainConfigOptions({ provider: "gemini", configOptions: [mode] } as unknown as Agent);
+    expect(o.options.map((c) => c.name)).toEqual(["Ask before changes", "Accept edits", "Run without asking", "Plan"]);
+    expect(o.options[2].description).toBe("“Auto”");
+  });
+});
