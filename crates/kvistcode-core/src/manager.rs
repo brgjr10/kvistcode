@@ -17,6 +17,7 @@ use crate::model::*;
 use crate::session::{AgentCtx, ExitIntent, Prompt, StartCancelled, Steer, TurnOutcome};
 use crate::{accounts, git, local, providers, EventSink, Result};
 
+mod auto_review;
 mod budgets;
 mod helper_sync;
 mod limit_wait;
@@ -171,6 +172,10 @@ struct Inner {
     usage_refresh_at: Mutex<HashMap<String, i64>>,
     /// Deferred initial prompt / warm-up for worktree agents waiting on setup hooks or trust.
     pending_starts: Mutex<HashMap<String, worktree_setup::PendingStart>>,
+    /// Agents currently running an automatic cross-provider review pass.
+    running_reviews: Mutex<HashSet<String>>,
+    /// Agents that already used their single critical auto-fix pass in the current user-prompt episode.
+    auto_fix_used: Mutex<HashSet<String>>,
 }
 
 /// Marks a schedule as starting; released on drop.
@@ -323,6 +328,8 @@ impl Core {
                 limit_wait: Mutex::default(),
                 usage_refresh_at: Mutex::default(),
                 pending_starts: Mutex::default(),
+                running_reviews: Mutex::default(),
+                auto_fix_used: Mutex::default(),
             }),
         };
         core.restore_queues();
@@ -428,6 +435,13 @@ impl Core {
                     wt.status = crate::worktree_hooks::WorktreeSetupStatus::Failed;
                     wt.error = Some("Interrupted when Kvistcode closed".into());
                     agent.status = AgentStatus::Error;
+                    dirty = true;
+                }
+            }
+            if let Some(rev) = agent.auto_review_state.as_mut() {
+                if rev.status == crate::auto_review::AutoReviewStatus::Running {
+                    rev.status = crate::auto_review::AutoReviewStatus::Failed;
+                    rev.error = Some("Interrupted when Kvistcode closed".into());
                     dirty = true;
                 }
             }
@@ -2191,6 +2205,8 @@ impl Core {
                 files: 0,
             }),
             worktree_setup: None,
+            auto_review: None,
+            auto_review_state: None,
         };
         {
             // Under the agents lock, which `delete_account` holds across its checks:
@@ -2334,6 +2350,8 @@ impl Core {
         }
         self.prepare_attachments(&mut attachments)?;
         self.agent(agent_id)?;
+        // A new user prompt starts a fresh auto-fix episode.
+        self.inner.auto_fix_used.lock().remove(agent_id);
         let ctx = self.ctx(agent_id);
         if ctx.is_turn_active() && !ctx.is_queue_paused() && !text.starts_with('/') {
             if let Some(driver) = self.live_driver(agent_id) {
@@ -2387,6 +2405,10 @@ impl Core {
         }
         self.prepare_attachments(&mut attachments)?;
         let agent = self.agent(agent_id)?;
+        if !internal {
+            // A new user prompt starts a fresh auto-fix episode.
+            self.inner.auto_fix_used.lock().remove(agent_id);
+        }
         let ctx = self.ctx(agent_id);
         // A helper picks up what the main agent changed before it starts its turn.
         if !internal && agent.parent_id.is_some() && !ctx.is_turn_active() {
@@ -2923,6 +2945,8 @@ impl Core {
             agent_id,
         ));
         self.inner.agents.lock().remove(agent_id);
+        self.inner.running_reviews.lock().remove(agent_id);
+        self.inner.auto_fix_used.lock().remove(agent_id);
         self.helper_deleted(&agent).await;
         self.inner.ctxs.lock().remove(agent_id);
         self.inner.start_locks.lock().remove(agent_id);
@@ -3065,6 +3089,7 @@ impl Core {
             s.project_budgets.keys().any(|k| is_old(k))
                 || s.project_worktrees.keys().any(|k| is_old(k))
                 || s.trusted_worktree_hooks.keys().any(|k| is_old(k))
+                || s.project_auto_review.keys().any(|k| is_old(k))
                 || s.mcp_servers.iter().any(|m| is_old(&m.project_path))
                 || s.recent_projects.iter().any(|p| is_old(p))
                 || s.project_layout.paths().any(|p| is_old(p))
@@ -3105,6 +3130,17 @@ impl Core {
                         s.trusted_worktree_hooks
                             .entry(new.to_string())
                             .or_insert(hash);
+                    }
+                }
+                let rev_keys: Vec<String> = s
+                    .project_auto_review
+                    .keys()
+                    .filter(|k| is_old(k))
+                    .cloned()
+                    .collect();
+                for key in rev_keys {
+                    if let Some(cfg) = s.project_auto_review.remove(&key) {
+                        s.project_auto_review.entry(new.to_string()).or_insert(cfg);
                     }
                 }
                 for server in s.mcp_servers.iter_mut().filter(|m| is_old(&m.project_path)) {

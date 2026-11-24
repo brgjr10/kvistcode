@@ -5,9 +5,11 @@ import {
   CircleX,
   Gauge,
   GitBranch,
+  GitCompare,
   Play,
   Repeat,
   RotateCcw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   ShieldX,
@@ -38,6 +40,7 @@ import { useBackground } from "@/store/background";
 import { REASON_TONE, reasonLabel, type TriageEntry } from "@/components/triage/useTriage";
 import { CodeText } from "@/components/CodeText";
 import { ResumeLine } from "@/components/agent/ResumesAt";
+import { AutoReviewBadge, reviewerLabel } from "@/components/review/AutoReviewPanel";
 import { BudgetHoldPanel } from "./BudgetHoldPanel";
 import { turnErrorNotice } from "./notices";
 
@@ -101,6 +104,7 @@ export function NeedsYouDetail({
             <span className={cn("rounded-full border px-2 py-0.5 text-micro font-medium", REASON_TONE[reason])}>
               {label}
             </span>
+            {agent.autoReviewState && <AutoReviewBadge state={agent.autoReviewState} />}
             <span className="text-meta text-steel">
               <RelTime ts={agent.lastActivityAt} long />
             </span>
@@ -198,7 +202,7 @@ export function NeedsYouDetail({
             }
           />
         ) : (
-          <DonePanel items={items} fallback={agent.lastMessage} agentId={agent.id} />
+          <DonePanel items={items} fallback={agent.lastMessage} agent={agent} />
         )}
       </div>
 
@@ -483,19 +487,99 @@ function RecoveryPanel({
 function DonePanel({
   items,
   fallback,
-  agentId,
+  agent,
 }: {
   items: TimelineItem[] | undefined;
   fallback: string | null;
-  agentId: string;
+  agent: TriageEntry["agent"];
 }) {
+  const agentId = agent.id;
+  const review = agent.autoReviewState ?? null;
+  const [sending, setSending] = useState(false);
   // A reply that is only a picture has no text to show here.
   const message = [...(items ?? [])].reverse().find((i) => i.kind === "agent_message" && i.text.trim()) as
     Extract<TimelineItem, { kind: "agent_message" }> | undefined;
   const summary = lastOf(items, "turn_summary");
   const bg = useBackground(agentId);
+  const criticalCount = review?.findings.filter((f) => f.severity === "critical").length ?? 0;
+
+  const sendAllFindings = async () => {
+    if (sending) return;
+    setSending(true);
+    try {
+      await attempt("Couldn't send review findings", () => api.sendAutoReviewFindings(agentId, []));
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
+      {review && (
+        <div
+          className={cn(
+            "rounded-xl border p-3 text-small",
+            review.status === "failed" || criticalCount > 0
+              ? "border-err/35 bg-err/[0.06]"
+              : review.status === "findings"
+                ? "border-warn/35 bg-warn/[0.06]"
+                : review.status === "passed"
+                  ? "border-ok/30 bg-ok/[0.05]"
+                  : "border-accent/35 bg-accent/[0.06]",
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-fg/80" />
+            <span className="font-semibold text-fg">Auto-review · {reviewerLabel(review)}</span>
+            <AutoReviewBadge state={review} />
+            {review.autoFixSent && (
+              <span className="text-micro text-steel">Auto-fix sent once</span>
+            )}
+          </div>
+          <p className="mt-1 text-caption leading-relaxed text-muted">{review.error || review.summary}</p>
+          {review.findings.length > 0 && (
+            <ul className="mt-2 space-y-1 text-caption">
+              {review.findings.slice(0, 3).map((f) => (
+                <li key={f.id} className="flex items-baseline gap-1.5 truncate">
+                  <span
+                    className={cn(
+                      "shrink-0 font-semibold uppercase text-micro",
+                      f.severity === "critical" ? "text-err" : f.severity === "warning" ? "text-warn" : "text-steel",
+                    )}
+                  >
+                    {f.severity}
+                  </span>
+                  {f.path && (
+                    <span className="shrink-0 font-mono text-micro text-muted">
+                      {f.path}
+                      {f.line ? `:${f.line}` : ""}
+                    </span>
+                  )}
+                  <span className="min-w-0 truncate text-fg">{f.title}</span>
+                </li>
+              ))}
+              {review.findings.length > 3 && (
+                <li className="text-micro text-steel">+{review.findings.length - 3} more in Review</li>
+              )}
+            </ul>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Button
+              size="xs"
+              variant="secondary"
+              onClick={() => useUi.getState().setReviewAgent(agentId)}
+            >
+              <GitCompare className="!h-3.5 !w-3.5" /> Review changes
+            </Button>
+            {review.findings.length > 0 && (
+              <Button size="xs" variant="primary" disabled={sending} onClick={() => void sendAllFindings()}>
+                <Send className="!h-3.5 !w-3.5" />
+                Send {pluralize(review.findings.length, "finding")} to fix
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {backgroundActive(bg) && (
         <p className="text-caption text-accent" title={backgroundDetail(bg)}>
           Its turn finished, but not everything: {backgroundShort(bg).toLowerCase()}.

@@ -1730,6 +1730,160 @@ pub async fn fetch_rate_limits(account: &Account, data_dir: &Path) -> Option<Acc
     res
 }
 
+/// Runs a single read-only prompt on a short-lived Codex app-server process (sandboxed
+/// `read-only` with `approvalPolicy: "never"`, declining any approval request and always
+/// killing the process before returning).
+#[allow(clippy::too_many_arguments)]
+pub async fn one_shot_prompt(
+    program: &Path,
+    args: &[String],
+    cwd: &Path,
+    env: &[(String, String)],
+    env_remove: &[String],
+    children_file: Option<&Path>,
+    guidance: &str,
+    model: Option<&str>,
+    prompt: &str,
+    timeout: Duration,
+) -> anyhow::Result<String> {
+    let (peer, mut rx) = Peer::spawn(SpawnOptions {
+        program,
+        args,
+        cwd,
+        env,
+        env_remove,
+        label: "auto-review-codex",
+        children_file,
+    })?;
+
+    let work = async {
+        peer.request_timeout(
+            "initialize",
+            json!({ "clientInfo": { "name": "kvistcode", "title": "Kvistcode", "version": env!("CARGO_PKG_VERSION") } }),
+            Some(Duration::from_secs(60)),
+        )
+        .await
+        .map_err(|e| auth_hint(peer.with_stderr(e, 0)))?;
+        peer.notify("initialized", json!({})).await?;
+
+        let resp = peer
+            .request_timeout(
+                "thread/start",
+                json!({
+                    "cwd": cwd.to_string_lossy(),
+                    "approvalPolicy": "never",
+                    "sandbox": "read-only",
+                    "serviceName": "kvistcode",
+                    "developerInstructions": guidance,
+                    "config": {}
+                }),
+                Some(Duration::from_secs(60)),
+            )
+            .await
+            .map_err(|e| auth_hint(peer.with_stderr(e, 0)))?;
+        let thread_id = resp["thread"]["id"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Codex reviewer returned no thread id"))?
+            .to_string();
+
+        let mark = peer.stderr_mark();
+        let mut turn_params = json!({
+            "threadId": thread_id,
+            "input": [{ "type": "text", "text": prompt }],
+            "approvalPolicy": "never",
+        });
+        if let Some(m) = model.map(str::trim).filter(|m| !m.is_empty()) {
+            turn_params["model"] = json!(m);
+        }
+        peer.request_timeout("turn/start", turn_params, Some(Duration::from_secs(60)))
+            .await
+            .map_err(|e| auth_hint(peer.with_stderr(e, mark)))?;
+
+        let mut streamed = String::new();
+        let mut final_msg: Option<String> = None;
+
+        let collect = async {
+            while let Some(msg) = rx.recv().await {
+                match msg {
+                    Incoming::Notification { method, params } => {
+                        let same_thread = params["threadId"]
+                            .as_str()
+                            .is_none_or(|t| t == thread_id);
+                        if !same_thread {
+                            continue;
+                        }
+                        if method == "item/agentMessage/delta" {
+                            if let Some(delta) = params["delta"].as_str() {
+                                streamed.push_str(delta);
+                            }
+                        } else if method == "item/completed" {
+                            let item = &params["item"];
+                            if item["type"].as_str() == Some("agentMessage") {
+                                if let Some(text) = item["text"].as_str() {
+                                    if !text.trim().is_empty() {
+                                        final_msg = Some(text.to_string());
+                                    }
+                                }
+                            }
+                        } else if method == "turn/completed" {
+                            let status = params["turn"]["status"].as_str().unwrap_or("completed");
+                            if status == "failed" {
+                                let err_text = error_message(&params["turn"]["error"]);
+                                return Err(anyhow!(err_text));
+                            }
+                            if status == "interrupted" {
+                                return Err(anyhow!("Reviewer turn was interrupted"));
+                            }
+                            break;
+                        }
+                    }
+                    Incoming::Request { id, method, .. } => {
+                        // Never allow mutations or interactive prompts during auto-review.
+                        let reply = match method.as_str() {
+                            "item/commandExecution/requestApproval"
+                            | "item/fileChange/requestApproval" => json!({ "decision": "decline" }),
+                            "item/permissions/requestApproval" => json!({ "permissions": {} }),
+                            "execCommandApproval" | "applyPatchApproval" => {
+                                json!({ "decision": { "denied": { "rejection": "Read-only auto-review" } } })
+                            }
+                            "item/tool/requestUserInput" => json!({ "answers": {} }),
+                            "mcpServer/elicitation/request" => {
+                                json!({ "action": "decline", "content": null })
+                            }
+                            _ => {
+                                let _ = peer
+                                    .respond_error(id, -32601, "unsupported in read-only review")
+                                    .await;
+                                continue;
+                            }
+                        };
+                        let _ = peer.respond(id, reply).await;
+                    }
+                    Incoming::Closed => {
+                        if final_msg.is_none() && streamed.trim().is_empty() {
+                            return Err(auth_hint(peer.with_stderr(
+                                anyhow!("Codex reviewer exited before finishing"),
+                                mark,
+                            )));
+                        }
+                        break;
+                    }
+                    Incoming::Barrier(_) => {}
+                }
+            }
+            Ok(final_msg.unwrap_or(streamed))
+        };
+
+        tokio::time::timeout(timeout, collect)
+            .await
+            .map_err(|_| anyhow!("Auto-review timed out after {}s", timeout.as_secs()))?
+    }
+    .await;
+
+    peer.kill().await;
+    work
+}
+
 fn collect_sub_agent_messages(states: &Value, threads: &[String]) -> Option<String> {
     let map = states.as_object()?;
     let mut parts: Vec<String> = Vec::new();

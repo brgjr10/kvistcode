@@ -25,6 +25,7 @@ import {
   Plus,
   Pencil,
   Play,
+  ShieldCheck,
   SquareTerminal,
   Trash2,
 } from "lucide-react";
@@ -77,6 +78,7 @@ import { Tooltip } from "../ui/tooltip";
 import { PrChip } from "./PrChip";
 import { ResumesAt } from "./ResumesAt";
 import { HelperOfLine, HelpersChip, SyncChip, TileToggle } from "./HelperBits";
+import { AutoReviewBadge } from "../review/AutoReviewPanel";
 
 const EMPTY_CUSTOM: CustomAgent[] = [];
 
@@ -329,6 +331,16 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
           {!tile && (minimal ? !tight : tier !== "compact") && (
             <PrChip agent={agent} compact={minimal || tier !== "full"} />
           )}
+          {agent.autoReviewState && !tight && !minimal && (
+            <button
+              type="button"
+              onClick={() => setReviewAgent(agent.id)}
+              className="rounded-full transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-accent"
+              title="Open cross-provider review findings"
+            >
+              <AutoReviewBadge state={agent.autoReviewState} compact={tier !== "full"} />
+            </button>
+          )}
         </div>
         <div className="relative flex shrink-0 items-center gap-1 minimal:ml-auto">
           {resumable && !busy && !minimal ? (
@@ -453,6 +465,15 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
                 </DropdownMenuItem>
               )}
               <HandoffSub agent={agent} onCustom={() => setHandoffAgent(agent)} />
+              {!isHelper && (
+                <DropdownMenuItem
+                  disabled={agent.autoReviewState?.status === "running"}
+                  onSelect={() => void attempt("Couldn't run review", () => api.runAutoReview(agent.id))}
+                >
+                  <ShieldCheck />
+                  {agent.autoReviewState?.status === "running" ? "Review running…" : "Run cross-provider review"}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {

@@ -14,6 +14,7 @@ import { useStatusView } from "@/store/background";
 import type { Account, Agent, PermissionOption, TimelineItem } from "@/lib/types";
 import { ResumesAt } from "../agent/ResumesAt";
 import { WorktreeSetupCard } from "../agent/WorktreeSetupRow";
+import { AutoReviewBadge } from "../review/AutoReviewPanel";
 import { plainPreview as preview } from "./preview";
 import { RecoveryActions, needsRecovery } from "./RecoveryActions";
 import type { TileSummary } from "./useTileSummaries";
@@ -159,6 +160,7 @@ export const AgentTile = memo(function AgentTile({
               {background ? summary.subagents : `${summary.subagents} sub-agent${summary.subagents === 1 ? "" : "s"}`}
             </span>
           )}
+          {agent.autoReviewState && <AutoReviewBadge state={agent.autoReviewState} compact />}
           <span className="ml-auto flex items-center gap-1.5 text-micro text-steel">
             {agent.unread && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="Unread" />}
             <RelTime ts={agent.lastActivityAt} />

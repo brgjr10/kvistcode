@@ -1,6 +1,7 @@
-import { FileText, FolderOpen, GitBranch, Plug, Puzzle, Shield, Workflow } from "lucide-react";
+import { FileText, FolderOpen, GitBranch, Plug, Puzzle, Shield, ShieldCheck, Workflow } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { McpSection } from "@/components/settings/McpSection";
+import { ProjectAutoReview } from "@/components/settings/ProjectAutoReview";
 import { ProjectRules } from "@/components/settings/ProjectSettingsSection";
 import { ProjectWorktrees } from "@/components/settings/ProjectWorktrees";
 import { SectionHeader } from "@/components/settings/SettingRow";
@@ -43,7 +44,11 @@ export function ToolsHub({ servers }: { servers: McpServer[] }) {
 
   // Leaving the tab for a project that has nothing to show there is never a dead end.
   const needsProject =
-    tab === "instructions" || tab === "permissions" || tab === "automation" || tab === "worktrees";
+    tab === "instructions" ||
+    tab === "permissions" ||
+    tab === "automation" ||
+    tab === "worktrees" ||
+    tab === "auto_review";
   useEffect(() => {
     if (!project && needsProject) setTab("mcp");
   }, [project, needsProject, setTab]);
@@ -151,6 +156,15 @@ export function ToolsHub({ servers }: { servers: McpServer[] }) {
               </>
             ),
           },
+          {
+            value: "auto_review",
+            disabled: !project,
+            label: (
+              <>
+                <ShieldCheck className="h-3.5 w-3.5" /> Auto-review
+              </>
+            ),
+          },
         ]}
       />
 
@@ -162,6 +176,8 @@ export function ToolsHub({ servers }: { servers: McpServer[] }) {
         <SkillsPanel project={project} />
       ) : tab === "worktrees" && project ? (
         <ProjectWorktrees project={project} />
+      ) : tab === "auto_review" && project ? (
+        <ProjectAutoReview project={project} />
       ) : (tab === "permissions" || tab === "automation") && project ? (
         <ProjectRules project={project} show={tab} />
       ) : null}

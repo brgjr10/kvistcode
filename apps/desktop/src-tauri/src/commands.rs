@@ -2080,3 +2080,42 @@ pub async fn save_workspace_file(
     .map_err(|e| e.to_string())?
     .map_err(err)
 }
+
+/// Sets or clears a per-agent automatic cross-provider review override.
+#[tauri::command]
+pub async fn set_agent_auto_review(
+    core: State<'_, Core>,
+    agent_id: String,
+    config: Option<kvistcode_core::auto_review::AutoReviewConfig>,
+) -> CmdResult<Agent> {
+    core.set_agent_auto_review(&agent_id, config).map_err(err)
+}
+
+/// Manually triggers (or re-runs) a cross-provider review pass for an agent.
+#[tauri::command]
+pub async fn run_auto_review(core: State<'_, Core>, agent_id: String) -> CmdResult<Agent> {
+    core.run_auto_review(&agent_id).await.map_err(err)
+}
+
+/// Dismisses a single finding from an agent's auto-review state.
+#[tauri::command]
+pub async fn dismiss_auto_review_finding(
+    core: State<'_, Core>,
+    agent_id: String,
+    finding_id: String,
+) -> CmdResult<Agent> {
+    core.dismiss_auto_review_finding(&agent_id, &finding_id)
+        .map_err(err)
+}
+
+/// Sends chosen auto-review findings (or all when `finding_ids` is empty) back to the agent to fix.
+#[tauri::command]
+pub async fn send_auto_review_findings(
+    core: State<'_, Core>,
+    agent_id: String,
+    finding_ids: Vec<String>,
+) -> CmdResult<Agent> {
+    core.send_auto_review_findings(&agent_id, finding_ids)
+        .await
+        .map_err(err)
+}

@@ -1316,6 +1316,173 @@ pub async fn probe(
     Ok(format!("{name}{version} (ACP v{protocol})"))
 }
 
+/// Runs a single read-only prompt on a short-lived ACP process, denying any permission or
+/// elicitation request and always killing the process before returning.
+#[allow(clippy::too_many_arguments)]
+pub async fn one_shot_prompt(
+    program: &Path,
+    args: &[String],
+    cwd: &Path,
+    env: &[(String, String)],
+    env_remove: &[String],
+    children_file: Option<&Path>,
+    guidance: &str,
+    model: Option<&str>,
+    prompt: &str,
+    timeout: Duration,
+) -> anyhow::Result<String> {
+    let (peer, mut rx) = Peer::spawn(SpawnOptions {
+        program,
+        args,
+        cwd,
+        env,
+        env_remove,
+        label: "auto-review-acp",
+        children_file,
+    })?;
+
+    let collected = Arc::new(Mutex::new(String::new()));
+    let collected_loop = collected.clone();
+    let peer_loop = peer.clone();
+    let (barrier_tx, barrier_rx) = tokio::sync::oneshot::channel::<()>();
+    let collector = tokio::spawn(async move {
+        let mut barrier_tx = Some(barrier_tx);
+        while let Some(msg) = rx.recv().await {
+            match msg {
+                Incoming::Notification { method, params } if method == "session/update" => {
+                    let upd = &params["update"];
+                    // Ignore subagent chatter when present.
+                    let is_subagent = upd["_meta"]["claudeCode"]["parentToolUseId"]
+                        .as_str()
+                        .is_some();
+                    if !is_subagent && upd["sessionUpdate"].as_str() == Some("agent_message_chunk")
+                    {
+                        if let Some(t) = upd["content"]["text"].as_str() {
+                            collected_loop.lock().push_str(t);
+                        }
+                    }
+                }
+                Incoming::Request { id, method, params } => {
+                    if method == "session/request_permission" {
+                        let reject_id = params["options"].as_array().and_then(|opts| {
+                            opts.iter().find_map(|o| {
+                                let kind = o["kind"].as_str().unwrap_or("");
+                                (kind == "reject_once" || kind == "reject_always")
+                                    .then(|| o["optionId"].as_str().map(str::to_string))
+                                    .flatten()
+                            })
+                        });
+                        let outcome = match reject_id {
+                            Some(opt) => json!({ "outcome": "selected", "optionId": opt }),
+                            None => json!({ "outcome": "cancelled" }),
+                        };
+                        let _ = peer_loop.respond(id, json!({ "outcome": outcome })).await;
+                    } else if method == "elicitation/create" {
+                        let _ = peer_loop
+                            .respond(id, json!({ "action": "decline", "content": null }))
+                            .await;
+                    } else {
+                        let _ = peer_loop
+                            .respond_error(id, -32601, "unsupported in read-only review")
+                            .await;
+                    }
+                }
+                Incoming::Barrier(1) => {
+                    if let Some(tx) = barrier_tx.take() {
+                        let _ = tx.send(());
+                    }
+                }
+                Incoming::Closed => {
+                    if let Some(tx) = barrier_tx.take() {
+                        let _ = tx.send(());
+                    }
+                    break;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let work = async {
+        let init = peer
+            .request_timeout(
+                "initialize",
+                json!({
+                    "protocolVersion": PROTOCOL_VERSION,
+                    "clientCapabilities": { "fs": { "readTextFile": false, "writeTextFile": false }, "terminal": false },
+                    "clientInfo": { "name": "kvistcode", "title": "Kvistcode", "version": env!("CARGO_PKG_VERSION") }
+                }),
+                Some(Duration::from_secs(60)),
+            )
+            .await
+            .map_err(|e| peer.with_stderr(e, 0))?;
+        let caps = &init["agentCapabilities"];
+        let mut new_params = json!({
+            "cwd": cwd.to_string_lossy(),
+            "mcpServers": [],
+        });
+        if let Some(sp) = system_prompt(caps, guidance) {
+            new_params["systemPrompt"] = sp;
+        }
+        let session = peer
+            .request_timeout("session/new", new_params, Some(Duration::from_secs(60)))
+            .await
+            .map_err(|e| peer.with_stderr(e, 0))?;
+        let sid = session["sessionId"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Reviewer returned no session id"))?
+            .to_string();
+
+        if let Some(m) = model.map(str::trim).filter(|m| !m.is_empty()) {
+            // Try ACP config option first, then legacy session/set_model; ignore unsupported.
+            let cfg_res = peer
+                .request_timeout(
+                    "session/set_config_option",
+                    json!({ "sessionId": sid, "configId": "model", "value": m }),
+                    Some(Duration::from_secs(15)),
+                )
+                .await;
+            if cfg_res.is_err() {
+                let _ = peer
+                    .request_timeout(
+                        "session/set_model",
+                        json!({ "sessionId": sid, "modelId": m }),
+                        Some(Duration::from_secs(15)),
+                    )
+                    .await;
+            }
+        }
+
+        let mark = peer.stderr_mark();
+        let prompt_res = peer
+            .request_timeout(
+                "session/prompt",
+                json!({
+                    "sessionId": sid,
+                    "prompt": [{ "type": "text", "text": prompt }],
+                }),
+                Some(timeout),
+            )
+            .await
+            .map_err(|e| peer.with_stderr(e, mark))?;
+
+        if let Some(reason) = prompt_res["stopReason"].as_str() {
+            if reason == "refusal" {
+                return Err(anyhow!("Reviewer declined the review request"));
+            }
+        }
+
+        peer.barrier(1);
+        let _ = tokio::time::timeout(Duration::from_secs(2), barrier_rx).await;
+        Ok::<String, anyhow::Error>(collected.lock().clone())
+    }
+    .await;
+
+    peer.kill().await;
+    collector.abort();
+    work
+}
+
 /// MCP servers in ACP's wire format (HTTP ones only if the agent supports them).
 /// Kvistcode's note to the agent (see `guidance`), appended to its own system prompt, for agents that
 /// advertise `sessionCapabilities.systemPrompt`; others never see the field.

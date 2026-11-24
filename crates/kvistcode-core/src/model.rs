@@ -360,6 +360,12 @@ pub struct Agent {
     /// Present while a worktree agent's setup hooks are running, waiting for trust, or failed.
     #[serde(default)]
     pub worktree_setup: Option<crate::worktree_hooks::WorktreeSetupState>,
+    /// Optional per-agent override for automatic cross-provider review.
+    #[serde(default)]
+    pub auto_review: Option<crate::auto_review::AutoReviewConfig>,
+    /// Latest automatic cross-provider review result for this agent.
+    #[serde(default)]
+    pub auto_review_state: Option<crate::auto_review::AutoReviewState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1386,6 +1392,9 @@ pub struct Settings {
         std::collections::BTreeMap<String, crate::worktree_hooks::ProjectWorktreeConfig>,
     /// Approved repo-level worktree script hashes, by project folder.
     pub trusted_worktree_hooks: std::collections::BTreeMap<String, String>,
+    /// Per-project automatic cross-provider review settings, by project folder.
+    pub project_auto_review:
+        std::collections::BTreeMap<String, crate::auto_review::AutoReviewConfig>,
     /// The order of the sidebar's projects and the named sections they are filed under.
     pub project_layout: ProjectLayout,
     /// Slack, Discord and generic webhook targets for alerts (ntfy has its own field).
@@ -1738,6 +1747,11 @@ impl Settings {
                 return Err(format!("Worktree hooks for {project}: {problem}"));
             }
         }
+        for (project, rev) in &self.project_auto_review {
+            if let Some(problem) = rev.problem() {
+                return Err(format!("Auto-review for {project}: {problem}"));
+            }
+        }
         if let Some(problem) = self.project_layout.problem() {
             return Err(problem);
         }
@@ -1879,6 +1893,14 @@ impl Settings {
         if self.trusted_worktree_hooks.len() != orig_trusted {
             reset.push("trustedWorktreeHooks");
         }
+        let mut bad_rev = false;
+        for rev in self.project_auto_review.values_mut() {
+            bad_rev |= rev.sanitize();
+        }
+        self.project_auto_review.retain(|_, rev| !rev.is_empty());
+        if bad_rev {
+            reset.push("projectAutoReview");
+        }
         if self.project_layout.sanitize() {
             reset.push("projectLayout");
         }
@@ -2005,6 +2027,7 @@ impl Default for Settings {
             project_budgets: Default::default(),
             project_worktrees: Default::default(),
             trusted_worktree_hooks: Default::default(),
+            project_auto_review: Default::default(),
             project_layout: ProjectLayout::default(),
             alert_targets: Vec::new(),
             // On by default: measured as the biggest saver (see docs/TOKEN-SAVING.md). Anyone who
