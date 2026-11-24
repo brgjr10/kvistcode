@@ -138,6 +138,11 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { label: "Remembered composer choices", page: "behavior", keywords: ["composer", "remember"] },
   { label: "Auto-resume interrupted agents", page: "behavior", keywords: ["crash", "reboot", "restart"] },
   { label: "Use a git worktree by default", page: "behavior", keywords: ["branch", "worktree", "folder"] },
+  {
+    label: "Preferred code editor",
+    page: "behavior",
+    keywords: ["editor", "vscode", "cursor", "zed", "jetbrains", "neovim", "open in"],
+  },
   { label: "How agents reply", page: "behavior", anchor: "replies", keywords: ["report", "style", "language"] },
   { label: "Helper agents", page: "behavior", anchor: "helpers", keywords: ["busy", "queue", "side agent"] },
   {

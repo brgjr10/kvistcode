@@ -66,6 +66,9 @@ import type {
   WakeStatus,
   WorkflowProgress,
   ResolvedWorktreeHooks,
+  EditorInfo,
+  WorkspaceFile,
+  WorkspaceFileSave,
 } from "./types";
 import type {
   InstructionDoc,
@@ -466,6 +469,25 @@ const tauriApi = {
   retryWorktreeSetup: (agentId: string) => invoke<Agent>("retry_worktree_setup", { agentId }),
   /** Skips worktree setup commands and lets the agent start. */
   skipWorktreeHooks: (agentId: string) => invoke<Agent>("skip_worktree_hooks", { agentId }),
+
+  // editors & lightweight workspace files
+  detectEditors: () => invoke<EditorInfo[]>("detect_editors"),
+  openInEditor: (path: string, opts?: { editorId?: string | null; line?: number | null; column?: number | null }) =>
+    invoke<EditorInfo>("open_in_editor", {
+      editorId: opts?.editorId ?? null,
+      path,
+      line: opts?.line ?? null,
+      column: opts?.column ?? null,
+    }),
+  listWorkspaceFiles: (agentId: string) => invoke<string[]>("list_workspace_files", { agentId }),
+  readWorkspaceFile: (agentId: string, path: string) => invoke<WorkspaceFile>("read_workspace_file", { agentId, path }),
+  saveWorkspaceFile: (agentId: string, path: string, content: string, expectedStamp?: string | null) =>
+    invoke<WorkspaceFileSave>("save_workspace_file", {
+      agentId,
+      path,
+      content,
+      expectedStamp: expectedStamp ?? null,
+    }),
 
   // remote control / share links
   remoteStatus: () => invoke<RemoteStatus>("remote_status"),

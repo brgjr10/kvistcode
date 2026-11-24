@@ -29,6 +29,7 @@ import { prefillPr } from "@/lib/prFlow";
 import type { Agent, AgentDiff, BaseBranchStatus, ChangedFile } from "@/lib/types";
 import { basename, cn, errorMessage } from "@/lib/utils";
 import { useApp } from "@/store/app";
+import { openFileLineTarget, useEditors } from "@/store/editors";
 import { refreshPrSoon } from "@/store/pr";
 import { useUi } from "@/store/ui";
 import { anchorKey, type FileReviewActions, type LineAnchor, type LineCommenting } from "./DiffView";
@@ -492,6 +493,9 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   // Revert is blocked while the agent works; read the latest reason without re-creating the actions.
   const gitBlockedRef = useRef(gitBlocked);
   gitBlockedRef.current = gitBlocked;
+  const { preferred: preferredEditor } = useEditors();
+  const agentCwdRef = useRef(agent.cwd);
+  agentCwdRef.current = agent.cwd;
   const openStateRef = openState;
   const reviewActions = useMemo<FileReviewActions>(
     () => ({
@@ -512,8 +516,17 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
         if (f) useViewedFiles.getState().toggle(agentId, path, fileSignature(f));
       },
       setOpen: (path, open) => void openStateRef.current.set(path, open),
+      openInEditor: (path, line) => {
+        void openFileLineTarget(agentId, agentCwdRef.current, {
+          path,
+          line: line ?? null,
+          column: null,
+          absolute: false,
+        });
+      },
+      editorName: preferredEditor?.name ?? null,
     }),
-    [agentId],
+    [agentId, preferredEditor?.name],
   );
   const isViewed = (path: string) => {
     if (viewed[path] === undefined) return false;

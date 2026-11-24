@@ -3327,6 +3327,75 @@ export const mockApi: KvistcodeApi = {
     return clone(a);
   },
 
+  async detectEditors() {
+    await sleep(30);
+    return [
+      { id: "cursor", name: "Cursor", command: "/usr/bin/cursor", terminal: false },
+      { id: "vscode", name: "VS Code", command: "/usr/bin/code", terminal: false },
+      { id: "zed", name: "Zed", command: "/usr/bin/zed", terminal: false },
+      { id: "nvim", name: "Neovim", command: "/usr/bin/nvim", terminal: true },
+    ];
+  },
+
+  async openInEditor(path, opts) {
+    await sleep(40);
+    const editors = await mockApi.detectEditors();
+    const chosen =
+      (opts?.editorId && editors.find((e) => e.id === opts.editorId)) ||
+      (db.settings.preferredEditor && editors.find((e) => e.id === db.settings.preferredEditor)) ||
+      editors[0];
+    if (!path.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(path)) {
+      throw new Error(`Can't open ${path}: path must be absolute`);
+    }
+    return chosen;
+  },
+
+  async listWorkspaceFiles(agentId) {
+    getAgent(agentId);
+    return delay([...MOCK_FILES].sort(), 60);
+  },
+
+  async readWorkspaceFile(agentId, path) {
+    getAgent(agentId);
+    await sleep(40);
+    const norm = path.trim().replace(/^\/+/, "");
+    const key = `${agentId}\0${norm}`;
+    const existing = mockWorkspaceFiles.get(key);
+    if (existing) return clone(existing);
+    const content = `// ${norm}\nexport const example = true;\n`;
+    const file = {
+      path: norm,
+      content,
+      stamp: `mock-1-${content.length}`,
+      sizeBytes: content.length,
+      binary: false,
+      truncated: false,
+    };
+    mockWorkspaceFiles.set(key, file);
+    return clone(file);
+  },
+
+  async saveWorkspaceFile(agentId, path, content, expectedStamp) {
+    getAgent(agentId);
+    await sleep(50);
+    const norm = path.trim().replace(/^\/+/, "");
+    const key = `${agentId}\0${norm}`;
+    const cur = mockWorkspaceFiles.get(key);
+    if (cur && expectedStamp && cur.stamp !== expectedStamp) {
+      return { saved: false, file: clone(cur) };
+    }
+    const next = {
+      path: norm,
+      content,
+      stamp: `mock-${Date.now()}-${content.length}`,
+      sizeBytes: content.length,
+      binary: false,
+      truncated: false,
+    };
+    mockWorkspaceFiles.set(key, next);
+    return { saved: true, file: clone(next) };
+  },
+
   async listFiles(agentId, query) {
     getAgent(agentId);
     const q = query.toLowerCase().replace(/^@/, "");
@@ -3965,6 +4034,11 @@ function mockWakeStatus(): WakeStatus {
     message: !va.enabled && va.wakeWord ? "Turn on the voice assistant first." : null,
   };
 }
+
+const mockWorkspaceFiles = new Map<
+  string,
+  { path: string; content: string; stamp: string; sizeBytes: number; binary: boolean; truncated: boolean }
+>();
 
 let nextHelperParent: Agent | null = null;
 

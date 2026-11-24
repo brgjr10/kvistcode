@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   CalendarPlus,
   Columns2,
+  Code2,
   Shrink,
   Power,
   Radio,
@@ -49,6 +50,7 @@ import { selectFromAgents } from "@/lib/memoSelector";
 import { useApp } from "@/store/app";
 import { hasNewServer, previewOf, togglePreview, usePreview } from "@/store/preview";
 import { openToolkit } from "@/store/toolkit";
+import { openPathInEditor, useEditors } from "@/store/editors";
 import { useUi } from "@/store/ui";
 import { ProviderGlyph } from "../ProviderGlyph";
 import { StatusDot, StatusPill } from "../StatusDot";
@@ -128,6 +130,7 @@ export interface HeaderTile {
 
 function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
   const account = useApp((s) => s.accounts.find((a) => a.id === agent.accountId));
+  const { editors, preferred: preferredEditor } = useEditors();
   const view = useStatusView(agent);
   const { done } = view;
   // Minimal: one quiet line. Review and the panel toggles stay beside ⋯; every other action lives in it.
@@ -470,6 +473,31 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
+              {preferredEditor && (
+                <DropdownMenuItem onSelect={() => void openPathInEditor(agent.cwd)}>
+                  <Code2 /> Open in {preferredEditor.name}
+                </DropdownMenuItem>
+              )}
+              {editors.length > 1 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Code2 /> Open in editor…
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {editors.map((ed) => (
+                      <DropdownMenuItem
+                        key={ed.id}
+                        onSelect={() => void openPathInEditor(agent.cwd, { editorId: ed.id, remember: true })}
+                      >
+                        {ed.name}
+                        {ed.id === preferredEditor?.id && (
+                          <span className="ml-auto pl-3 text-xs text-steel">default</span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
               <DropdownMenuItem
                 onSelect={() => void attempt("Couldn't open the folder", () => api.openPath(agent.cwd))}
               >

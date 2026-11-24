@@ -1,4 +1,4 @@
-import { Check, ChevronDown, FileCode2, FileMinus2, FilePlus2, Plus, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Code2, FileCode2, FileMinus2, FilePlus2, Plus, Undo2 } from "lucide-react";
 import {
   Fragment,
   memo,
@@ -94,6 +94,10 @@ export interface FileReviewActions {
   toggleViewed: (path: string) => void;
   /** Remember a file's open/collapsed state (virtualised lists unmount files that scroll away). */
   setOpen?: (path: string, open: boolean) => void;
+  /** Opens a file (optionally at `line`) in the user's preferred code editor. */
+  openInEditor?: (path: string, line?: number) => void;
+  /** Label for the preferred editor (e.g. "Cursor", "VS Code"). */
+  editorName?: string | null;
 }
 
 const STATUS_ICON = {
@@ -185,6 +189,18 @@ export const FileDiffView = memo(function FileDiffView({
         </button>
         {review && (
           <div className="flex h-full shrink-0 items-center gap-1 border-l border-line/70 px-1.5">
+            {review.openInEditor && file.status !== "deleted" && (
+              <button
+                type="button"
+                onClick={() => review.openInEditor?.(file.path)}
+                title={review.editorName ? `Open in ${review.editorName}` : "Open in editor"}
+                aria-label={`Open ${file.path} in ${review.editorName ?? "editor"}`}
+                className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-meta text-muted transition-colors hover:bg-raised hover:text-fg"
+              >
+                <Code2 className="h-3.5 w-3.5" />
+                <span className="max-lg:hidden">{review.editorName ?? "Edit"}</span>
+              </button>
+            )}
             {/* A binary file's change isn't in the diff text, so it can't be reverted from here. */}
             {!file.binary && (
               <button
@@ -548,7 +564,19 @@ const LazyChunk = memo(function LazyChunk({
               </td>
               <td
                 className="w-10 cursor-pointer select-none border-r border-line/50 pr-2 text-right align-top text-micro text-steel tabular hover:text-accent"
-                onClick={() => anchor && commenting.onLineComment(anchor)}
+                title={
+                  review?.openInEditor && l.newNo
+                    ? `Click to comment · Cmd/Ctrl+click to open line ${l.newNo} in ${review.editorName ?? "editor"}`
+                    : undefined
+                }
+                onClick={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && review?.openInEditor && l.newNo) {
+                    e.preventDefault();
+                    review.openInEditor(path, l.newNo);
+                    return;
+                  }
+                  if (anchor) commenting.onLineComment(anchor);
+                }}
               >
                 {l.newNo ?? ""}
               </td>

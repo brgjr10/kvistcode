@@ -2007,3 +2007,76 @@ pub async fn retry_worktree_setup(core: State<'_, Core>, agent_id: String) -> Cm
 pub async fn skip_worktree_hooks(core: State<'_, Core>, agent_id: String) -> CmdResult<Agent> {
     core.skip_worktree_hooks(&agent_id).await.map_err(err)
 }
+
+/// Detects installed code editors (VS Code, Cursor, Zed, JetBrains, Neovim, Helix, …).
+#[tauri::command]
+pub async fn detect_editors() -> CmdResult<Vec<kvistcode_core::editors::EditorInfo>> {
+    tauri::async_runtime::spawn_blocking(kvistcode_core::editors::detect_editors)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Opens a folder or file (optionally at `line`/`column`) in a detected code editor.
+#[tauri::command]
+pub async fn open_in_editor(
+    core: State<'_, Core>,
+    editor_id: Option<String>,
+    path: String,
+    line: Option<u32>,
+    column: Option<u32>,
+) -> CmdResult<kvistcode_core::editors::EditorInfo> {
+    let preferred = core.settings().ok().and_then(|s| s.preferred_editor);
+    tauri::async_runtime::spawn_blocking(move || {
+        kvistcode_core::editors::open_in_editor(
+            editor_id.as_deref(),
+            preferred.as_deref(),
+            Path::new(path.trim()),
+            line,
+            column,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)
+}
+
+/// Lists relative file paths inside an agent's workspace for the lightweight Files tab.
+#[tauri::command]
+pub async fn list_workspace_files(
+    core: State<'_, Core>,
+    agent_id: String,
+) -> CmdResult<Vec<String>> {
+    core.list_workspace_files(&agent_id).await.map_err(err)
+}
+
+/// Reads a single file inside an agent's workspace for the lightweight Files tab.
+#[tauri::command]
+pub async fn read_workspace_file(
+    core: State<'_, Core>,
+    agent_id: String,
+    path: String,
+) -> CmdResult<kvistcode_core::files::WorkspaceFile> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || core.read_workspace_file(&agent_id, &path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
+}
+
+/// Saves edits to a single file inside an agent's workspace (checking `expected_stamp`).
+#[tauri::command]
+pub async fn save_workspace_file(
+    core: State<'_, Core>,
+    agent_id: String,
+    path: String,
+    content: String,
+    expected_stamp: Option<String>,
+) -> CmdResult<kvistcode_core::files::WorkspaceFileSave> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.save_workspace_file(&agent_id, &path, &content, expected_stamp.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)
+}

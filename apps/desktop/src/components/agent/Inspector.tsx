@@ -1,6 +1,7 @@
 import {
   CalendarClock,
   ChevronDown,
+  Code2,
   Cpu,
   FilePen,
   FileSearch,
@@ -33,6 +34,7 @@ import { agentHasBranch } from "@/lib/pr";
 import type { Account, Agent } from "@/lib/types";
 import { cn, modKey, prettyPath } from "@/lib/utils";
 import { useApp } from "@/store/app";
+import { openPathInEditor, useEditors } from "@/store/editors";
 import { usePr } from "@/store/pr";
 import { useUi } from "@/store/ui";
 import { AccountAvatar } from "../AccountAvatar";
@@ -277,15 +279,17 @@ export const Inspector = memo(function Inspector({
               <div className="selectable break-all rounded-lg border border-line bg-base/50 px-2 py-1.5 font-mono text-micro text-muted">
                 {prettyPath(agent.cwd)}
               </div>
-              <Button
-                size="xs"
-                variant="ghost"
-                className="mt-1.5 -ml-1"
-                onClick={() => void attempt("Couldn't open the folder", () => api.openPath(agent.cwd))}
-              >
-                <FolderOpen className="!h-3.5 !w-3.5" />
-                Open folder
-              </Button>
+              <div className="mt-1.5 -ml-1 flex flex-wrap items-center gap-1">
+                <OpenInEditorButton path={agent.cwd} />
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => void attempt("Couldn't open the folder", () => api.openPath(agent.cwd))}
+                >
+                  <FolderOpen className="!h-3.5 !w-3.5" />
+                  Open folder
+                </Button>
+              </div>
             </dd>
           </div>
         </dl>
@@ -399,6 +403,7 @@ function PanelRows({ agent }: { agent: Agent }) {
           <Kbd>`</Kbd>
         </span>
       </button>
+      <OpenInEditorCardRow path={agent.cwd} className={cardRow} />
       <button
         type="button"
         className={cardRow}
@@ -413,14 +418,20 @@ function PanelRows({ agent }: { agent: Agent }) {
 
 /** A touched file. The tooltip (a dozen components) is only mounted once the row has been hovered or focused. */
 const FileRow = memo(function FileRow({ file: f, cwd }: { file: AgentDerived["files"][number]; cwd: string }) {
+  const { preferred } = useEditors();
   const [armed, setArmed] = useState(false);
   const name = f.path.split("/").pop() ?? f.path;
   const dir = f.path.slice(0, f.path.length - name.length);
+  const full = joinPath(cwd, f.path);
   const button = (
     <button
       type="button"
-      aria-label={`Show ${f.path} in folder`}
-      onClick={() => void attempt("Couldn't show the file", () => api.openPath(joinPath(cwd, f.path)))}
+      aria-label={preferred ? `Open ${f.path} in ${preferred.name}` : `Show ${f.path} in folder`}
+      onClick={() =>
+        preferred
+          ? void openPathInEditor(full)
+          : void attempt("Couldn't show the file", () => api.openPath(full))
+      }
       onPointerEnter={armed ? undefined : () => setArmed(true)}
       onFocus={armed ? undefined : () => setArmed(true)}
       className="flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-raised"
@@ -536,5 +547,27 @@ function CompactRow({ agent }: { agent: Agent }) {
         Compact context
       </Button>
     </div>
+  );
+}
+
+function OpenInEditorButton({ path }: { path: string }) {
+  const { preferred } = useEditors();
+  if (!preferred) return null;
+  return (
+    <Button size="xs" variant="ghost" onClick={() => void openPathInEditor(path)}>
+      <Code2 className="!h-3.5 !w-3.5" />
+      Open in {preferred.name}
+    </Button>
+  );
+}
+
+function OpenInEditorCardRow({ path, className }: { path: string; className: string }) {
+  const { preferred } = useEditors();
+  if (!preferred) return null;
+  return (
+    <button type="button" className={className} onClick={() => void openPathInEditor(path)}>
+      <Code2 />
+      Open in {preferred.name}
+    </button>
   );
 }

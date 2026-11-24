@@ -441,6 +441,184 @@ fn score(path: &str, q: &str) -> Option<i64> {
     Some(2_000 + bonus * 10 - len_penalty)
 }
 
+// ---- lightweight workspace file viewer & editor ----------------------------
+
+/// Largest text file read in full for the workspace Files tab (512 KB).
+pub const MAX_WORKSPACE_FILE_BYTES: u64 = 512 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFile {
+    /// Normalized forward-slash path relative to the workspace root.
+    pub path: String,
+    pub content: String,
+    /// Opaque stamp (`<mtime-nanos>-<len>`) used to detect external edits before saving.
+    pub stamp: String,
+    pub size_bytes: u64,
+    pub binary: bool,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFileSave {
+    /// False when the file changed on disk since `expected_stamp` (nothing was written).
+    pub saved: bool,
+    pub file: WorkspaceFile,
+}
+
+fn normalize_rel_path(rel_path: &str) -> anyhow::Result<String> {
+    let norm = rel_path.trim().replace('\\', "/");
+    let norm = norm.trim_start_matches("./");
+    if norm.is_empty() || norm.starts_with('/') || norm.starts_with('~') || norm.contains('\0') {
+        anyhow::bail!("Invalid relative file path");
+    }
+    if norm.len() >= 2 && norm.as_bytes()[1] == b':' {
+        anyhow::bail!("Invalid relative file path");
+    }
+    for comp in Path::new(norm).components() {
+        match comp {
+            std::path::Component::ParentDir
+            | std::path::Component::RootDir
+            | std::path::Component::Prefix(_) => {
+                anyhow::bail!("File path must stay inside the workspace folder");
+            }
+            std::path::Component::Normal(seg) if seg == ".git" => {
+                anyhow::bail!("Files inside .git cannot be opened here");
+            }
+            _ => {}
+        }
+    }
+    Ok(norm.to_string())
+}
+
+fn resolve_contained(root: &Path, rel_path: &str) -> anyhow::Result<(String, PathBuf)> {
+    let norm = normalize_rel_path(rel_path)?;
+    let canon_root = std::fs::canonicalize(root)
+        .map_err(|e| anyhow::anyhow!("Couldn't open workspace folder: {e}"))?;
+    let full = canon_root.join(&norm);
+    let canon_file =
+        std::fs::canonicalize(&full).map_err(|_| anyhow::anyhow!("File not found: {norm}"))?;
+    if !canon_file.starts_with(&canon_root) {
+        anyhow::bail!("File path points outside the workspace folder");
+    }
+    Ok((norm, canon_file))
+}
+
+fn file_stamp(meta: &std::fs::Metadata) -> String {
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{mtime}-{}", meta.len())
+}
+
+/// Safely reads a text file inside `root` for the workspace Files tab (size-capped, symlink-contained).
+pub fn read_workspace_file(root: &Path, rel_path: &str) -> anyhow::Result<WorkspaceFile> {
+    use std::io::Read;
+    let (norm, canon_file) = resolve_contained(root, rel_path)?;
+    let meta = std::fs::metadata(&canon_file)?;
+    if !meta.is_file() {
+        anyhow::bail!("{norm} is not a regular file");
+    }
+    let size_bytes = meta.len();
+    let stamp = file_stamp(&meta);
+    let truncated = size_bytes > MAX_WORKSPACE_FILE_BYTES;
+    let to_read = size_bytes.min(MAX_WORKSPACE_FILE_BYTES) as usize;
+    let mut buf = Vec::with_capacity(to_read);
+    std::fs::File::open(&canon_file)?
+        .take(MAX_WORKSPACE_FILE_BYTES)
+        .read_to_end(&mut buf)?;
+
+    // Treat NUL bytes or non-UTF8 content as binary.
+    if buf.contains(&0) {
+        return Ok(WorkspaceFile {
+            path: norm,
+            content: String::new(),
+            stamp,
+            size_bytes,
+            binary: true,
+            truncated: false,
+        });
+    }
+    let content = match String::from_utf8(buf) {
+        Ok(s) => s,
+        Err(e) => {
+            if truncated {
+                // Truncating mid-UTF8 sequence on a large text file: trim trailing incomplete sequence.
+                let valid = e.utf8_error().valid_up_to();
+                let bytes = e.into_bytes();
+                if valid == 0 {
+                    return Ok(WorkspaceFile {
+                        path: norm,
+                        content: String::new(),
+                        stamp,
+                        size_bytes,
+                        binary: true,
+                        truncated: false,
+                    });
+                }
+                String::from_utf8_lossy(&bytes[..valid]).into_owned()
+            } else {
+                return Ok(WorkspaceFile {
+                    path: norm,
+                    content: String::new(),
+                    stamp,
+                    size_bytes,
+                    binary: true,
+                    truncated: false,
+                });
+            }
+        }
+    };
+
+    Ok(WorkspaceFile {
+        path: norm,
+        content,
+        stamp,
+        size_bytes,
+        binary: false,
+        truncated,
+    })
+}
+
+/// Safely saves edits to an existing text file inside `root`, refusing to clobber if the
+/// file changed on disk since `expected_stamp`.
+pub fn save_workspace_file(
+    root: &Path,
+    rel_path: &str,
+    content: &str,
+    expected_stamp: Option<&str>,
+) -> anyhow::Result<WorkspaceFileSave> {
+    if content.len() as u64 > MAX_WORKSPACE_FILE_BYTES {
+        anyhow::bail!(
+            "File is larger than {} KB; edit it in your code editor instead.",
+            MAX_WORKSPACE_FILE_BYTES / 1024
+        );
+    }
+    let current = read_workspace_file(root, rel_path)?;
+    if current.binary || current.truncated {
+        anyhow::bail!("This file can't be edited inline; open it in your code editor instead.");
+    }
+    if let Some(exp) = expected_stamp {
+        if current.stamp != exp {
+            return Ok(WorkspaceFileSave {
+                saved: false,
+                file: current,
+            });
+        }
+    }
+    let (_, canon_file) = resolve_contained(root, rel_path)?;
+    std::fs::write(&canon_file, content.as_bytes())?;
+    let updated = read_workspace_file(root, rel_path)?;
+    Ok(WorkspaceFileSave {
+        saved: true,
+        file: updated,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -581,5 +759,60 @@ mod tests {
         let files: Vec<String> = (0..200).map(|i| format!("src/d{i:03}/index.ts")).collect();
         let r = fuzzy_filter(&files, "index", 50);
         assert_eq!(r, files[..50].to_vec());
+    }
+
+    #[test]
+    fn workspace_file_read_save_conflict_binary_and_containment() {
+        let dir = crate::testutil::scratch("ws-files");
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("src/app.ts"), "const x = 1;\n").unwrap();
+        std::fs::write(dir.join("bin.dat"), [0u8, 1, 2, 3]).unwrap();
+
+        let f = read_workspace_file(&dir, "src/app.ts").unwrap();
+        assert_eq!(f.path, "src/app.ts");
+        assert_eq!(f.content, "const x = 1;\n");
+        assert!(!f.binary);
+        assert!(!f.truncated);
+
+        // Checked save succeeds with matching stamp.
+        let saved =
+            save_workspace_file(&dir, "src/app.ts", "const x = 2;\n", Some(&f.stamp)).unwrap();
+        assert!(saved.saved);
+        assert_eq!(saved.file.content, "const x = 2;\n");
+
+        // Stale stamp refuses to clobber.
+        let conflict =
+            save_workspace_file(&dir, "src/app.ts", "const x = 3;\n", Some("stale")).unwrap();
+        assert!(!conflict.saved);
+        assert_eq!(conflict.file.content, "const x = 2;\n");
+
+        // Binary files are detected and cannot be edited inline.
+        let bin = read_workspace_file(&dir, "bin.dat").unwrap();
+        assert!(bin.binary);
+        assert!(save_workspace_file(&dir, "bin.dat", "text", None).is_err());
+
+        // Traversal and .git are refused.
+        assert!(read_workspace_file(&dir, "../outside.txt").is_err());
+        assert!(read_workspace_file(&dir, ".git/config").is_err());
+        assert!(read_workspace_file(&dir, "/etc/passwd").is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn workspace_file_refuses_escaping_symlink() {
+        use std::os::unix::fs::symlink;
+        let outside = crate::testutil::scratch("ws-outside");
+        let dir = crate::testutil::scratch("ws-sym");
+        let secret = outside.join("secret.txt");
+        std::fs::write(&secret, "nope").unwrap();
+        symlink(&secret, dir.join("link.txt")).unwrap();
+
+        assert!(read_workspace_file(&dir, "link.txt").is_err());
+        assert!(save_workspace_file(&dir, "link.txt", "x", None).is_err());
+
+        let _ = std::fs::remove_dir_all(&outside);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

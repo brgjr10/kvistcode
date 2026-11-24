@@ -1,6 +1,7 @@
-import { ListChecks, SquareTerminal, type LucideIcon } from "lucide-react";
+import { Files, ListChecks, SquareTerminal, type LucideIcon } from "lucide-react";
 import { lazy, type ComponentType } from "react";
 import type { Agent } from "@/lib/types";
+import { FilesTab } from "./FilesTab";
 import { ScriptsTab } from "./ScriptsTab";
 
 // xterm is large: load it when a terminal is first shown, not with the app.
@@ -17,5 +18,6 @@ export interface WorkspaceTabDef {
 /** Tabs of the workspace panel, in order. Add a new entry here  to extend the panel. */
 export const WORKSPACE_TABS: WorkspaceTabDef[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal, Component: TerminalTab },
+  { id: "files", label: "Files", icon: Files, Component: FilesTab },
   { id: "scripts", label: "Scripts", icon: ListChecks, Component: ScriptsTab },
 ];

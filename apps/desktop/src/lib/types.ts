@@ -670,6 +670,8 @@ export interface Settings {
   tokenSaver: TokenSaverOptions;
   /** How the sidebar lists projects: the user's own order and named sections. */
   projectLayout: ProjectLayout;
+  /** Preferred external code editor id (e.g. "cursor", "vscode", "zed"); null = first detected. */
+  preferredEditor?: string | null;
 }
 
 /** How the sidebar lists projects. Paths are project folders as `projectKey` writes them. */
@@ -1336,4 +1338,28 @@ export interface WorktreeSetupState {
   scriptHash: string | null;
   error: string | null;
   output: string | null;
+}
+
+/** A detected code editor installed on this machine. */
+export interface EditorInfo {
+  id: string;
+  name: string;
+  command: string;
+  terminal: boolean;
+}
+
+/** A file read from an agent's workspace for the lightweight Files tab. */
+export interface WorkspaceFile {
+  path: string;
+  content: string;
+  stamp: string;
+  sizeBytes: number;
+  binary: boolean;
+  truncated: boolean;
+}
+
+/** Result of a checked save in the workspace Files tab (`saved` is false on external conflict). */
+export interface WorkspaceFileSave {
+  saved: boolean;
+  file: WorkspaceFile;
 }

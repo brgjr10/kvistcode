@@ -24,6 +24,10 @@ interface AgentWs {
   active: string | null;
   /** A first shell has been started for this agent; closing them all doesn't start another. */
   autoStarted: boolean;
+  /** File open in the lightweight Files tab (relative to the agent's cwd). */
+  file: string | null;
+  /** Optional 1-based line to highlight/scroll to in the Files tab. */
+  fileLine: number | null;
 }
 
 /** Live view of a terminal, set while its xterm is mounted. */
@@ -59,19 +63,27 @@ export function terminalView(id: string): WsView | undefined {
   return runtime.get(id)?.view;
 }
 
-const EMPTY: AgentWs = { tab: "terminal", terms: [], active: null, autoStarted: false };
+const EMPTY: AgentWs = { tab: "terminal", terms: [], active: null, autoStarted: false, file: null, fileLine: null };
 
 interface WsStore {
   byAgent: Record<string, AgentWs>;
   setTab: (agentId: string, tab: string) => void;
   setActive: (agentId: string, id: string) => void;
+  setFile: (agentId: string, file: string | null, line?: number | null) => void;
 }
 
 export const useWorkspace = create<WsStore>(() => ({
   byAgent: {},
   setTab: (agentId, tab) => patchAgent(agentId, { tab }),
   setActive: (agentId, id) => patchAgent(agentId, { tab: "terminal", active: id }),
+  setFile: (agentId, file, line = null) => patchAgent(agentId, { file, fileLine: line }),
 }));
+
+/** Opens a relative file (optionally at `line`) inside the agent's bottom Files tab. */
+export function openFileInWorkspace(agentId: string, relPath: string, line: number | null = null) {
+  patchAgent(agentId, { tab: "files", file: relPath, fileLine: line });
+  useUi.getState().setWorkspaceOpen(true);
+}
 
 function patchAgent(agentId: string, p: Partial<AgentWs>) {
   useWorkspace.setState((s) => ({

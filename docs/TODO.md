@@ -20,9 +20,9 @@ Fresh worktrees currently run only `git worktree add`, leaving out `.env` / untr
 ### 2. Open in Editor + lightweight Files tab
 `open_path` currently opens only the OS file manager, and the workspace panel only has Terminal and Scripts.
 
-- [ ] Detect installed editors (VS Code, Cursor, Zed, JetBrains IDEs, Neovim/terminal) and remember the user's preferred editor
-- [ ] Add "Open in `<Editor>`" in the agent header / context menu and on `file:line` links in timelines and diffs
-- [ ] Add a lightweight **Files** tab to `apps/desktop/src/components/workspace/tabs.ts`: project file tree, syntax-highlighted viewer, and basic edit/save for quick manual fixes (keep it light—do not turn Kvistcode into an IDE)
+- [x] Detect installed editors (VS Code, Cursor, Zed, JetBrains IDEs, Neovim/terminal) and remember the user's preferred editor
+- [x] Add "Open in `<Editor>`" in the agent header / context menu and on `file:line` links in timelines and diffs
+- [x] Add a lightweight **Files** tab to `apps/desktop/src/components/workspace/tabs.ts`: project file tree, syntax-highlighted viewer, and basic edit/save for quick manual fixes (keep it light—do not turn Kvistcode into an IDE)
 - **Touchpoints:** `apps/desktop/src-tauri/src/commands.rs` (`open_path`), `apps/desktop/src/components/workspace/tabs.ts`, `crates/kvistcode-core/src/files.rs`
 
 ### 3. Per-turn diffs & Thread Forking

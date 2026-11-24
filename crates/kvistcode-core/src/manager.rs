@@ -4116,6 +4116,44 @@ impl Core {
             .map_err(|e| anyhow!("{e}"))
     }
 
+    /// Sorted relative paths of files in the agent's workspace (for the lightweight Files tab).
+    pub async fn list_workspace_files(&self, agent_id: &str) -> Result<Vec<String>> {
+        let agent = self.agent(agent_id)?;
+        let cwd = PathBuf::from(&agent.cwd);
+        let dir = cwd.clone();
+        let files = tokio::task::spawn_blocking(move || crate::files::project_files(&dir))
+            .await
+            .map_err(|e| anyhow!("{e}"))??;
+        let arc = Arc::new(files.clone());
+        let mut cache = self.inner.file_cache.lock();
+        cache.retain(|_, (at, _)| at.elapsed() < FILE_CACHE_TTL);
+        cache.insert(cwd, (std::time::Instant::now(), arc));
+        Ok(files)
+    }
+
+    /// Reads a text file inside the agent's workspace folder (for the lightweight Files tab).
+    pub fn read_workspace_file(
+        &self,
+        agent_id: &str,
+        rel_path: &str,
+    ) -> Result<crate::files::WorkspaceFile> {
+        let agent = self.agent(agent_id)?;
+        crate::files::read_workspace_file(Path::new(&agent.cwd), rel_path)
+    }
+
+    /// Saves edits to a text file inside the agent's workspace folder, refusing to clobber
+    /// if the file changed on disk since `expected_stamp`.
+    pub fn save_workspace_file(
+        &self,
+        agent_id: &str,
+        rel_path: &str,
+        content: &str,
+        expected_stamp: Option<&str>,
+    ) -> Result<crate::files::WorkspaceFileSave> {
+        let agent = self.agent(agent_id)?;
+        crate::files::save_workspace_file(Path::new(&agent.cwd), rel_path, content, expected_stamp)
+    }
+
     /// Loads an image an agent referenced (e.g. a screenshot it saved) so the UI can
     /// show the picture. Readable: image files inside the agent's folders, and images
     /// in the system temp dir that the agent's own timeline mentions (by path or file

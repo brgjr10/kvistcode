@@ -6,6 +6,7 @@ import {
   ArrowUp,
   CalendarClock,
   CircleDot,
+  Code2,
   Download,
   Gauge,
   GitBranch,
@@ -42,6 +43,7 @@ import {
   stopAgent,
 } from "@/lib/actions";
 import { api } from "@/lib/api";
+import { openPathInEditor, useEditors } from "@/store/editors";
 import {
   ARCHIVED_KEY,
   groupByActivity,
@@ -1447,6 +1449,7 @@ const AgentRow = memo(function AgentRow({
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
+          <OpenInEditorContextItem path={agent.cwd} />
           <ContextMenuItem onSelect={() => void attempt("Couldn't open the folder", () => api.openPath(agent.cwd))}>
             <FolderOpen /> Open folder
           </ContextMenuItem>
@@ -1480,3 +1483,13 @@ const AgentRow = memo(function AgentRow({
     </li>
   );
 });
+
+function OpenInEditorContextItem({ path }: { path: string }) {
+  const { preferred } = useEditors();
+  if (!preferred) return null;
+  return (
+    <ContextMenuItem onSelect={() => void openPathInEditor(path)}>
+      <Code2 /> Open in {preferred.name}
+    </ContextMenuItem>
+  );
+}

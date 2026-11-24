@@ -51,6 +51,7 @@ import { SectionHeader, SettingGroup, SettingRow } from "@/components/settings/S
 import { ToolsSection } from "@/components/settings/ToolsSection";
 import { TemplatesSection } from "@/components/settings/TemplatesSection";
 import { ThemeCard } from "@/components/settings/ThemeCard";
+import { rememberPreferredEditor, useEditors } from "@/store/editors";
 import { openShortcutHelp } from "@/components/shell/ShortcutHelp";
 import {
   ANCHOR_OF,
@@ -1262,6 +1263,7 @@ function NewAgents({ settings }: { settings: Settings }) {
           >
             <Switch id="b-worktree" checked={settings.defaultWorktree} onCheckedChange={toggle("defaultWorktree")} />
           </SettingRow>
+          <PreferredEditorRow settings={settings} />
         </SettingGroup>
         <Spot id="replies">
           <ResponseStyleSettings settings={settings} />
@@ -1271,6 +1273,40 @@ function NewAgents({ settings }: { settings: Settings }) {
         </Spot>
       </div>
     </>
+  );
+}
+
+function PreferredEditorRow({ settings }: { settings: Settings }) {
+  const { editors, loaded } = useEditors();
+  const value = settings.preferredEditor ?? "__auto__";
+  const options = [
+    {
+      value: "__auto__",
+      label: editors.length > 0 ? `Auto (${editors[0].name})` : "Auto (first detected)",
+    },
+    ...editors.map((e) => ({ value: e.id, label: e.name })),
+  ];
+  return (
+    <SettingRow
+      title="Preferred code editor"
+      description={
+        !loaded
+          ? "Checking installed code editors…"
+          : editors.length === 0
+            ? "No supported code editor found on PATH (VS Code, Cursor, Zed, JetBrains, Neovim, Helix)."
+            : "Used by Open in editor and file:line links in timelines and diffs."
+      }
+      htmlFor="b-editor"
+    >
+      <Select
+        id="b-editor"
+        aria-label="Preferred code editor"
+        value={options.some((o) => o.value === value) ? value : "__auto__"}
+        disabled={editors.length === 0}
+        onValueChange={(v) => void rememberPreferredEditor(v === "__auto__" ? null : v)}
+        options={options}
+      />
+    </SettingRow>
   );
 }
 

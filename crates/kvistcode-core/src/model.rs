@@ -1401,6 +1401,8 @@ pub struct Settings {
     pub auto_compact_percent: Option<u8>,
     /// The other "Save tokens" options (output tidying, command output limit, helper model).
     pub token_saver: crate::token_saver::TokenSaverOptions,
+    /// Preferred external code editor id (e.g. "cursor", "vscode", "zed"); None = first detected.
+    pub preferred_editor: Option<String>,
 }
 
 /// The voice assistant: talk to Kvistcode through OpenAI's Realtime API. Off by default;
@@ -1773,6 +1775,14 @@ impl Settings {
         if let Some(problem) = self.token_saver.problem() {
             return Err(problem);
         }
+        if let Some(ref editor) = self.preferred_editor {
+            let trimmed = editor.trim();
+            if !trimmed.is_empty() && !crate::editors::is_known_editor(trimmed) {
+                return Err(format!(
+                    "Unknown preferred editor \u{201c}{trimmed}\u{201d}"
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -1909,6 +1919,16 @@ impl Settings {
             reset.push("autoCompactPercent");
         }
         reset.extend(self.token_saver.sanitize());
+        if let Some(editor) = self.preferred_editor.clone() {
+            let trimmed = editor.trim();
+            if trimmed.is_empty() || !crate::editors::is_known_editor(trimmed) {
+                self.preferred_editor = None;
+                reset.push("preferredEditor");
+            } else if trimmed != editor {
+                self.preferred_editor = Some(trimmed.to_string());
+                reset.push("preferredEditor");
+            }
+        }
         let hd = &mut self.helper_defaults;
         for (field, name) in [
             (&mut hd.account_id, "helperDefaults.accountId"),
@@ -1992,6 +2012,7 @@ impl Default for Settings {
             auto_compact_window: Some(crate::token_saver::PRESET_COMPACT_WINDOW),
             auto_compact_percent: None,
             token_saver: Default::default(),
+            preferred_editor: None,
         }
     }
 }

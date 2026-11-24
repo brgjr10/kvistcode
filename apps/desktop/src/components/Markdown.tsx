@@ -33,8 +33,10 @@ import { CopyButton } from "./CopyButton";
 import { LocalImage } from "./LocalImage";
 import { CodeText } from "./CodeText";
 import { langFromFence } from "@/lib/highlight";
+import { parseFileUri, parseInlineFileLine } from "@/lib/fileLinks";
 import { commandText, findHiddenChars, isShellLang, looksLikeCommand, revealHidden } from "@/lib/shellRun";
 import { useApp } from "@/store/app";
+import { openFileLineTarget } from "@/store/editors";
 import { RunButton } from "./RunButton";
 import { CODE_PREVIEW_LINES, codeCollapses } from "./timeline/collapse";
 import { FindTargetContext } from "./timeline/findInConversation";
@@ -275,6 +277,12 @@ const components: Components = {
       onClick={(e) => {
         e.preventDefault();
         if (!href) return;
+        const fileRef = parseFileUri(href);
+        if (fileRef) {
+          const aid = resolveAgentId(e.currentTarget);
+          const cwd = aid ? useApp.getState().agents[aid]?.cwd : undefined;
+          return void openFileLineTarget(aid ?? undefined, cwd, fileRef, e.shiftKey);
+        }
         const host = linkMismatchHost(e.currentTarget.textContent ?? textOf(children), href);
         if (!host) return void openLink(href, e.nativeEvent, resolveAgentId(e.currentTarget));
         toast(`This link goes to ${host}`, {
@@ -288,10 +296,11 @@ const components: Components = {
   ),
 };
 
-/** Keep local file paths (incl. file:// and Windows drive paths) for images; everything else uses the default filter. */
+/** Keep local file paths (incl. file:// and Windows drive paths) for images and file:// links; everything else uses the default filter. */
 function urlTransform(url: string, key: string): string {
   if (key === "src" && (/^file:\/\//i.test(url) || /^[A-Za-z]:[\\/]/.test(url))) return url;
   if (key === "src" && inlineImageSrc(url)) return url;
+  if (key === "href" && parseFileUri(url)) return url;
   return defaultUrlTransform(url);
 }
 
@@ -383,6 +392,36 @@ function useComponents(agentId: string | undefined): Components {
   return useMemo<Components>(
     () => ({
       ...components,
+      code: ({ className, children }) => {
+        const match = /language-([\w+-]+)/.exec(className ?? "");
+        const text = textOf(children);
+        const block = Boolean(match) || text.includes("\n");
+        if (block) return <CodeBlock lang={match ? match[1] : null} code={text} />;
+        const ref = agentId ? parseInlineFileLine(text) : null;
+        if (!ref) return <code>{children}</code>;
+        return (
+          <code
+            role="button"
+            tabIndex={0}
+            title={`Open ${text.trim()} in editor (Shift+click for Files tab)`}
+            onClick={(e) => {
+              e.preventDefault();
+              const cwd = useApp.getState().agents[agentId!]?.cwd;
+              void openFileLineTarget(agentId, cwd, ref, e.shiftKey);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                const cwd = useApp.getState().agents[agentId!]?.cwd;
+                void openFileLineTarget(agentId, cwd, ref, e.shiftKey);
+              }
+            }}
+            className="cursor-pointer underline decoration-line-strong decoration-dotted underline-offset-2 transition-colors hover:text-accent hover:decoration-accent"
+          >
+            {children}
+          </code>
+        );
+      },
       // Never fetch remote images from agent output (a prompt-injected agent could
       // exfiltrate data through the URL). Local files load through the backend.
       img: ({ src, alt }) => {
