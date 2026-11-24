@@ -73,6 +73,7 @@ import type {
   EditorInfo,
   WorkspaceFile,
   WorkspaceFileSave,
+  AutoReviewConfig,
 } from "./types";
 import type {
   InstructionDoc,
@@ -507,6 +508,19 @@ const tauriApi = {
       content,
       expectedStamp: expectedStamp ?? null,
     }),
+
+  // automatic cross-provider review
+  /** Sets or clears a per-agent auto-review override. */
+  setAgentAutoReview: (agentId: string, config: AutoReviewConfig | null) =>
+    invoke<Agent>("set_agent_auto_review", { agentId, config }),
+  /** Manually triggers (or re-runs) a cross-provider review for an agent. */
+  runAutoReview: (agentId: string) => invoke<Agent>("run_auto_review", { agentId }),
+  /** Dismisses one finding from an agent's auto-review state. */
+  dismissAutoReviewFinding: (agentId: string, findingId: string) =>
+    invoke<Agent>("dismiss_auto_review_finding", { agentId, findingId }),
+  /** Sends chosen auto-review findings (or all when empty) back to the agent to fix. */
+  sendAutoReviewFindings: (agentId: string, findingIds: string[]) =>
+    invoke<Agent>("send_auto_review_findings", { agentId, findingIds }),
 
   // remote control / share links
   remoteStatus: () => invoke<RemoteStatus>("remote_status"),

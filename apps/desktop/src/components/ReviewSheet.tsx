@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Rocket,
   Send,
+  ShieldCheck,
   Trash2,
   TriangleAlert,
   X,
@@ -26,7 +27,7 @@ import { PatchIndex } from "@/lib/patchIndex";
 import { findFileSlice, hunkPatch } from "@/lib/patchSlices";
 import { createLatest, HIDE_COMPACT_DEFAULT_OVER, isCompactFile, orderReviewFiles } from "@/lib/reviewFiles";
 import { prefillPr } from "@/lib/prFlow";
-import type { Agent, AgentDiff, BaseBranchStatus, ChangedFile } from "@/lib/types";
+import type { Agent, AgentDiff, AutoReviewFinding, BaseBranchStatus, ChangedFile } from "@/lib/types";
 import { basename, cn, errorMessage } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { openFileLineTarget, useEditors } from "@/store/editors";
@@ -34,6 +35,7 @@ import { refreshPrSoon } from "@/store/pr";
 import { useUi } from "@/store/ui";
 import { anchorKey, type FileReviewActions, type LineAnchor, type LineCommenting } from "./DiffView";
 import { formatReviewPrompt, useAgentComments, useReviewComments } from "./review/commentStore";
+import { AutoReviewPanel, InlineFindingCard } from "./review/AutoReviewPanel";
 import { LineCommentCard, LineCommentEditor } from "./review/LineComments";
 import { LFS_BLOCK_REASON, LfsNotice } from "./review/LfsNotice";
 import { ReviewDiffColumn, type DiffColumnHandle } from "./review/ReviewDiffColumn";
@@ -407,10 +409,62 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
     }
   };
 
-  // ---- line comments
+  // ---- line comments + auto-review suggested comments
+  const autoFindings = useMemo(() => agent.autoReviewState?.findings ?? [], [agent.autoReviewState?.findings]);
+  const matchFindingPath = useCallback(
+    (findingPath: string): string | null => {
+      const norm = findingPath.replace(/^\.?\//, "");
+      if (!norm || !diff) return null;
+      const hit =
+        diff.files.find((f) => f.path === norm) ??
+        diff.files.find((f) => f.path.endsWith(`/${norm}`) || norm.endsWith(`/${f.path}`));
+      return hit?.path ?? null;
+    },
+    [diff],
+  );
+  const jumpToFinding = useCallback(
+    (findingPath: string) => {
+      const target = matchFindingPath(findingPath) ?? findingPath;
+      if (diff?.files.some((f) => f.path === target)) jump(target);
+      else toast.info("File isn't in the current diff", { description: findingPath });
+    },
+    [diff, matchFindingPath],
+  );
+  const applyFindingAsComment = useCallback(
+    (finding: AutoReviewFinding) => {
+      const path = matchFindingPath(finding.path) ?? finding.path;
+      const parsed = index?.parsed(path);
+      const wantedLine = finding.line ?? 1;
+      const matched = parsed?.hunks
+        .flatMap((h) => h.lines)
+        .find((l) => l.newNo === wantedLine);
+      const anchor: LineAnchor = {
+        path,
+        side: "new",
+        line: matched?.newNo ?? wantedLine,
+        code: matched?.text ?? "",
+      };
+      const text =
+        finding.body && finding.body !== finding.title
+          ? `[${finding.severity.toUpperCase()}] ${finding.title}\n${finding.body}`
+          : `[${finding.severity.toUpperCase()}] ${finding.title}`;
+      useReviewComments.getState().add(agent.id, anchor, text);
+      void api.dismissAutoReviewFinding(agent.id, finding.id).catch(() => {});
+      toast.success("Added as review comment");
+      if (diff?.files.some((f) => f.path === path)) jump(path);
+    },
+    [agent.id, diff, index, matchFindingPath],
+  );
+
   // The `commenting` object is stable (it reads current state through a ref), so files only
   // re-render when their own `commentVersion` changes, and within a file only the touched chunk.
-  const live = useRef({ comments, editing, outdatedIds: new Set<string>() });
+  const live = useRef({
+    comments,
+    editing,
+    outdatedIds: new Set<string>(),
+    autoFindings,
+    applyFindingAsComment,
+  });
   // Return focus to the diff line after the editor closes, so keyboard review can continue.
   const returnFocus = useRef<HTMLElement | null>(null);
   const agentId = agent.id;
@@ -431,25 +485,63 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
       if (active instanceof HTMLElement && !active.closest("[data-comment-editor]")) returnFocus.current = active;
       setEditing({ key, commentId });
     };
+    const findingsAt = (anchor: LineAnchor) =>
+      anchor.side !== "new"
+        ? []
+        : live.current.autoFindings.filter(
+            (f) =>
+              f.line === anchor.line &&
+              (f.path === anchor.path ||
+                anchor.path.endsWith(`/${f.path}`) ||
+                f.path.endsWith(`/${anchor.path}`)),
+          );
     const store = useReviewComments.getState;
     return {
       onLineComment: (anchor) => openEditor(anchorKey(anchor), null),
       hasComments: (key) => live.current.comments.some((c) => anchorKey(c) === key),
       noteSignature: (key) => {
-        const { comments: cs, editing: ed } = live.current;
+        const { comments: cs, editing: ed, autoFindings: af } = live.current;
         let sig = ed?.key === key ? `e:${ed.commentId ?? "new"};` : "";
         for (const c of cs)
           if (anchorKey(c) === key) sig += `${c.id}:${c.text}:${live.current.outdatedIds.has(c.id) ? 1 : 0};`;
+        const [p, side, lineStr] = key.split("\u0000");
+        if (side === "new") {
+          const ln = Number(lineStr);
+          for (const f of af) {
+            if (f.line === ln && (f.path === p || p.endsWith(`/${f.path}`) || f.path.endsWith(`/${p}`))) {
+              sig += `af:${f.id}:${f.severity};`;
+            }
+          }
+        }
         return sig;
       },
       renderBelowLine: (anchor: LineAnchor) => {
         const key = anchorKey(anchor);
         const { comments: cs, editing: ed } = live.current;
         const here = cs.filter((c) => anchorKey(c) === key);
+        const suggested = findingsAt(anchor);
         const editingHere = ed?.key === key;
-        if (here.length === 0 && !editingHere) return null;
+        if (here.length === 0 && suggested.length === 0 && !editingHere) return null;
         return (
           <div className="space-y-2">
+            {suggested.map((f) => (
+              <InlineFindingCard
+                key={f.id}
+                finding={f}
+                onApply={() => live.current.applyFindingAsComment(f)}
+                onSend={() => {
+                  void api.sendAutoReviewFindings(agentId, [f.id]).then(
+                    () => toast.success("Sent finding to the agent"),
+                    (e) => toast.error("Couldn't send finding", { description: errorMessage(e) }),
+                  );
+                }}
+                onDismiss={() => {
+                  void api.dismissAutoReviewFinding(agentId, f.id).catch((e) =>
+                    toast.error("Couldn't dismiss finding", { description: errorMessage(e) }),
+                  );
+                }}
+              />
+            ))}
             {here.map((c) =>
               editingHere && ed?.commentId === c.id ? (
                 <LineCommentEditor
@@ -559,15 +651,19 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
     [comments, index],
   );
 
-  /** Per-file signature of comments + editor state: the memo key that re-renders just that file. */
+  /** Per-file signature of comments + editor state + auto-review findings: the memo key that re-renders just that file. */
   const fileVersions = useMemo(() => {
     const m = new Map<string, string>();
     const add = (path: string, part: string) => m.set(path, (m.get(path) ?? "") + part);
     for (const c of comments) add(c.path, `${c.id}:${c.side}${c.line}:${c.text}:${outdatedIds.has(c.id) ? 1 : 0};`);
     if (editing) add(editing.key.split("\u0000")[0], `e:${editing.key}:${editing.commentId ?? "new"};`);
+    for (const f of autoFindings) {
+      const target = matchFindingPath(f.path);
+      if (target) add(target, `af:${f.id}:${f.line ?? 0}:${f.severity};`);
+    }
     return m;
-  }, [comments, editing, outdatedIds]);
-  live.current = { comments, editing, outdatedIds };
+  }, [comments, editing, outdatedIds, autoFindings, matchFindingPath]);
+  live.current = { comments, editing, outdatedIds, autoFindings, applyFindingAsComment };
 
   const sendComments = () => {
     // A comment still being written isn't among the saved ones: sending now would drop it.
@@ -650,6 +746,21 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
             )}
           </div>
         </div>
+        {!agent.autoReviewState && hasChanges && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void api.runAutoReview(agent.id).catch((e) =>
+                toast.error("Couldn't run review", { description: errorMessage(e) }),
+              );
+            }}
+            title="Run a cross-provider AI review on this diff"
+          >
+            <ShieldCheck className="!h-3.5 !w-3.5" />
+            AI review
+          </Button>
+        )}
         <Button size="icon-sm" variant="ghost" aria-label="Refresh diff" onClick={() => void load()}>
           <RefreshCw className={cn(loading && "animate-spin")} />
         </Button>
@@ -743,6 +854,11 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
             </div>
           ) : index ? (
             <>
+              <AutoReviewPanel
+                agent={agent}
+                onJump={jumpToFinding}
+                onApplyComment={applyFindingAsComment}
+              />
               {ordered.compactCount > 0 && hideCompact && ordered.textCount === 0 && (
                 <p className="pt-4 text-center text-small text-muted">
                   Only binary/LFS files changed. Use “Show {ordered.compactCount.toLocaleString()} binary/LFS files” to

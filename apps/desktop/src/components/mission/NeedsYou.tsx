@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Plus, Radar } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { NeedsYouDetail } from "@/components/mission/NeedsYouDetail";
+import { AutoReviewBadge } from "@/components/review/AutoReviewPanel";
 import { ResumesAt } from "@/components/agent/ResumesAt";
 import { ProviderGlyph } from "@/components/ProviderGlyph";
 import { RelTime } from "@/components/RelTime";
@@ -301,7 +302,7 @@ const QueueRow = memo(function QueueRow({
           <ProviderGlyph provider={agent.provider} customAgentId={agent.customAgentId} size="sm" className="mt-0.5" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-small font-medium text-fg">{agent.title}</span>
-            <span className="mt-1 flex items-center gap-1.5">
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
               <span className={cn("rounded-full border px-1.5 text-micro font-medium", REASON_TONE[reason])}>
                 {reason === "rate_limited" ? (
                   <ResumesAt agent={agent} fallback={reasonLabel(reason, asking, backgroundRunning)} />
@@ -309,6 +310,7 @@ const QueueRow = memo(function QueueRow({
                   reasonLabel(reason, asking, backgroundRunning)
                 )}
               </span>
+              {agent.autoReviewState && <AutoReviewBadge state={agent.autoReviewState} compact />}
               <span className="text-micro text-steel">
                 <RelTime ts={agent.lastActivityAt} side="right" />
               </span>

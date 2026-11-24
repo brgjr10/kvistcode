@@ -4,7 +4,15 @@
 import type { InstructionDoc, InstructionFileName } from "./projectConfig";
 import type { Agent, McpServer, Provider } from "./types";
 
-export type ToolkitTab = "instructions" | "mcp" | "skills" | "permissions" | "automation" | "worktrees" | "sandbox";
+export type ToolkitTab =
+  | "instructions"
+  | "mcp"
+  | "skills"
+  | "permissions"
+  | "automation"
+  | "worktrees"
+  | "sandbox"
+  | "auto_review";
 
 // ---------------------------------------------------------------- instructions
 

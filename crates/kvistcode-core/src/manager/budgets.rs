@@ -294,6 +294,13 @@ impl Core {
             .status(Local::now().date_naive(), &daily)
     }
 
+    /// Whether `agent_id` has reached any configured budget/turn cap (regardless of action).
+    /// Used by automatic loops (like auto-review critical auto-fix) to avoid spending past caps.
+    pub(crate) fn budget_has_hit(&self, agent_id: &str) -> bool {
+        self.budget_readings(agent_id, false)
+            .is_some_and(|(_, _, readings)| readings.iter().any(|r| r.level() == BudgetLevel::Hit))
+    }
+
     /// Startup: an interrupted agent over a limit (with the Pause action) stays
     /// stopped instead of auto-resuming into more spend.
     pub(super) fn budget_blocks_resume(&self, agent_id: &str) -> bool {

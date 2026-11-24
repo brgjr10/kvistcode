@@ -36,9 +36,9 @@ Kvistcode already snapshots a git ref before every user message (`refs/kvistcode
 ### 4. Automatic cross-provider review ("Review before Needs you")
 Turn Kvistcode's multi-provider accounts and Handoff into a local, BYOS equivalent of Cursor Bugbot.
 
-- [ ] Add an optional per-project / per-agent toggle: when an agent finishes with code changes, automatically run a review pass with a chosen second provider/model (e.g., Codex reviewing Claude's diff)
-- [ ] Display review findings directly on `ReviewSheet.tsx` (as suggested line comments) and on the Mission Control "Needs you" card
-- [ ] Optional "send critical findings back once" loop with clear budget/turn caps
+- [x] Add an optional per-project / per-agent toggle: when an agent finishes with code changes, automatically run a review pass with a chosen second provider/model (e.g., Codex reviewing Claude's diff)
+- [x] Display review findings directly on `ReviewSheet.tsx` (as suggested line comments) and on the Mission Control "Needs you" card
+- [x] Optional "send critical findings back once" loop with clear budget/turn caps
 - **Touchpoints:** `crates/kvistcode-core/src/manager.rs`, `apps/desktop/src/components/ReviewSheet.tsx`, `apps/desktop/src/components/mission/`
 
 ### 5. Expose Kvistcode as a local MCP server

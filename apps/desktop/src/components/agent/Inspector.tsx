@@ -11,6 +11,8 @@ import {
   GitPullRequest,
   Hash,
   ListChecks,
+  RefreshCw,
+  ShieldCheck,
   Shrink,
   SquareTerminal,
   UserRound,
@@ -44,6 +46,10 @@ import { BillingSummary } from "../usage/BillingSummary";
 import { CopyButton } from "../CopyButton";
 import { PlanChecklist } from "../timeline/PlanChecklist";
 import { PrChip } from "./PrChip";
+import { normProject } from "@/lib/toolkit";
+import { openToolkit } from "@/store/toolkit";
+import { AutoReviewBadge } from "../review/AutoReviewPanel";
+import { Switch } from "../ui/switch";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 import { Spinner } from "../ui/misc";
@@ -231,6 +237,8 @@ export const Inspector = memo(function Inspector({
         )}
       </Section>
 
+      {!agent.parentId && <AutoReviewSection agent={agent} />}
+
       <Section title="Session" icon={<Hash />}>
         <dl className="space-y-2.5 text-caption">
           <Row label="Session">
@@ -345,6 +353,136 @@ export const Inspector = memo(function Inspector({
 
 function CardRule() {
   return <div className="mx-2 my-1 h-px bg-line/70" aria-hidden />;
+}
+
+/** Per-agent auto-review override toggle, manual trigger, and latest status summary. */
+function AutoReviewSection({ agent }: { agent: Agent }) {
+  const projectAutoReview = useApp((s) => s.settings?.projectAutoReview);
+  const [busy, setBusy] = useState(false);
+
+  const projKey = normProject(agent.projectPath);
+  const projCfg =
+    projectAutoReview?.[projKey] ??
+    Object.entries(projectAutoReview ?? {}).find(([k]) => normProject(k) === projKey)?.[1] ??
+    null;
+  const effective = agent.autoReview ?? projCfg;
+  const enabled = effective?.enabled ?? false;
+  const overridden = agent.autoReview != null;
+  const state = agent.autoReviewState ?? null;
+  const running = state?.status === "running";
+
+  const toggle = async (nextEnabled: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const base = agent.autoReview ??
+        projCfg ?? {
+          enabled: false,
+          provider: null,
+          accountId: null,
+          customAgentId: null,
+          model: null,
+          autoFixCritical: false,
+        };
+      await attempt("Couldn't update auto-review", () =>
+        api.setAgentAutoReview(agent.id, { ...base, enabled: nextEnabled }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetToProject = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await attempt("Couldn't reset auto-review", () => api.setAgentAutoReview(agent.id, null));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runNow = async () => {
+    if (busy || running) return;
+    setBusy(true);
+    try {
+      await attempt("Couldn't start review", () => api.runAutoReview(agent.id));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section
+      title="Auto-review"
+      icon={<ShieldCheck />}
+      right={
+        state ? (
+          <AutoReviewBadge state={state} compact />
+        ) : (
+          <span className="text-micro text-steel">{enabled ? "On" : "Off"}</span>
+        )
+      }
+    >
+      <div className="space-y-2.5 text-caption">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-fg">Review after turns</div>
+            <div className="text-micro text-steel">
+              {overridden
+                ? "Overridden for this agent"
+                : projCfg?.enabled
+                  ? "Following project default (on)"
+                  : "Following project default (off)"}
+            </div>
+          </div>
+          <Switch
+            aria-label="Auto-review after turns"
+            checked={enabled}
+            disabled={busy}
+            onCheckedChange={(v) => void toggle(v)}
+          />
+        </div>
+
+        {state && (
+          <div className="rounded-lg border border-line bg-base/50 px-2.5 py-2">
+            <p className="text-micro leading-relaxed text-muted">{state.error || state.summary}</p>
+            {state.findings.length > 0 && (
+              <Button
+                size="xs"
+                variant="secondary"
+                className="mt-2 w-full"
+                onClick={() => useUi.getState().setReviewAgent(agent.id)}
+              >
+                <GitCompare className="!h-3.5 !w-3.5" />
+                Inspect {state.findings.length} finding{state.findings.length === 1 ? "" : "s"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="xs" variant="secondary" disabled={busy || running} onClick={() => void runNow()}>
+            <RefreshCw className={cn("!h-3 !w-3", running && "animate-spin")} />
+            {running ? "Reviewing…" : "Run review now"}
+          </Button>
+          {overridden ? (
+            <Button size="xs" variant="ghost" disabled={busy} onClick={() => void resetToProject()}>
+              Use project default
+            </Button>
+          ) : (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => openToolkit("auto_review", agent.projectPath)}
+            >
+              Configure…
+            </Button>
+          )}
+        </div>
+      </div>
+    </Section>
+  );
 }
 
 /** Minimal: the top of the details card. What you do with the agent's work: review it, see its branch, open a pull request. */

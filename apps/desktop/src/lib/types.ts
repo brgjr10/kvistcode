@@ -251,6 +251,10 @@ export interface Agent {
   worktreeSetup?: WorktreeSetupState | null;
   /** Present while the agent's live process is running inside a Bubblewrap or Docker sandbox. */
   sandboxActive?: ActiveSandbox | null;
+  /** Optional per-agent override for automatic cross-provider review. */
+  autoReview?: AutoReviewConfig | null;
+  /** Latest automatic cross-provider review result for this agent. */
+  autoReviewState?: AutoReviewState | null;
   /** Set while the agent waits at a spending limit for you to choose (a "Needs you" item). */
   budgetHold?: BudgetHold | null;
   /** Turns this agent has completed (counted by the backend; null = not counted yet). Turn limits measure this. */
@@ -681,6 +685,8 @@ export interface Settings {
   trustedWorktreeHooks?: Record<string, string>;
   /** Per-project OS/container sandbox configuration, by project folder. */
   projectSandboxes?: Record<string, ProjectSandboxConfig>;
+  /** Per-project automatic cross-provider review configuration, by project folder. */
+  projectAutoReview?: Record<string, AutoReviewConfig>;
   /** Slack, Discord and webhook targets for alerts (ntfy has its own field above). */
   alertTargets: AlertTarget[];
   /** Claude agents summarize their conversation at this many tokens (100k..1M); null = Claude Code's default. */
@@ -1437,4 +1443,39 @@ export interface SandboxCapabilities {
   dockerAvailable: boolean;
   dockerPath: string | null;
   platform: string;
+}
+
+/** Per-project or per-agent automatic cross-provider review configuration. */
+export interface AutoReviewConfig {
+  enabled: boolean;
+  provider: Provider | null;
+  accountId: string | null;
+  customAgentId: string | null;
+  model: string | null;
+  autoFixCritical: boolean;
+}
+
+export type AutoReviewStatus = "running" | "passed" | "findings" | "failed";
+
+export type AutoReviewSeverity = "critical" | "warning" | "suggestion";
+
+export interface AutoReviewFinding {
+  id: string;
+  severity: AutoReviewSeverity;
+  path: string;
+  line: number | null;
+  title: string;
+  body: string;
+}
+
+export interface AutoReviewState {
+  status: AutoReviewStatus;
+  reviewerProvider: Provider;
+  reviewerModel: string | null;
+  summary: string;
+  findings: AutoReviewFinding[];
+  checkedAt: number;
+  autoFixSent: boolean;
+  error: string | null;
+  diffFingerprint?: string | null;
 }

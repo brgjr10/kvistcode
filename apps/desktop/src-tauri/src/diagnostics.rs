@@ -159,6 +159,7 @@ pub fn settings_section(settings: &Settings) -> String {
             "projectWorktrees",
             "trustedWorktreeHooks",
             "projectSandboxes",
+            "projectAutoReview",
         ] {
             if let Some(slot) = o.get_mut(key) {
                 let n = slot
@@ -739,6 +740,17 @@ mod tests {
                 extra_read_paths: vec!["/home/zed/private-certs".into()],
             },
         );
+        s.project_auto_review.insert(
+            "/home/zed/secret-review-project".into(),
+            kvistcode_core::auto_review::AutoReviewConfig {
+                enabled: true,
+                provider: Some(kvistcode_core::Provider::Codex),
+                account_id: Some("secret-acc-id".into()),
+                custom_agent_id: None,
+                model: Some("private-model-name".into()),
+                auto_fix_critical: true,
+            },
+        );
         let out = settings_section(&s);
         assert!(!out.contains("webhooksecret123") && !out.contains("hooks.slack.com"));
         assert!(!out.contains("ops-room") && !out.contains("secret-project"));
@@ -746,6 +758,16 @@ mod tests {
         assert!(!out.contains("secret-sandbox-project") && !out.contains("private-certs"));
         assert!(
             out.contains("\"projectSandboxes\": \"1 configured (hidden)\""),
+            "{out}"
+        );
+        assert!(
+            !out.contains("secret-review-project")
+                && !out.contains("secret-acc-id")
+                && !out.contains("private-model-name"),
+            "projectAutoReview leaked: {out}"
+        );
+        assert!(
+            out.contains("\"projectAutoReview\": \"1 configured (hidden)\""),
             "{out}"
         );
         assert!(out.contains("1 configured (hidden)"), "{out}");

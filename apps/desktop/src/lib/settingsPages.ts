@@ -188,6 +188,12 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
     tab: "sandbox",
     keywords: ["sandbox", "bwrap", "bubblewrap", "docker", "container", "isolation", "network", "unattended"],
   },
+  {
+    label: "Automatic cross-provider review",
+    page: "projects",
+    tab: "auto_review",
+    keywords: ["auto review", "auto-review", "bugbot", "reviewer", "cross-provider", "needs you", "critical"],
+  },
   { label: "Templates", page: "templates", keywords: ["prompts", "snippets"] },
   {
     label: "Remote access",

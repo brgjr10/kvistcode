@@ -1864,9 +1864,17 @@ impl AgentCtx {
         // The agent is idle now: helpers merge into it, or it merges into its main.
         if let (Some(core), Ok(rt)) = (self.core.upgrade(), tokio::runtime::Handle::try_current()) {
             let id = self.agent_id.clone();
+            let completed = matches!(
+                outcome,
+                TurnOutcome::Completed | TurnOutcome::CompletedWithNote(_)
+            );
+            let held = hold.is_some();
             rt.spawn(async move {
                 core.on_turn_idle(&id).await;
                 core.refresh_account_usage_for_agent(&id).await;
+                if completed && !held {
+                    core.maybe_run_auto_review(&id).await;
+                }
             });
         }
         // Any end but a usage limit closes the wait for one (a failed resume that hits the limit

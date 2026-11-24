@@ -3418,6 +3418,97 @@ export const mockApi: KvistcodeApi = {
     return clone(a);
   },
 
+  async setAgentAutoReview(agentId, config) {
+    await sleep(40);
+    const a = getAgent(agentId);
+    a.autoReview = config ? clone(config) : null;
+    a.updatedAt = Date.now();
+    emit({ type: "agent_updated", agent: clone(a) });
+    return clone(a);
+  },
+
+  async runAutoReview(agentId) {
+    const a = getAgent(agentId);
+    const projKey = a.projectPath.trim().replace(/[\\/]+$/, "");
+    const projCfg = db.settings.projectAutoReview?.[projKey] ?? db.settings.projectAutoReview?.[a.projectPath];
+    const cfg = a.autoReview ?? projCfg ?? null;
+    const reviewerProvider: Provider = cfg?.provider ?? (a.provider === "claude" ? "codex" : "claude");
+    const reviewerModel = cfg?.model ?? null;
+    a.autoReviewState = {
+      status: "running",
+      reviewerProvider,
+      reviewerModel,
+      summary: `Reviewing changes with ${reviewerProvider}…`,
+      findings: [],
+      checkedAt: Date.now(),
+      autoFixSent: a.autoReviewState?.autoFixSent ?? false,
+      error: null,
+    };
+    emit({ type: "agent_updated", agent: clone(a) });
+    const snap = clone(a);
+    setTimeout(() => {
+      const cur = db.agents.find((x) => x.id === agentId);
+      if (!cur) return;
+      cur.autoReviewState = {
+        status: "findings",
+        reviewerProvider,
+        reviewerModel,
+        summary: "Found 1 warning in the diff.",
+        findings: [
+          {
+            id: "finding-1",
+            severity: "warning",
+            path: "src/index.ts",
+            line: 12,
+            title: "Check error handling on async call",
+            body: "Add a catch handler so rejected promises are surfaced instead of failing silently.",
+          },
+        ],
+        checkedAt: Date.now(),
+        autoFixSent: cur.autoReviewState?.autoFixSent ?? false,
+        error: null,
+      };
+      emit({ type: "agent_updated", agent: clone(cur) });
+    }, 350);
+    return snap;
+  },
+
+  async dismissAutoReviewFinding(agentId, findingId) {
+    await sleep(30);
+    const a = getAgent(agentId);
+    if (a.autoReviewState) {
+      a.autoReviewState = {
+        ...a.autoReviewState,
+        findings: a.autoReviewState.findings.filter((f) => f.id !== findingId),
+      };
+      if (a.autoReviewState.status === "findings" && a.autoReviewState.findings.length === 0) {
+        a.autoReviewState.status = "passed";
+        a.autoReviewState.summary = "All findings dismissed.";
+      }
+      emit({ type: "agent_updated", agent: clone(a) });
+    }
+    return clone(a);
+  },
+
+  async sendAutoReviewFindings(agentId, findingIds) {
+    const a = getAgent(agentId);
+    const st = a.autoReviewState;
+    if (!st || st.findings.length === 0) throw new Error("This agent has no review findings to send");
+    const chosen = findingIds.length === 0 ? st.findings : st.findings.filter((f) => findingIds.includes(f.id));
+    if (chosen.length === 0) throw new Error("No matching review findings to send");
+    const lines = chosen.map((f) => `- [${f.severity.toUpperCase()}] ${f.path}${f.line ? `:${f.line}` : ""} — ${f.title}: ${f.body}`);
+    await mockApi.sendPrompt(agentId, `Cross-provider code review findings to address:\n\n${lines.join("\n")}`);
+    const sent = new Set(chosen.map((f) => f.id));
+    a.autoReviewState = {
+      ...st,
+      findings: st.findings.filter((f) => !sent.has(f.id)),
+      status: st.findings.every((f) => sent.has(f.id)) ? "passed" : st.status,
+      summary: st.findings.every((f) => sent.has(f.id)) ? "Findings sent to the agent." : st.summary,
+    };
+    emit({ type: "agent_updated", agent: clone(a) });
+    return clone(a);
+  },
+
   async detectEditors() {
     await sleep(30);
     return [

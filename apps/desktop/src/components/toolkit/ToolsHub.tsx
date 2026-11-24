@@ -2,6 +2,7 @@ import { FileText, FolderOpen, GitBranch, Plug, Puzzle, Shield, ShieldCheck, Wor
 import { useEffect, useMemo } from "react";
 import { McpSection } from "@/components/settings/McpSection";
 import { ProjectSandbox } from "@/components/settings/ProjectSandbox";
+import { ProjectAutoReview } from "@/components/settings/ProjectAutoReview";
 import { ProjectRules } from "@/components/settings/ProjectSettingsSection";
 import { ProjectWorktrees } from "@/components/settings/ProjectWorktrees";
 import { SectionHeader } from "@/components/settings/SettingRow";
@@ -48,7 +49,8 @@ export function ToolsHub({ servers }: { servers: McpServer[] }) {
     tab === "permissions" ||
     tab === "automation" ||
     tab === "worktrees" ||
-    tab === "sandbox";
+    tab === "sandbox" ||
+    tab === "auto_review";
   useEffect(() => {
     if (!project && needsProject) setTab("mcp");
   }, [project, needsProject, setTab]);
@@ -165,6 +167,15 @@ export function ToolsHub({ servers }: { servers: McpServer[] }) {
               </>
             ),
           },
+          {
+            value: "auto_review",
+            disabled: !project,
+            label: (
+              <>
+                <ShieldCheck className="h-3.5 w-3.5" /> Auto-review
+              </>
+            ),
+          },
         ]}
       />
 
@@ -178,6 +189,8 @@ export function ToolsHub({ servers }: { servers: McpServer[] }) {
         <ProjectWorktrees project={project} />
       ) : tab === "sandbox" && project ? (
         <ProjectSandbox project={project} />
+      ) : tab === "auto_review" && project ? (
+        <ProjectAutoReview project={project} />
       ) : (tab === "permissions" || tab === "automation") && project ? (
         <ProjectRules project={project} show={tab} />
       ) : null}
