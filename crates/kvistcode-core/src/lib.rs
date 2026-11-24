@@ -14,6 +14,7 @@ pub mod local;
 pub mod local_assist;
 pub mod local_ctx;
 pub mod local_health;
+pub mod local_mcp;
 pub mod local_prefs;
 pub mod model;
 pub mod newproject;
@@ -62,6 +63,7 @@ pub use jsonrpc::kill_all_children;
 pub async fn git_work_tree(path: &std::path::Path) -> bool {
     git::repo_info(path).await.is_some()
 }
+pub use local_mcp::LocalMcpSettings;
 pub use manager::Core;
 pub use model::*;
 

@@ -17,6 +17,7 @@ import { cleanKeyValues, KeyValueEditor, validateKeyValues, type KeyValueRow } f
 import { RestartNote } from "@/components/toolkit/RestartNote";
 import { FieldError } from "./TemplatesSection";
 import { McpPasteDialog } from "./McpPasteDialog";
+import { LocalMcpSection } from "./LocalMcpSection";
 import { McpTestButton, McpTestOutcome } from "./McpTestResult";
 import { useMcpTestResult, useMcpTests } from "./mcpTest";
 
@@ -146,6 +147,8 @@ export function McpSection({ servers, project }: { servers: McpServer[]; project
       </div>
 
       <RestartNote className="mb-5" changed={servers !== firstServers.current} />
+
+      <LocalMcpSection />
 
       {project &&
         group(project, scoped.project, `Only ${projectName}`, "Only agents running in this project get these.")}

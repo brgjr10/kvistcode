@@ -656,6 +656,8 @@ export interface Settings {
   defaultPermissionMode: "auto" | "ask";
   customAgents: CustomAgent[];
   remote: RemoteSettings;
+  /** Opt-in loopback-only MCP server exposing Kvistcode's agent fleet. */
+  localMcp?: LocalMcpSettings;
   voice: VoiceSettings;
   voiceAssistant: VoiceAssistantSettings;
   /** Sending while an agent works: ask each time, queue it, or start a helper agent. */
@@ -928,6 +930,31 @@ export interface RemoteSettings {
   tailscale?: boolean;
   /** The address LAN access listens on; null picks automatically (Wi-Fi/Ethernet first). */
   lanAddress?: string | null;
+}
+
+export interface LocalMcpSettings {
+  /** Strictly opt-in: off by default. */
+  enabled: boolean;
+  /** Loopback port (127.0.0.1 only). */
+  port: number;
+  /** Expose read-only fleet tools (list_agents, get_agent_status, get_diff, read_summary). */
+  allowReadTools: boolean;
+  /** Explicit opt-in for write tools (spawn_agent, send_message). */
+  allowWriteTools: boolean;
+  /** Automatically attach Kvistcode's local MCP server to spawned Kvistcode agents. */
+  exposeToAgents: boolean;
+}
+
+export interface LocalMcpStatus {
+  enabled: boolean;
+  running: boolean;
+  port: number;
+  url: string | null;
+  tokenPreview: string | null;
+  token: string | null;
+  configSnippet: string | null;
+  toolsEnabled: string[];
+  error: string | null;
 }
 
 /** One of this computer's network addresses LAN access can listen on. */

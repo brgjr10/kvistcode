@@ -3,13 +3,14 @@ import { create } from "zustand";
 import type { Settings } from "@/lib/types";
 import { useApp } from "@/store/app";
 
-export type SettingsField = "failover" | "permissionMode" | "port" | "quietHours" | "ntfy" | "alerts";
+export type SettingsField = "failover" | "permissionMode" | "port" | "localMcpPort" | "quietHours" | "ntfy" | "alerts";
 
 /** Which field a backend error message belongs to (by its prefix). */
 export function fieldForError(message: string): SettingsField | null {
   if (/^Unknown failover/i.test(message)) return "failover";
   if (/^Unknown permission mode/i.test(message)) return "permissionMode";
   if (/^The remote control port/i.test(message)) return "port";
+  if (/^The local MCP port/i.test(message)) return "localMcpPort";
   if (/^Quiet hours/i.test(message)) return "quietHours";
   if (/^Phone push URL:/i.test(message)) return "ntfy";
   if (/^Alerts:/i.test(message)) return "alerts";
@@ -22,6 +23,7 @@ export function fieldsOf(patch: Partial<Settings>): SettingsField[] {
   if ("failover" in patch) out.push("failover");
   if ("defaultPermissionMode" in patch) out.push("permissionMode");
   if ("remote" in patch) out.push("port");
+  if ("localMcp" in patch) out.push("localMcpPort");
   if ("quietHours" in patch) out.push("quietHours");
   if ("ntfyUrl" in patch) out.push("ntfy");
   if ("alertTargets" in patch) out.push("alerts");

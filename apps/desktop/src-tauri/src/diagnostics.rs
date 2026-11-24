@@ -782,6 +782,14 @@ mod tests {
     }
 
     #[test]
+    fn local_mcp_token_is_scrubbed_from_logs() {
+        let tok = kvistcode_core::local_mcp::generate_token();
+        let log = format!("INFO Authorization: Bearer {tok}\nDEBUG raw={tok}\n");
+        let out = scrub(&log);
+        assert!(!out.contains(&tok), "leaked local MCP token: {out}");
+    }
+
+    #[test]
     fn home_becomes_tilde() {
         let out = tilde(
             "at /home/zed/work and /home/zed",

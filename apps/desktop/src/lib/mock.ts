@@ -72,6 +72,7 @@ import type {
   LocalModel,
   LocalProbe,
   LocalHealth,
+  LocalMcpStatus,
   LoadedModel,
   Hardware,
   LocalPrefs,
@@ -3642,6 +3643,15 @@ export const mockApi: KvistcodeApi = {
     return delay(remoteStatus(), 200);
   },
 
+  async localMcpStatus() {
+    return delay(mockLocalMcpStatus(), 100);
+  },
+
+  async localMcpRotateToken() {
+    mockLocalMcpToken = `${randomToken()}${randomToken()}`;
+    return delay(mockLocalMcpStatus(), 150);
+  },
+
   async createShareLink(agentId, hours) {
     if (!db.settings.remote.enabled) throw new Error("Turn on remote access to create share links.");
     const a = getAgent(agentId);
@@ -4047,6 +4057,52 @@ function remoteStatus() {
         ? { name: "ufw", command: `sudo ufw allow from 192.168.1.0/24 to any port ${r.port} proto tcp` }
         : null,
     tailscale,
+  });
+}
+
+let mockLocalMcpToken = "mocklocalmcptoken0123456789abcdef0123456789abcdef0123456789abcd";
+
+function mockLocalMcpStatus(): LocalMcpStatus {
+  const cfg = db.settings.localMcp ?? {
+    enabled: false,
+    port: 47822,
+    allowReadTools: true,
+    allowWriteTools: false,
+    exposeToAgents: false,
+  };
+  const running = cfg.enabled;
+  const url = running ? `http://127.0.0.1:${cfg.port}/mcp` : null;
+  const token = running ? mockLocalMcpToken : null;
+  const tokenPreview = token ? `••••${token.slice(-4)}` : null;
+  const configSnippet = token
+    ? JSON.stringify(
+        {
+          mcpServers: {
+            kvistcode: {
+              type: "http",
+              url: `http://127.0.0.1:${cfg.port}/mcp`,
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          },
+        },
+        null,
+        2,
+      )
+    : null;
+  const toolsEnabled = [
+    ...(cfg.allowReadTools ? ["list_agents", "get_agent_status", "get_diff", "read_summary"] : []),
+    ...(cfg.allowWriteTools ? ["spawn_agent", "send_message"] : []),
+  ];
+  return clone({
+    enabled: cfg.enabled,
+    running,
+    port: cfg.port,
+    url,
+    tokenPreview,
+    token,
+    configSnippet,
+    toolsEnabled,
+    error: null,
   });
 }
 

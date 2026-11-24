@@ -348,6 +348,27 @@ pub fn servers_for_project(servers: &[McpServer], project: &str) -> Vec<McpServe
         .collect()
 }
 
+/// The servers an agent in `project` gets, plus Kvistcode's own local MCP server when
+/// both `settings.local_mcp.enabled` and `settings.local_mcp.expose_to_agents` are on.
+pub fn servers_for_agent(
+    settings: &crate::model::Settings,
+    data_dir: &Path,
+    project: &str,
+) -> Vec<McpServer> {
+    let mut out = servers_for_project(&settings.mcp_servers, project);
+    let already_named = out.iter().any(|s| {
+        s.name
+            .trim()
+            .eq_ignore_ascii_case(crate::local_mcp::SERVER_NAME)
+    });
+    if !already_named {
+        if let Some(local) = crate::local_mcp::agent_mcp_server(&settings.local_mcp, data_dir) {
+            out.push(local);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,6 +545,43 @@ for line in sys.stdin:
         std::os::unix::fs::symlink(&real, &link).unwrap();
         let all = vec![scoped("p", "db", &real.to_string_lossy())];
         assert_eq!(ids(&all, &link.to_string_lossy()), ["p"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn servers_for_agent_injects_local_mcp_when_exposed() {
+        let dir = crate::testutil::scratch("mcp-local-inject");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut settings = crate::model::Settings::default();
+        settings.mcp_servers.push(scoped("g", "github", ""));
+
+        // Off by default: only user server is returned.
+        let list = servers_for_agent(&settings, &dir, "/work/app");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "github");
+
+        // Enabled + expose_to_agents: appends kvistcode HTTP MCP server with Bearer auth.
+        settings.local_mcp.enabled = true;
+        settings.local_mcp.expose_to_agents = true;
+        settings.local_mcp.port = 47911;
+        let list = servers_for_agent(&settings, &dir, "/work/app");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[1].name, "kvistcode");
+        assert_eq!(list[1].transport, McpTransport::Http);
+        assert_eq!(list[1].url, "http://127.0.0.1:47911/mcp");
+        assert!(list[1].headers[0].value.starts_with("Bearer "));
+
+        // User server already named `kvistcode` is not duplicated.
+        settings.mcp_servers.push(scoped("k", "kvistcode", ""));
+        let list = servers_for_agent(&settings, &dir, "/work/app");
+        assert_eq!(
+            list.iter()
+                .filter(|s| s.name.eq_ignore_ascii_case("kvistcode"))
+                .count(),
+            1
+        );
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

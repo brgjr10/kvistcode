@@ -20,6 +20,7 @@ use crate::attention::Attention;
 use crate::git_review::{self, AgentDiff, CommitSummary};
 use crate::github;
 use crate::github_work;
+use crate::local_mcp_server::{LocalMcpServer, LocalMcpStatus};
 use crate::pr_status::{self, PrCache, PrStatus};
 use crate::remote::{Remote, RemoteStatus, ShareLink};
 use crate::state::Shell;
@@ -1414,6 +1415,9 @@ pub async fn update_settings(
     // Starts, restarts or stops listening for the wake phrase (no-op when unchanged).
     crate::wake::apply(&app);
     app.state::<Arc<Remote>>().apply(&saved.remote).await;
+    app.state::<Arc<LocalMcpServer>>()
+        .apply(&saved.local_mcp)
+        .await;
     // Reported when the user just set this hotkey; an unchanged one that still can't
     // be registered (e.g. Wayland) shouldn't fail every later save.
     let global_changed =
@@ -1841,6 +1845,22 @@ pub async fn create_share_link(
 pub async fn revoke_share_link(remote: State<'_, Arc<Remote>>, id: String) -> CmdResult<()> {
     remote.revoke_share(&id);
     Ok(())
+}
+
+// ---- local MCP server --------------------------------------------------------------
+
+#[tauri::command]
+pub async fn local_mcp_status(
+    local_mcp: State<'_, Arc<LocalMcpServer>>,
+) -> CmdResult<LocalMcpStatus> {
+    Ok(local_mcp.status())
+}
+
+#[tauri::command]
+pub async fn local_mcp_rotate_token(
+    local_mcp: State<'_, Arc<LocalMcpServer>>,
+) -> CmdResult<LocalMcpStatus> {
+    local_mcp.rotate_token()
 }
 
 #[cfg(test)]
