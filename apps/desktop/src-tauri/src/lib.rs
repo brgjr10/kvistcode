@@ -1,6 +1,7 @@
 //! Kvistcode desktop shell: wires `kvistcode_core::Core` to a Tauri 2 window, the tray,
 //! OS notifications, sounds, PTY terminals and git review commands.
 
+mod artifact_protocol;
 mod attention;
 mod budget;
 mod clipboard;
@@ -297,6 +298,9 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .register_uri_scheme_protocol(artifact_protocol::SCHEME, |_ctx, req| {
+            artifact_protocol::handle(&req)
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(

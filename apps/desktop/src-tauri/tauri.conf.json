@@ -28,8 +28,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; media-src 'self' data: blob:; object-src 'none'; frame-src data: http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:* https://[::1]:*; base-uri 'self'; form-action 'none'",
-      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420; media-src 'self' data: blob:; object-src 'none'; frame-src data: http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:* https://[::1]:*; base-uri 'self'; form-action 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; media-src 'self' data: blob:; object-src 'none'; frame-src kvartifact: http://kvartifact.localhost https://kvartifact.localhost http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:* https://[::1]:*; base-uri 'self'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420; media-src 'self' data: blob:; object-src 'none'; frame-src kvartifact: http://kvartifact.localhost https://kvartifact.localhost http://localhost:* http://127.0.0.1:* http://[::1]:* https://localhost:* https://127.0.0.1:* https://[::1]:*; base-uri 'self'; form-action 'none'",
       "dangerousDisableAssetCspModification": [
         "style-src"
       ]
@@ -53,8 +53,8 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Command center for Claude, Codex and Grok agents",
-    "longDescription": "Kvistcode runs Claude Code, OpenAI Codex, xAI Grok Build and any ACP agent (Gemini CLI, Goose, OpenCode) side by side across multiple accounts, alerts you with sounds and notifications when an agent needs attention, and resumes every agent after the app closes.",
+    "shortDescription": "Command center for AI coding agents",
+    "longDescription": "Kvistcode runs Claude Code, OpenAI Codex, Gemini CLI, xAI Grok Build, OpenCode, Cursor CLI and any ACP agent side by side across multiple accounts, alerts you with sounds and notifications when an agent needs attention, and resumes every agent after the app closes.",
     "publisher": "Kvistcode contributors",
     "copyright": "Copyright (c) Kvistcode contributors. MIT License.",
     "license": "MIT",

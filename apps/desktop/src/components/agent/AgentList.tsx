@@ -9,6 +9,7 @@ import {
   Code2,
   Download,
   Gauge,
+  KanbanSquare,
   GitBranch,
   GitFork,
   Repeat,
@@ -82,6 +83,7 @@ import { useApp } from "@/store/app";
 import { usePr } from "@/store/pr";
 import { ciSummary, listIndicator } from "@/lib/pr";
 import { useUi } from "@/store/ui";
+import { openBoardFor } from "../board/Board";
 import { useVa } from "@/store/voiceAssistant";
 import { isLive } from "@/lib/voiceAssistant";
 import { ProviderGlyph } from "../ProviderGlyph";
@@ -992,6 +994,9 @@ function ProjectMenuItems({
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={onNewAgent}>
         <Plus /> New agent in {project.name}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => openBoardFor(project.path)}>
+        <KanbanSquare /> Open board
       </ContextMenuItem>
     </>
   );

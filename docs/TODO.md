@@ -69,7 +69,7 @@ Git worktrees isolate repository files, not the broader filesystem or network—
 - [x] **Project task board (Kanban view):** Optional board view over agents/issues per project (Backlog → Working → Needs review → Merged)
 - [x] **First-class providers:** OpenCode (`opencode acp`) and Cursor CLI (`cursor-agent acp`) are built-in with install/auth/model-picker parity; usage shows only the token counts the agent reports. More ACP agents (Goose, etc.) can follow the same pattern
 - [x] **Interactive inline artifacts:** Render sandboxed HTML/SVG/chart artifacts inline in the conversation timeline
-- [ ] **Package-manager distribution & macOS:** Winget, Scoop, Homebrew cask, and revisiting macOS release builds (currently held on v0.6.1)
+- [x] **Package-manager distribution & macOS:** winget manifests are generated per release (`scripts/winget_manifest.py`, see `docs/RELEASING.md`). Decided against: Scoop (a portable install the in-app updater can't update), and macOS + Homebrew cask (macOS builds were dropped on purpose in v0.7.0; revisit with Apple signing and notarization)
 
 ---
 

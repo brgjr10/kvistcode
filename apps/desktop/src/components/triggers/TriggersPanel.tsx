@@ -45,6 +45,12 @@ export function TriggersPanel() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
+  // A trigger that fires starts an agent: refresh then too, so "last fired" shows at once.
+  const agentCount = useApp((s) => Object.keys(s.agents).length);
+  useEffect(() => {
+    if (triggers) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentCount]);
 
   const upsert = (t: Trigger) =>
     setTriggers((list) => {

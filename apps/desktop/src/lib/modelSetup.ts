@@ -114,7 +114,7 @@ export function otherProviders(
     if (!cur || a.lastActivityAt > cur.lastActivityAt) latest.set(key, a);
   }
   const list: { key: string; name: string }[] = [];
-  for (const p of ["codex", "grok", "gemini"] as const)
+  for (const p of ["codex", "grok", "gemini", "opencode", "cursor"] as const)
     if (agents.some((a) => a.provider === p) || providers.some((x) => x.provider === p && x.installed))
       list.push({ key: p, name: identityFor(p, null, [...customAgents]).short });
   for (const c of customAgents) if (c.enabled) list.push({ key: `custom:${c.id}`, name: c.name });

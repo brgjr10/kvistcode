@@ -70,6 +70,21 @@ describe("document builder", () => {
   it("makes a data url", () => {
     expect(artifactSrc("html", "<p>é</p>", "i")).toMatch(/^data:text\/html;base64,/);
   });
+  it("uses the kvartifact scheme in the app, with base64url", () => {
+    const g = globalThis as { __TAURI_INTERNALS__?: unknown };
+    g.__TAURI_INTERNALS__ = {
+      convertFileSrc: (p: string, proto: string) => `${proto}://localhost/${encodeURIComponent(p)}`,
+    };
+    try {
+      const src = artifactSrc("html", "<p>é??>>></p>", "i");
+      expect(src).toMatch(/^kvartifact:\/\/localhost\/[A-Za-z0-9_-]+$/);
+      const b64 = src.split("/").pop()!.replace(/-/g, "+").replace(/_/g, "/");
+      const doc = new TextDecoder().decode(Uint8Array.from(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0)));
+      expect(doc).toContain("<p>é??>>></p>");
+    } finally {
+      delete g.__TAURI_INTERNALS__;
+    }
+  });
 });
 
 describe("parseHeightMessage", () => {

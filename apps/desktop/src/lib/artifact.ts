@@ -1,8 +1,10 @@
 // Sandboxed inline previews of HTML/SVG code blocks. The security model lives here:
-//  - the page is loaded from a `data:` URL into `<iframe sandbox="allow-scripts">` (opaque origin, no
-//    same-origin, no top navigation, popups or forms). A `srcdoc` frame would inherit the app's own
-//    CSP, which forbids inline scripts, so it could not run anything;
-//  - the page carries its own CSP meta: no network at all, inline script/style, data:/blob: images;
+//  - in the app the page is served by the `kvartifact:` scheme (`src-tauri/src/artifact_protocol.rs`)
+//    into `<iframe sandbox="allow-scripts">` (opaque origin, no same-origin, no top navigation, popups
+//    or forms). A `data:` or `srcdoc` frame would inherit the app's own CSP, which forbids inline
+//    scripts, so it could not run anything. The browser mock has no such CSP and uses `data:`;
+//  - the page carries its own CSP (header and meta): no network at all, inline script/style,
+//    data:/blob: images;
 //  - SVG is shown through `<img>`, where scripts never run.
 
 /** Largest artifact we will render (bytes of source). Bigger ones stay code only. */
@@ -90,10 +92,20 @@ export function toBase64(s: string): string {
   return btoa(bin);
 }
 
-/** `src` for the sandboxed iframe. */
+export const ARTIFACT_SCHEME = "kvartifact";
+
+type TauriInternals = { convertFileSrc?: (path: string, protocol: string) => string };
+
+/** `src` for the sandboxed iframe: the `kvartifact:` scheme in the app, a `data:` URL in a browser. */
 export function artifactSrc(kind: ArtifactKind, code: string, id: string): string {
   const doc = kind === "svg" ? buildSvgDoc(code, id) : buildArtifactDoc(code, id);
-  return `data:text/html;base64,${toBase64(doc)}`;
+  const b64 = toBase64(doc);
+  const tauri = (globalThis as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
+  if (tauri?.convertFileSrc) {
+    const url = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return tauri.convertFileSrc(url, ARTIFACT_SCHEME);
+  }
+  return `data:text/html;base64,${b64}`;
 }
 
 export function clampHeight(h: number): number {

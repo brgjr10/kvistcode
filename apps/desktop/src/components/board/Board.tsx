@@ -28,6 +28,16 @@ function readProject(): string {
   }
 }
 
+/** Opens Mission Control's Board on `path`. */
+export function openBoardFor(path: string) {
+  try {
+    localStorage.setItem(PROJECT_KEY, projectKey(path));
+  } catch {
+    /* ignore */
+  }
+  useUi.getState().openMission("board");
+}
+
 /** The prompt a card starts an agent with: its title, then its notes. */
 export function cardPrompt(c: Pick<BoardCard, "title" | "notes">): string {
   return c.notes ? `${c.title}\n\n${c.notes}` : c.title;
