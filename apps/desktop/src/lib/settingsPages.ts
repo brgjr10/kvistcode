@@ -171,6 +171,12 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { label: "Skills", page: "projects", tab: "skills", keywords: ["skill.md"] },
   { label: "Permission rules", page: "projects", tab: "permissions", keywords: ["allow", "deny", "ask"] },
   { label: "Hooks and slash commands", page: "projects", tab: "automation", keywords: ["hooks", "commands"] },
+  {
+    label: "Worktree setup & teardown hooks",
+    page: "projects",
+    tab: "worktrees",
+    keywords: ["worktree", "setup", "teardown", "copy", ".env", "kvistcode.json", "cursor", "conductor"],
+  },
   { label: "Templates", page: "templates", keywords: ["prompts", "snippets"] },
   {
     label: "Remote access",

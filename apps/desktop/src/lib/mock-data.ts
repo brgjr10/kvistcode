@@ -325,6 +325,8 @@ export function seedSettings(onboarded: boolean): Settings {
     dailyBudgetTurns: null,
     agentBudgetTurns: null,
     projectBudgets: {},
+    projectWorktrees: {},
+    trustedWorktreeHooks: {},
     alertTargets: [],
     autoCompactWindow: 250_000,
     autoCompactPercent: null,

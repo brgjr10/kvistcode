@@ -20,6 +20,7 @@ use crate::{accounts, git, local, providers, EventSink, Result};
 mod budgets;
 mod helper_sync;
 mod limit_wait;
+mod worktree_setup;
 
 /// Starts an agent as a helper of `parent_id`, from `commit` (a snapshot of the
 /// main agent's files). `preamble` is shown to the helper's model, not the user.
@@ -168,6 +169,8 @@ struct Inner {
     limit_wait: Mutex<limit_wait::State>,
     /// account id → unix ms of last background usage-limit poll (throttled per account).
     usage_refresh_at: Mutex<HashMap<String, i64>>,
+    /// Deferred initial prompt / warm-up for worktree agents waiting on setup hooks or trust.
+    pending_starts: Mutex<HashMap<String, worktree_setup::PendingStart>>,
 }
 
 /// Marks a schedule as starting; released on drop.
@@ -319,6 +322,7 @@ impl Core {
                 budget: Mutex::new(budgets::BudgetState::load(&budget_dir)),
                 limit_wait: Mutex::default(),
                 usage_refresh_at: Mutex::default(),
+                pending_starts: Mutex::default(),
             }),
         };
         core.restore_queues();
@@ -419,6 +423,14 @@ impl Core {
                 dirty = true;
             }
             // Runtime-only state doesn't survive a restart.
+            if let Some(wt) = agent.worktree_setup.as_mut() {
+                if wt.status == crate::worktree_hooks::WorktreeSetupStatus::Running {
+                    wt.status = crate::worktree_hooks::WorktreeSetupStatus::Failed;
+                    wt.error = Some("Interrupted when Kvistcode closed".into());
+                    agent.status = AgentStatus::Error;
+                    dirty = true;
+                }
+            }
             if agent.running
                 || agent.pending_permissions != 0
                 || agent.queued_prompts != 0
@@ -2178,6 +2190,7 @@ impl Core {
                 detail: None,
                 files: 0,
             }),
+            worktree_setup: None,
         };
         {
             // Under the agents lock, which `delete_account` holds across its checks:
@@ -2240,6 +2253,13 @@ impl Core {
         }
         if let Some(seed) = &helper {
             ctx.set_preamble(seed.preamble.clone());
+        }
+        let pending = worktree_setup::PendingStart {
+            prompt: has_prompt.then(|| (prompt.clone(), req.attachments.clone())),
+            model: req.model.clone(),
+        };
+        if self.begin_worktree_setup(&agent, pending) {
+            return self.agent(&id);
         }
         if !has_prompt {
             self.warm_up(&id, req.model.clone());
@@ -2637,6 +2657,7 @@ impl Core {
     pub async fn stop_agent(&self, agent_id: &str) -> Result<()> {
         // Stopping an agent that waits out a usage limit takes it out of the automatic resume.
         self.limit_wait_ended(agent_id);
+        self.inner.pending_starts.lock().remove(agent_id);
         let ctx = self.ctx(agent_id);
         // A start in progress is abandoned and its process killed right away (a
         // hung handshake would otherwise linger until its timeout).
@@ -2818,6 +2839,7 @@ impl Core {
             }
         }
         let ctx = self.ctx(agent_id);
+        self.inner.pending_starts.lock().remove(agent_id);
         // A start in progress is abandoned and its (maybe hung) process killed now.
         self.abort_start(agent_id).await;
         let lock = self.start_lock(agent_id);
@@ -2838,6 +2860,7 @@ impl Core {
                     {
                         Some(problem) => Err(anyhow!("{problem}")),
                         None => {
+                            self.run_worktree_teardown(&agent).await;
                             git::remove_worktree(
                                 &self.inner.data_dir,
                                 &project,
@@ -2850,6 +2873,7 @@ impl Core {
                     }
                 }
                 None => {
+                    self.run_worktree_teardown(&agent).await;
                     git::remove_worktree(
                         &self.inner.data_dir,
                         &project,
@@ -3039,6 +3063,8 @@ impl Core {
         };
         let filed = |s: &Settings| {
             s.project_budgets.keys().any(|k| is_old(k))
+                || s.project_worktrees.keys().any(|k| is_old(k))
+                || s.trusted_worktree_hooks.keys().any(|k| is_old(k))
                 || s.mcp_servers.iter().any(|m| is_old(&m.project_path))
                 || s.recent_projects.iter().any(|p| is_old(p))
                 || s.project_layout.paths().any(|p| is_old(p))
@@ -3055,6 +3081,30 @@ impl Core {
                     if let Some(cap) = s.project_budgets.remove(&key) {
                         // A limit already set on the new folder stays.
                         s.project_budgets.entry(new.to_string()).or_insert(cap);
+                    }
+                }
+                let wt_keys: Vec<String> = s
+                    .project_worktrees
+                    .keys()
+                    .filter(|k| is_old(k))
+                    .cloned()
+                    .collect();
+                for key in wt_keys {
+                    if let Some(cfg) = s.project_worktrees.remove(&key) {
+                        s.project_worktrees.entry(new.to_string()).or_insert(cfg);
+                    }
+                }
+                let trust_keys: Vec<String> = s
+                    .trusted_worktree_hooks
+                    .keys()
+                    .filter(|k| is_old(k))
+                    .cloned()
+                    .collect();
+                for key in trust_keys {
+                    if let Some(hash) = s.trusted_worktree_hooks.remove(&key) {
+                        s.trusted_worktree_hooks
+                            .entry(new.to_string())
+                            .or_insert(hash);
                     }
                 }
                 for server in s.mcp_servers.iter_mut().filter(|m| is_old(&m.project_path)) {

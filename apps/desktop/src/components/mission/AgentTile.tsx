@@ -13,6 +13,7 @@ import type { QuestionItem } from "@/lib/question";
 import { useStatusView } from "@/store/background";
 import type { Account, Agent, PermissionOption, TimelineItem } from "@/lib/types";
 import { ResumesAt } from "../agent/ResumesAt";
+import { WorktreeSetupCard } from "../agent/WorktreeSetupRow";
 import { plainPreview as preview } from "./preview";
 import { RecoveryActions, needsRecovery } from "./RecoveryActions";
 import type { TileSummary } from "./useTileSummaries";
@@ -252,7 +253,9 @@ export const AgentTile = memo(function AgentTile({
         </div>
       )}
 
-      {!pending && !question && needsRecovery(agent) && (
+      {!pending && !question && agent.worktreeSetup && <WorktreeSetupCard agent={agent} onOpen={onOpen} />}
+
+      {!pending && !question && !agent.worktreeSetup && needsRecovery(agent) && (
         <div className="relative mx-3 mt-3">
           <RecoveryActions agent={agent} />
         </div>

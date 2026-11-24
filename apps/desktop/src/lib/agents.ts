@@ -450,8 +450,14 @@ export type NeedsReason = "permission" | "budget" | "error" | "rate_limited" | "
 /** Why an agent needs the user, in triage priority order (null if it doesn't). */
 export function needsAttention(a: Agent): NeedsReason | null {
   if (a.archived) return null;
-  // An approval is still blocking, even if acknowledged.
-  if (a.pendingPermissions > 0 || a.status === "needs_permission") return "permission";
+  // An approval (including untrusted repo worktree hooks) is still blocking, even if acknowledged.
+  if (
+    a.pendingPermissions > 0 ||
+    a.status === "needs_permission" ||
+    a.worktreeSetup?.status === "needs_trust"
+  ) {
+    return "permission";
+  }
   // Held at a spending limit: stays until you choose, like an approval.
   if (a.budgetHold) return "budget";
   // "Done" in triage dismisses until the agent does something new.

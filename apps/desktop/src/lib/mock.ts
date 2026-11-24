@@ -3243,6 +3243,90 @@ export const mockApi: KvistcodeApi = {
     return mockSkillsSetEnabled(project, scope, id, enabled);
   },
 
+  async getWorktreeHooks(projectPath) {
+    await sleep(rand(40, 100));
+    const key = projectPath.trim().replace(/[\\/]+$/, "");
+    const settingsCfg = db.settings.projectWorktrees?.[key] ??
+      db.settings.projectWorktrees?.[projectPath] ?? {
+        copyFiles: [],
+        setupCommand: null,
+        teardownCommand: null,
+      };
+    const mockHash = "a".repeat(64);
+    const trustedHash = db.settings.trustedWorktreeHooks?.[key] ?? db.settings.trustedWorktreeHooks?.[projectPath];
+    const repo = key.endsWith("kvistcode")
+      ? {
+          source: "kvistcode_json" as const,
+          sourcePath: ".kvistcode.json",
+          copyFiles: [".env.local"],
+          setupCommand: "npm ci",
+          teardownCommand: null,
+          scriptHash: mockHash,
+          trusted: trustedHash === mockHash,
+          parseError: null,
+        }
+      : null;
+    const copyFiles = Array.from(new Set([...(repo?.copyFiles ?? []), ...settingsCfg.copyFiles]));
+    const setupFromRepo = !settingsCfg.setupCommand && Boolean(repo?.setupCommand);
+    const teardownFromRepo = !settingsCfg.teardownCommand && Boolean(repo?.teardownCommand);
+    return {
+      projectPath,
+      settings: clone(settingsCfg),
+      repo,
+      copyFiles,
+      setupCommand: settingsCfg.setupCommand ?? repo?.setupCommand ?? null,
+      setupFromRepo,
+      teardownCommand: settingsCfg.teardownCommand ?? repo?.teardownCommand ?? null,
+      teardownFromRepo,
+      needsTrust: (setupFromRepo || teardownFromRepo) && !(repo?.trusted ?? true),
+    };
+  },
+
+  async setWorktreeHooksTrust(projectPath, scriptHash) {
+    await sleep(rand(40, 100));
+    const key = projectPath.trim().replace(/[\\/]+$/, "");
+    const map = { ...(db.settings.trustedWorktreeHooks ?? {}) };
+    delete map[projectPath];
+    delete map[key];
+    if (scriptHash) map[key] = scriptHash;
+    db.settings = { ...db.settings, trustedWorktreeHooks: map };
+    emit({ type: "settings_changed", settings: clone(db.settings) });
+    return mockApi.getWorktreeHooks(projectPath);
+  },
+
+  async approveWorktreeHooks(agentId, trustAlways) {
+    await sleep(rand(60, 140));
+    const a = getAgent(agentId);
+    if (trustAlways && a.worktreeSetup?.scriptHash) {
+      await mockApi.setWorktreeHooksTrust(a.projectPath, a.worktreeSetup.scriptHash);
+    }
+    a.worktreeSetup = null;
+    a.status = "idle";
+    a.lastActivityAt = Date.now();
+    emit({ type: "agent_updated", agent: clone(a) });
+    return clone(a);
+  },
+
+  async retryWorktreeSetup(agentId) {
+    await sleep(rand(60, 140));
+    const a = getAgent(agentId);
+    a.worktreeSetup = null;
+    a.status = "idle";
+    a.lastActivityAt = Date.now();
+    emit({ type: "agent_updated", agent: clone(a) });
+    return clone(a);
+  },
+
+  async skipWorktreeHooks(agentId) {
+    await sleep(rand(40, 100));
+    const a = getAgent(agentId);
+    a.worktreeSetup = null;
+    if (a.status === "error") a.status = "idle";
+    a.lastActivityAt = Date.now();
+    emit({ type: "agent_updated", agent: clone(a) });
+    return clone(a);
+  },
+
   async listFiles(agentId, query) {
     getAgent(agentId);
     const q = query.toLowerCase().replace(/^@/, "");

@@ -357,6 +357,9 @@ pub struct Agent {
     /// Present only on helpers: how their files relate to the main agent's.
     #[serde(default)]
     pub helper_sync: Option<HelperSync>,
+    /// Present while a worktree agent's setup hooks are running, waiting for trust, or failed.
+    #[serde(default)]
+    pub worktree_setup: Option<crate::worktree_hooks::WorktreeSetupState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1378,6 +1381,11 @@ pub struct Settings {
     pub agent_budget_turns: Option<i64>,
     /// Caps on everything the agents of one project spend, by project folder.
     pub project_budgets: std::collections::BTreeMap<String, crate::budget::BudgetCap>,
+    /// Per-project worktree setup/teardown hooks and files to copy, by project folder.
+    pub project_worktrees:
+        std::collections::BTreeMap<String, crate::worktree_hooks::ProjectWorktreeConfig>,
+    /// Approved repo-level worktree script hashes, by project folder.
+    pub trusted_worktree_hooks: std::collections::BTreeMap<String, String>,
     /// The order of the sidebar's projects and the named sections they are filed under.
     pub project_layout: ProjectLayout,
     /// Slack, Discord and generic webhook targets for alerts (ntfy has its own field).
@@ -1723,6 +1731,11 @@ impl Settings {
                 return Err(format!("Project budget for {project}: {problem}"));
             }
         }
+        for (project, wt) in &self.project_worktrees {
+            if let Some(problem) = wt.problem() {
+                return Err(format!("Worktree hooks for {project}: {problem}"));
+            }
+        }
         if let Some(problem) = self.project_layout.problem() {
             return Err(problem);
         }
@@ -1841,6 +1854,21 @@ impl Settings {
         if bad_project {
             reset.push("projectBudgets");
         }
+        let mut bad_wt = false;
+        for wt in self.project_worktrees.values_mut() {
+            bad_wt |= wt.sanitize();
+        }
+        self.project_worktrees.retain(|_, wt| !wt.is_empty());
+        if bad_wt {
+            reset.push("projectWorktrees");
+        }
+        let orig_trusted = self.trusted_worktree_hooks.len();
+        self.trusted_worktree_hooks.retain(|k, v| {
+            !k.trim().is_empty() && v.len() == 64 && v.chars().all(|c| c.is_ascii_hexdigit())
+        });
+        if self.trusted_worktree_hooks.len() != orig_trusted {
+            reset.push("trustedWorktreeHooks");
+        }
         if self.project_layout.sanitize() {
             reset.push("projectLayout");
         }
@@ -1955,6 +1983,8 @@ impl Default for Settings {
             daily_budget_turns: None,
             agent_budget_turns: None,
             project_budgets: Default::default(),
+            project_worktrees: Default::default(),
+            trusted_worktree_hooks: Default::default(),
             project_layout: ProjectLayout::default(),
             alert_targets: Vec::new(),
             // On by default: measured as the biggest saver (see docs/TOKEN-SAVING.md). Anyone who

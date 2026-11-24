@@ -148,7 +148,13 @@ describe("blockers", () => {
   const base = { status: "working", rateLimited: false, costUsd: 0.5, helperSync: null, parentId: null } as const;
   const settings = { agentBudgetUsd: 3, budgetAction: "pause" };
   it("has none for a healthy agent", () => {
-    expect(blockers(base, settings)).toEqual({ rateLimit: false, error: false, budget: false, conflict: false });
+    expect(blockers(base, settings)).toEqual({
+      worktreeSetup: false,
+      rateLimit: false,
+      error: false,
+      budget: false,
+      conflict: false,
+    });
   });
   it("flags a usage limit, but not for a stopped agent (the Resume banner is shown)", () => {
     expect(blockers({ ...base, status: "error", rateLimited: true }, settings)).toMatchObject({
@@ -180,6 +186,21 @@ describe("blockers", () => {
     const sync = { state: "conflict" } as never;
     expect(blockers({ ...base, parentId: "main", helperSync: sync }, settings).conflict).toBe(true);
     expect(blockers({ ...base, helperSync: sync }, settings).conflict).toBe(false);
+  });
+  it("flags worktree setup and suppresses the duplicate generic error row while setup failed", () => {
+    const failed = {
+      status: "failed" as const,
+      sourcePath: ".kvistcode.json",
+      setupCommand: "npm ci",
+      teardownCommand: null,
+      scriptHash: null,
+      error: "Exited with status 1",
+      output: "err",
+    };
+    const b = blockers({ ...base, status: "error", worktreeSetup: failed }, settings);
+    expect(b.worktreeSetup).toBe(true);
+    expect(b.error).toBe(false);
+    expect(blockers({ ...base, status: "stopped", worktreeSetup: failed }, settings).worktreeSetup).toBe(false);
   });
 });
 

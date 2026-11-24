@@ -1954,3 +1954,56 @@ pub async fn read_image(
         .map_err(|e| e.to_string())?
         .map_err(err)
 }
+
+/// Resolves effective worktree hooks (user Settings + detected repo config) for a project.
+#[tauri::command]
+pub async fn get_worktree_hooks(
+    core: State<'_, Core>,
+    project_path: String,
+) -> CmdResult<kvistcode_core::worktree_hooks::ResolvedWorktreeHooks> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || core.get_worktree_hooks(&project_path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
+}
+
+/// Trusts a repo's worktree script hash for a project, or revokes trust when `script_hash` is None.
+#[tauri::command]
+pub async fn set_worktree_hooks_trust(
+    core: State<'_, Core>,
+    project_path: String,
+    script_hash: Option<String>,
+) -> CmdResult<kvistcode_core::worktree_hooks::ResolvedWorktreeHooks> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.set_worktree_hooks_trust(&project_path, script_hash)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)
+}
+
+/// Approves repo-defined worktree hooks for an agent waiting on trust and starts setup.
+#[tauri::command]
+pub async fn approve_worktree_hooks(
+    core: State<'_, Core>,
+    agent_id: String,
+    trust_always: bool,
+) -> CmdResult<Agent> {
+    core.approve_worktree_hooks(&agent_id, trust_always)
+        .await
+        .map_err(err)
+}
+
+/// Retries a failed worktree setup for an agent.
+#[tauri::command]
+pub async fn retry_worktree_setup(core: State<'_, Core>, agent_id: String) -> CmdResult<Agent> {
+    core.retry_worktree_setup(&agent_id).await.map_err(err)
+}
+
+/// Skips worktree setup commands for an agent and proceeds with starting it.
+#[tauri::command]
+pub async fn skip_worktree_hooks(core: State<'_, Core>, agent_id: String) -> CmdResult<Agent> {
+    core.skip_worktree_hooks(&agent_id).await.map_err(err)
+}

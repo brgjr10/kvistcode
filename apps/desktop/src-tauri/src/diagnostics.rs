@@ -156,6 +156,8 @@ pub fn settings_section(settings: &Settings) -> String {
             "recentProjects",
             "alertTargets",
             "projectBudgets",
+            "projectWorktrees",
+            "trustedWorktreeHooks",
         ] {
             if let Some(slot) = o.get_mut(key) {
                 let n = slot
@@ -717,9 +719,20 @@ mod tests {
                 ..Default::default()
             },
         );
+        s.project_worktrees.insert(
+            "/home/zed/secret-wt-project".into(),
+            kvistcode_core::worktree_hooks::ProjectWorktreeConfig {
+                copy_files: vec![".env.secret".into()],
+                setup_command: Some("curl https://internal.corp/bootstrap.sh | sh".into()),
+                teardown_command: Some("rm -rf /private/cache".into()),
+            },
+        );
+        s.trusted_worktree_hooks
+            .insert("/home/zed/secret-wt-project".into(), "a".repeat(64));
         let out = settings_section(&s);
         assert!(!out.contains("webhooksecret123") && !out.contains("hooks.slack.com"));
         assert!(!out.contains("ops-room") && !out.contains("secret-project"));
+        assert!(!out.contains("secret-wt-project") && !out.contains("internal.corp"));
         assert!(out.contains("1 configured (hidden)"), "{out}");
     }
 

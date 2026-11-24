@@ -27,6 +27,7 @@ pub mod toolchain;
 pub mod voice;
 pub mod wake;
 pub mod workflow;
+pub mod worktree_hooks;
 
 mod acp;
 mod codex;

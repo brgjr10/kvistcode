@@ -247,6 +247,8 @@ export interface Agent {
   helperSync: HelperSync | null;
   /** This agent's own spending limits (set by "Raise limit"); they win over the per-agent defaults. */
   budget?: BudgetCap | null;
+  /** Present while a worktree agent's setup hooks are running, waiting for approval, or failed. */
+  worktreeSetup?: WorktreeSetupState | null;
   /** Set while the agent waits at a spending limit for you to choose (a "Needs you" item). */
   budgetHold?: BudgetHold | null;
   /** Turns this agent has completed (counted by the backend; null = not counted yet). Turn limits measure this. */
@@ -654,6 +656,10 @@ export interface Settings {
   agentBudgetTurns: number | null;
   /** Caps on everything the agents of one project spend, by project folder. */
   projectBudgets: Record<string, BudgetCap>;
+  /** Per-project worktree setup/teardown hooks and files to copy, by project folder. */
+  projectWorktrees?: Record<string, ProjectWorktreeConfig>;
+  /** Approved repo-level worktree script hashes, by project folder. */
+  trustedWorktreeHooks?: Record<string, string>;
   /** Slack, Discord and webhook targets for alerts (ntfy has its own field above). */
   alertTargets: AlertTarget[];
   /** Claude agents summarize their conversation at this many tokens (100k..1M); null = Claude Code's default. */
@@ -1283,4 +1289,51 @@ export interface PrCheck {
   url: string | null;
   runId: string | null;
   durationSecs: number | null;
+}
+
+/** Per-project worktree hooks configured in Kvistcode Settings. */
+export interface ProjectWorktreeConfig {
+  copyFiles: string[];
+  setupCommand: string | null;
+  teardownCommand: string | null;
+}
+
+export type WorktreeHookSource = "settings" | "kvistcode_json" | "cursor_json" | "conductor_json";
+
+/** Read-only view of a repo-level worktree config file (.kvistcode.json, .cursor/worktrees.json, conductor.json). */
+export interface RepoWorktreeConfig {
+  source: WorktreeHookSource;
+  sourcePath: string;
+  copyFiles: string[];
+  setupCommand: string | null;
+  teardownCommand: string | null;
+  scriptHash: string | null;
+  trusted: boolean;
+  parseError: string | null;
+}
+
+/** Effective worktree hooks for a project, combining Settings and any repo config file. */
+export interface ResolvedWorktreeHooks {
+  projectPath: string;
+  settings: ProjectWorktreeConfig;
+  repo: RepoWorktreeConfig | null;
+  copyFiles: string[];
+  setupCommand: string | null;
+  setupFromRepo: boolean;
+  teardownCommand: string | null;
+  teardownFromRepo: boolean;
+  needsTrust: boolean;
+}
+
+export type WorktreeSetupStatus = "running" | "needs_trust" | "failed";
+
+/** Live setup status of a worktree agent (cleared once setup finishes or is skipped). */
+export interface WorktreeSetupState {
+  status: WorktreeSetupStatus;
+  sourcePath: string | null;
+  setupCommand: string | null;
+  teardownCommand: string | null;
+  scriptHash: string | null;
+  error: string | null;
+  output: string | null;
 }

@@ -11,10 +11,10 @@ Each item is ordered by payoff-to-effort ratio and fit with Kvistcode's local-fi
 ### 1. Worktree setup & teardown hooks
 Fresh worktrees currently run only `git worktree add`, leaving out `.env` / untracked config files, installed dependencies, and per-worktree dev server ports.
 
-- [ ] Add per-project worktree setup config in Settings (files/globs to copy from the main checkout, setup command after creation, teardown command before removal)
-- [ ] Optional repo-level config file (`.kvistcode.json`) with read-only fallback support for `.cursor/worktrees.json` and `conductor.json`
-- [ ] Security gate: prompt once per repo/script hash before running repo-defined commands (never execute untrusted repo scripts silently)
-- [ ] Surface setup progress and failure output on the agent card / timeline instead of failing silently
+- [x] Add per-project worktree setup config in Settings (files/globs to copy from the main checkout, setup command after creation, teardown command before removal)
+- [x] Optional repo-level config file (`.kvistcode.json`) with read-only fallback support for `.cursor/worktrees.json` and `conductor.json`
+- [x] Security gate: prompt once per repo/script hash before running repo-defined commands (never execute untrusted repo scripts silently)
+- [x] Surface setup progress and failure output on the agent card / timeline instead of failing silently
 - **Touchpoints:** `crates/kvistcode-core/src/git.rs` (`create_worktree`, `remove_worktree`), `crates/kvistcode-core/src/project_config.rs`, `apps/desktop/src/components/settings/`
 
 ### 2. Open in Editor + lightweight Files tab

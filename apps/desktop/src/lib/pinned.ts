@@ -85,13 +85,23 @@ export function planIsLive(items: readonly TimelineItem[]): boolean {
 // ---------------------------------------------------------------- what the dock shows
 
 export type DockSection =
-  "needs_you" | "rate_limit" | "error" | "budget" | "conflict" | "plan" | "workflow" | "subagents" | "queue";
+  | "needs_you"
+  | "worktree_setup"
+  | "rate_limit"
+  | "error"
+  | "budget"
+  | "conflict"
+  | "plan"
+  | "workflow"
+  | "subagents"
+  | "queue";
 
 export type DockFlags = Record<DockSection, boolean>;
 
 /** Most important first: what waits for you, what blocks the agent, then what is just in progress. */
 export const DOCK_ORDER: readonly DockSection[] = [
   "needs_you",
+  "worktree_setup",
   "rate_limit",
   "error",
   "budget",
@@ -108,6 +118,7 @@ export function dockSections(flags: Partial<DockFlags>): DockSection[] {
 
 /** The blockers of an agent (not the approval or question it waits on). */
 export interface Blockers {
+  worktreeSetup: boolean;
   rateLimit: boolean;
   error: boolean;
   budget: boolean;
@@ -115,10 +126,11 @@ export interface Blockers {
 }
 
 type AgentLike = Pick<Agent, "status" | "rateLimited" | "costUsd" | "helperSync" | "parentId"> &
-  Partial<Pick<Agent, "budget" | "budgetHold">>;
+  Partial<Pick<Agent, "budget" | "budgetHold" | "worktreeSetup">>;
 
 /**
  * What is stopping the agent from going on, and can be acted on from the dock:
+ * - worktree setup running, awaiting trust, or failed;
  * - the account hit its usage limit (switch account / retry);
  * - the turn failed (retry);
  * - a spending limit paused the agent (raise it);
@@ -137,9 +149,11 @@ export function blockers(
     (agent.budgetHold === undefined &&
       settings.budgetAction === "pause" &&
       budgetLevel(agent.costUsd, effectiveCap) === "hit");
+  const worktreeFailed = agent.worktreeSetup?.status === "failed";
   return {
+    worktreeSetup: Boolean(agent.worktreeSetup) && !resumable,
     rateLimit: agent.rateLimited && !resumable,
-    error: agent.status === "error" && !agent.rateLimited,
+    error: agent.status === "error" && !agent.rateLimited && !worktreeFailed,
     budget: !resumable && !working && budgetHit,
     conflict: Boolean(agent.parentId) && agent.helperSync?.state === "conflict",
   };

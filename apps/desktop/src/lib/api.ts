@@ -65,6 +65,7 @@ import type {
   VoiceTranscript,
   WakeStatus,
   WorkflowProgress,
+  ResolvedWorktreeHooks,
 } from "./types";
 import type {
   InstructionDoc,
@@ -451,6 +452,20 @@ const tauriApi = {
   discoverProjects: () => invoke<string[]>("discover_projects"),
   /** True when the folder is inside a git work tree with at least one commit (~ is expanded). */
   isGitRepo: (path: string) => invoke<boolean>("is_git_repo", { path }),
+
+  // worktree hooks
+  /** Effective worktree hooks (user Settings + detected repo config) for a project. */
+  getWorktreeHooks: (projectPath: string) => invoke<ResolvedWorktreeHooks>("get_worktree_hooks", { projectPath }),
+  /** Trusts a repo's worktree script hash for a project, or revokes trust when null. */
+  setWorktreeHooksTrust: (projectPath: string, scriptHash: string | null) =>
+    invoke<ResolvedWorktreeHooks>("set_worktree_hooks_trust", { projectPath, scriptHash }),
+  /** Approves repo-defined worktree commands for a waiting agent and starts setup. */
+  approveWorktreeHooks: (agentId: string, trustAlways: boolean) =>
+    invoke<Agent>("approve_worktree_hooks", { agentId, trustAlways }),
+  /** Retries a failed worktree setup command. */
+  retryWorktreeSetup: (agentId: string) => invoke<Agent>("retry_worktree_setup", { agentId }),
+  /** Skips worktree setup commands and lets the agent start. */
+  skipWorktreeHooks: (agentId: string) => invoke<Agent>("skip_worktree_hooks", { agentId }),
 
   // remote control / share links
   remoteStatus: () => invoke<RemoteStatus>("remote_status"),

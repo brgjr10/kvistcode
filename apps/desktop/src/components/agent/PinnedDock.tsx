@@ -24,6 +24,7 @@ import { QueueStack } from "./QueueStack";
 import { RateLimitBanner } from "./RateLimitBanner";
 import { SubagentRow, useSubagentPin } from "./SubagentStrip";
 import { useWorkflowPin, WorkflowSection } from "./WorkflowRow";
+import { WorktreeSetupRow } from "./WorktreeSetupRow";
 
 /** The dock never takes more than this share of its pane; past that it scrolls inside. */
 const MAX_SHARE = 0.4;
@@ -86,6 +87,7 @@ export const PinnedDock = memo(function PinnedDock({
   const kind = needsYouKind(needs);
   const sections = dockSections({
     needs_you: needs !== null,
+    worktree_setup: block.worktreeSetup,
     rate_limit: block.rateLimit,
     error: block.error,
     budget: block.budget,
@@ -96,8 +98,10 @@ export const PinnedDock = memo(function PinnedDock({
     queue: queued,
   });
   const any = sections.length > 0;
-  const urgent = kind !== null;
-  const stuck = block.rateLimit || block.error || block.budget || block.conflict;
+  const worktreeUrgent = block.worktreeSetup && agent.worktreeSetup?.status === "needs_trust";
+  const worktreeFailed = block.worktreeSetup && agent.worktreeSetup?.status === "failed";
+  const urgent = kind !== null || worktreeUrgent;
+  const stuck = block.rateLimit || block.error || block.budget || block.conflict || worktreeFailed;
   const minimal = useMinimal();
 
   const anchor = useRef<HTMLDivElement>(null);
@@ -130,7 +134,7 @@ export const PinnedDock = memo(function PinnedDock({
                 ? undefined
                 : urgent
                   ? "urgent"
-                  : block.error || block.budget
+                  : block.error || block.budget || worktreeFailed
                     ? "error"
                     : stuck
                       ? "stuck"
@@ -143,7 +147,7 @@ export const PinnedDock = memo(function PinnedDock({
                     "overflow-hidden rounded-2xl border bg-card/90 transition-colors duration-200 edge",
                     urgent
                       ? "border-warn/40"
-                      : block.error || block.budget
+                      : block.error || block.budget || worktreeFailed
                         ? "border-err/30"
                         : stuck
                           ? "border-warn/30"
@@ -185,6 +189,9 @@ export const PinnedDock = memo(function PinnedDock({
                 maxHeight={maxHeight && urgent ? Math.max(MIN_REST_PX, Math.round(maxHeight / 2)) : maxHeight}
                 className={needs !== null ? "border-t border-line" : undefined}
               >
+                <Fold open={block.worktreeSetup}>
+                  <WorktreeSetupRow agent={agent} />
+                </Fold>
                 <Fold open={block.rateLimit}>
                   <RateLimitBanner agent={agent} embedded />
                 </Fold>
