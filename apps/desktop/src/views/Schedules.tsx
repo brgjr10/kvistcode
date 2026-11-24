@@ -6,6 +6,7 @@ import { HeaderAction, PageHeader } from "@/components/PageHeader";
 import { duplicateSchedule } from "@/components/schedules/duplicate";
 import { blankSchedule, ScheduleDialog } from "@/components/schedules/ScheduleDialog";
 import { ScheduleRow } from "@/components/schedules/ScheduleRow";
+import { TriggersPanel } from "@/components/triggers/TriggersPanel";
 import { ConfirmDialog } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -225,6 +226,7 @@ export function SchedulesView() {
               Times are local. Schedules run while Kvistcode is running, including when it's minimized to the tray.
             </p>
           )}
+          <TriggersPanel />
         </div>
       </div>
 

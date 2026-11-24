@@ -65,6 +65,10 @@ import type {
   VoiceTranscript,
   WakeStatus,
   WorkflowProgress,
+  Trigger,
+  TriggersView,
+  TriggerWebhookInfo,
+  TriggerWebhookStatus,
 } from "./types";
 import type {
   InstructionDoc,
@@ -441,6 +445,21 @@ const tauriApi = {
   saveSchedule: (schedule: Schedule) => invoke<Schedule>("save_schedule", { schedule }),
   deleteSchedule: (scheduleId: string) => invoke<void>("delete_schedule", { scheduleId }),
   runSchedule: (scheduleId: string) => invoke<Agent>("run_schedule", { scheduleId }),
+
+  // inbound event triggers
+  listTriggers: () => invoke<TriggersView>("list_triggers"),
+  /** Validates and saves; returns the saved trigger (with id and webhook token). */
+  saveTrigger: (trigger: Trigger) => invoke<Trigger>("save_trigger", { trigger }),
+  deleteTrigger: (triggerId: string) => invoke<void>("delete_trigger", { triggerId }),
+  /** Starts an agent now with a made-up event. */
+  testTrigger: (triggerId: string) => invoke<Agent>("test_trigger", { triggerId }),
+  /** Turns the loopback webhook listener on or off (and picks its port). */
+  setTriggerWebhook: (enabled: boolean, port: number | null) =>
+    invoke<TriggerWebhookStatus>("set_trigger_webhook", { enabled, port }),
+  /** The URL and secret to paste into the sending service. */
+  triggerWebhookInfo: (triggerId: string) => invoke<TriggerWebhookInfo>("trigger_webhook_info", { triggerId }),
+  /** New URL token and secret; the old ones stop working. */
+  regenerateTriggerWebhook: (triggerId: string) => invoke<Trigger>("regenerate_trigger_webhook", { triggerId }),
 
   // custom agents
   /** Spawns the agent and runs the ACP handshake; resolves to e.g. "Gemini CLI 0.52.0 (ACP v1)". */

@@ -29,6 +29,7 @@ import {
 import { configDefaultsKey, isRememberableOption } from "./configMemory";
 import { BRANCH_CHANGED_MESSAGE } from "./ghError";
 import { isStressMode, STRESS_AGENTS, STRESS_TICK_MS, stressAgents, stressItems, stressWords } from "./mock-stress";
+import { createTriggerMock } from "./mock-triggers";
 import { EMPTY_LAYOUT, layoutProblem } from "./projectLayout";
 import {
   commandsFor,
@@ -1522,7 +1523,17 @@ const mockPublished = new Map<string, string>([
 /** Port the mock agent "a-token" says its dev server runs on. */
 const MOCK_DEV_PORT = 4723;
 
+const triggerMock = createTriggerMock(() => mockApi);
+
 export const mockApi: KvistcodeApi = {
+  // Inbound event triggers live in mock-triggers.ts.
+  listTriggers: () => triggerMock.list(),
+  saveTrigger: (trigger) => triggerMock.save(trigger),
+  deleteTrigger: (triggerId) => triggerMock.remove(triggerId),
+  testTrigger: (triggerId) => triggerMock.test(triggerId),
+  setTriggerWebhook: (enabled, port) => triggerMock.setWebhook(enabled, port),
+  triggerWebhookInfo: (triggerId) => triggerMock.webhookInfo(triggerId),
+  regenerateTriggerWebhook: (triggerId) => triggerMock.regenerate(triggerId),
   async getState(): Promise<AppState> {
     setTimeout(startLiveActivity, 600);
     if (isStressMode()) setupStress();

@@ -1284,3 +1284,59 @@ export interface PrCheck {
   runId: string | null;
   durationSecs: number | null;
 }
+
+// ---- inbound event triggers ----
+
+export type TriggerSource = "github_ci" | "github_mention" | "webhook";
+export type TriggerWebhookAuth = "hmac" | "bearer";
+
+/** Starts an agent when something happens elsewhere (see crates/kvistcode-core/src/triggers.rs). */
+export interface Trigger {
+  id: string; // "" when creating
+  name: string;
+  enabled: boolean;
+  source: TriggerSource;
+  provider: Provider;
+  accountId: string;
+  projectPath: string;
+  /** `{{event}}` is replaced by the fenced event text (added at the end when missing). */
+  prompt: string;
+  worktree: boolean;
+  model: string | null;
+  customAgentId: string | null;
+  /** Off unless chosen here: triggered agents ask first whatever the app default is. */
+  runWithoutAsking: boolean;
+  keyword: string;
+  allowOutsiders: boolean;
+  auth: TriggerWebhookAuth;
+  dailyCap: number;
+  /** Set by the app. */
+  pathToken: string;
+  createdAt: number;
+  updatedAt: number;
+  lastFiredAt: number | null;
+  lastAgentId: string | null;
+  lastError: string | null;
+  lastPolledAt: number | null;
+  firedDay: string;
+  firedToday: number;
+  firedTotal: number;
+}
+
+export interface TriggerWebhookStatus {
+  enabled: boolean;
+  port: number;
+  running: boolean;
+  error: string | null;
+}
+
+export interface TriggersView {
+  triggers: Trigger[];
+  webhook: TriggerWebhookStatus;
+}
+
+export interface TriggerWebhookInfo {
+  url: string;
+  secret: string;
+  auth: TriggerWebhookAuth;
+}

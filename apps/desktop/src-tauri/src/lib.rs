@@ -27,6 +27,7 @@ mod terminal;
 mod toolkit;
 mod tools;
 mod tray;
+mod triggers;
 mod updater;
 mod voice_assistant;
 mod wake;
@@ -202,6 +203,13 @@ macro_rules! handler {
             commands::save_schedule,
             commands::delete_schedule,
             commands::run_schedule,
+            triggers::list_triggers,
+            triggers::save_trigger,
+            triggers::delete_trigger,
+            triggers::test_trigger,
+            triggers::set_trigger_webhook,
+            triggers::trigger_webhook_info,
+            triggers::regenerate_trigger_webhook,
             commands::test_custom_agent,
             commands::list_files,
             project_settings::project_config,
@@ -360,6 +368,7 @@ fn setup(app: &AppHandle, startup_data_dir: Option<&Path>) -> anyhow::Result<()>
     events::spawn_dispatcher(app.clone(), rx);
     spawn_signal_handler(app.clone());
     attention.spawn_escalation();
+    triggers::start(&core);
 
     // Settings-driven OS integration.
     let settings = core.settings().unwrap_or_else(|e| {

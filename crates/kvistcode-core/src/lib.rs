@@ -24,6 +24,8 @@ pub mod scripts;
 pub mod skill_prefs;
 pub mod skills;
 pub mod toolchain;
+pub mod triggers;
+pub mod triggers_github;
 pub mod voice;
 pub mod wake;
 pub mod workflow;
