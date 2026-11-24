@@ -360,6 +360,9 @@ pub struct Agent {
     /// Present while a worktree agent's setup hooks are running, waiting for trust, or failed.
     #[serde(default)]
     pub worktree_setup: Option<crate::worktree_hooks::WorktreeSetupState>,
+    /// Present while the agent's live process is running inside a Bubblewrap or Docker sandbox.
+    #[serde(default)]
+    pub sandbox_active: Option<crate::sandbox::ActiveSandbox>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1386,6 +1389,9 @@ pub struct Settings {
         std::collections::BTreeMap<String, crate::worktree_hooks::ProjectWorktreeConfig>,
     /// Approved repo-level worktree script hashes, by project folder.
     pub trusted_worktree_hooks: std::collections::BTreeMap<String, String>,
+    /// Per-project OS/container sandbox settings, by project folder.
+    #[serde(default)]
+    pub project_sandboxes: std::collections::BTreeMap<String, crate::sandbox::ProjectSandboxConfig>,
     /// The order of the sidebar's projects and the named sections they are filed under.
     pub project_layout: ProjectLayout,
     /// Slack, Discord and generic webhook targets for alerts (ntfy has its own field).
@@ -1738,6 +1744,11 @@ impl Settings {
                 return Err(format!("Worktree hooks for {project}: {problem}"));
             }
         }
+        for (project, sb) in &self.project_sandboxes {
+            if let Some(problem) = sb.problem() {
+                return Err(format!("Sandbox settings for {project}: {problem}"));
+            }
+        }
         if let Some(problem) = self.project_layout.problem() {
             return Err(problem);
         }
@@ -1879,6 +1890,16 @@ impl Settings {
         if self.trusted_worktree_hooks.len() != orig_trusted {
             reset.push("trustedWorktreeHooks");
         }
+        let mut bad_sb = false;
+        for sb in self.project_sandboxes.values_mut() {
+            bad_sb |= sb.sanitize();
+        }
+        let orig_sb_keys = self.project_sandboxes.len();
+        self.project_sandboxes
+            .retain(|k, sb| !k.trim().is_empty() && !sb.is_default());
+        if bad_sb || self.project_sandboxes.len() != orig_sb_keys {
+            reset.push("projectSandboxes");
+        }
         if self.project_layout.sanitize() {
             reset.push("projectLayout");
         }
@@ -2005,6 +2026,7 @@ impl Default for Settings {
             project_budgets: Default::default(),
             project_worktrees: Default::default(),
             trusted_worktree_hooks: Default::default(),
+            project_sandboxes: Default::default(),
             project_layout: ProjectLayout::default(),
             alert_targets: Vec::new(),
             // On by default: measured as the biggest saver (see docs/TOKEN-SAVING.md). Anyone who

@@ -25,6 +25,7 @@ import {
   Plus,
   Pencil,
   Play,
+  ShieldCheck,
   SquareTerminal,
   Trash2,
 } from "lucide-react";
@@ -311,6 +312,29 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
             <StatusPill status={agent.status} done={done} className="h-7 text-xs" />
           )}
           {helperCount > 0 && !tight && !minimal && <HelpersChip count={helperCount} label={tier !== "compact"} />}
+          {agent.sandboxActive &&
+            (tight ? (
+              <Tooltip
+                content={`Sandboxed (${agent.sandboxActive.backend} · ${agent.sandboxActive.network ? "network allowed" : "no network"})`}
+              >
+                <span
+                  role="img"
+                  aria-label={`Sandboxed (${agent.sandboxActive.backend} · ${agent.sandboxActive.network ? "network allowed" : "no network"})`}
+                  className="flex h-6 w-5 items-center justify-center text-ok"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                </span>
+              </Tooltip>
+            ) : (
+              <Tooltip
+                content={`Sandboxed (${agent.sandboxActive.backend} · ${agent.sandboxActive.network ? "network allowed" : "no network"})`}
+              >
+                <Chip className="border-ok/35 bg-ok/10 text-ok">
+                  <ShieldCheck className="h-3 w-3 shrink-0" />
+                  {tier === "full" && !minimal && <span>Sandboxed</span>}
+                </Chip>
+              </Tooltip>
+            ))}
           {agent.rateLimited &&
             (tight ? (
               <LimitMark agent={agent} />

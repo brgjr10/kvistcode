@@ -128,6 +128,12 @@ impl Driver {
             Driver::Codex(d) => d.generation(),
         }
     }
+    fn sandbox_active(&self) -> Option<crate::sandbox::ActiveSandbox> {
+        match self {
+            Driver::Acp(d) => d.sandbox_active(),
+            Driver::Codex(d) => d.sandbox_active(),
+        }
+    }
 }
 
 /// When a project's file list was read, and the list.
@@ -435,8 +441,10 @@ impl Core {
                 || agent.pending_permissions != 0
                 || agent.queued_prompts != 0
                 || !agent.queue.is_empty()
+                || agent.sandbox_active.is_some()
             {
                 agent.running = false;
+                agent.sandbox_active = None;
                 agent.pending_permissions = 0;
                 agent.queued_prompts = 0;
                 agent.queue.clear();
@@ -645,6 +653,7 @@ impl Core {
                         a.status = AgentStatus::Interrupted;
                     }
                     a.running = false;
+                    a.sandbox_active = None;
                     a.pending_permissions = 0;
                 });
                 driver.shutdown().await;
@@ -1577,10 +1586,31 @@ impl Core {
             exe.as_deref(),
             live_subagents.as_ref().map(|(l, p)| (l, p.as_path())),
         );
-        let (response_style, language) = {
+        let (response_style, language, sandbox_cfg) = {
             let s = self.inner.settings.lock();
-            (s.response_style, s.default_language.clone())
+            (
+                s.response_style,
+                s.default_language.clone(),
+                crate::sandbox::config_for_project(&s.project_sandboxes, &agent.project_path),
+            )
         };
+        let launch_sandbox = sandbox_cfg
+            .filter(|cfg| cfg.mode != crate::sandbox::SandboxMode::Off)
+            .map(|cfg| {
+                let (writable_dirs, readonly_dirs) = crate::sandbox::collect_mounts(
+                    &cfg,
+                    agent.provider,
+                    &account,
+                    &self.inner.data_dir,
+                    &program,
+                    &cwd,
+                );
+                crate::sandbox::LaunchSandbox {
+                    config: cfg,
+                    writable_dirs,
+                    readonly_dirs,
+                }
+            });
         let guidance = crate::guidance::guidance(response_style, &language);
         let guide_tag = crate::guidance::tag(response_style, &language);
         let started = match agent.provider {
@@ -1604,6 +1634,7 @@ impl Core {
                     mcp_servers: &mcp_servers,
                     guidance: &guidance,
                     local_models: local_models.as_deref(),
+                    sandbox: launch_sandbox.as_ref(),
                 },
             )
             .await
@@ -1624,6 +1655,7 @@ impl Core {
                         mcp_servers: &mcp_servers,
                         guidance: &guidance,
                         session_meta,
+                        sandbox: launch_sandbox.as_ref(),
                     },
                 )
                 .await
@@ -1694,9 +1726,11 @@ impl Core {
             .insert(agent_id.to_string(), driver.clone());
         let ctx = self.ctx(agent_id);
         ctx.mark_up(driver.generation());
+        let sandbox_active = driver.sandbox_active();
         ctx.update_agent_settled(|a, active| {
             a.session_id = Some(session_id);
             a.running = true;
+            a.sandbox_active = sandbox_active;
             a.needs_briefing = false;
             a.guide_tag = guide_tag;
             // A healthy process is up and no turn is waiting for it (the message that
@@ -2191,6 +2225,7 @@ impl Core {
                 files: 0,
             }),
             worktree_setup: None,
+            sandbox_active: None,
         };
         {
             // Under the agents lock, which `delete_account` holds across its checks:
@@ -2571,7 +2606,10 @@ impl Core {
         }
         ctx.notice(NoticeLevel::Warn, note);
         let next = ctx.turn_finished(TurnOutcome::Cancelled);
-        let _ = self.update_agent(agent_id, |a| a.running = false);
+        let _ = self.update_agent(agent_id, |a| {
+            a.running = false;
+            a.sandbox_active = None;
+        });
         drop(guard);
         if let Some(d) = driver {
             d.shutdown().await;
@@ -2666,6 +2704,7 @@ impl Core {
             ctx.kill_starting_peer().await;
             self.update_agent(agent_id, |a| {
                 a.running = false;
+                a.sandbox_active = None;
                 // A prompt sent since owns the status.
                 if a.status.is_busy() && !ctx.is_turn_active() {
                     a.status = AgentStatus::Stopped;
@@ -2690,6 +2729,7 @@ impl Core {
         // Settled regardless of which path (this one or the exit handler) ended it.
         self.update_agent(agent_id, |a| {
             a.running = false;
+            a.sandbox_active = None;
             a.pending_permissions = 0;
             if a.status.is_busy() && !ctx.is_turn_active() {
                 a.status = AgentStatus::Stopped;
@@ -3065,6 +3105,7 @@ impl Core {
             s.project_budgets.keys().any(|k| is_old(k))
                 || s.project_worktrees.keys().any(|k| is_old(k))
                 || s.trusted_worktree_hooks.keys().any(|k| is_old(k))
+                || s.project_sandboxes.keys().any(|k| is_old(k))
                 || s.mcp_servers.iter().any(|m| is_old(&m.project_path))
                 || s.recent_projects.iter().any(|p| is_old(p))
                 || s.project_layout.paths().any(|p| is_old(p))
@@ -3105,6 +3146,17 @@ impl Core {
                         s.trusted_worktree_hooks
                             .entry(new.to_string())
                             .or_insert(hash);
+                    }
+                }
+                let sb_keys: Vec<String> = s
+                    .project_sandboxes
+                    .keys()
+                    .filter(|k| is_old(k))
+                    .cloned()
+                    .collect();
+                for key in sb_keys {
+                    if let Some(cfg) = s.project_sandboxes.remove(&key) {
+                        s.project_sandboxes.entry(new.to_string()).or_insert(cfg);
                     }
                 }
                 for server in s.mcp_servers.iter_mut().filter(|m| is_old(&m.project_path)) {
@@ -3461,6 +3513,7 @@ impl Core {
             // Persisted: the brief is still owed after a restart.
             a.needs_briefing = true;
             a.running = false;
+            a.sandbox_active = None;
             a.rate_limited = false;
             a.limit_resets_at = None;
             a.limit_resume = None;

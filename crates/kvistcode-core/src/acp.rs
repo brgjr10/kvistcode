@@ -89,6 +89,8 @@ pub struct AcpDriver {
     guided: std::sync::atomic::AtomicBool,
     /// SendUserFile calls still running → the reply that shows their files (see `show_sent_files`).
     sent_files: Mutex<HashMap<String, String>>,
+    /// Active sandbox metadata when this process was wrapped in bwrap or Docker.
+    sandbox_active: Option<crate::sandbox::ActiveSandbox>,
 }
 
 pub struct StartOptions<'a> {
@@ -107,6 +109,8 @@ pub struct StartOptions<'a> {
     /// `_meta` for `session/new`, `session/resume` and `session/load` (Claude: skills
     /// switched off, see `skill_prefs`).
     pub session_meta: Option<Value>,
+    /// Optional Bubblewrap / Docker sandbox wrapping this agent process.
+    pub sandbox: Option<&'a crate::sandbox::LaunchSandbox>,
 }
 
 /// `params` with the session `_meta` attached (when there is any).
@@ -122,9 +126,17 @@ impl AcpDriver {
         ctx: Arc<AgentCtx>,
         opts: StartOptions<'_>,
     ) -> anyhow::Result<Arc<AcpDriver>> {
+        let wrapped = crate::sandbox::maybe_wrap_command(
+            opts.sandbox,
+            opts.program,
+            opts.args,
+            opts.cwd,
+            opts.env,
+            opts.env_remove,
+        )?;
         let (peer, rx) = Peer::spawn(SpawnOptions {
-            program: opts.program,
-            args: opts.args,
+            program: &wrapped.program,
+            args: &wrapped.args,
             cwd: opts.cwd,
             env: opts.env,
             env_remove: opts.env_remove,
@@ -133,7 +145,15 @@ impl AcpDriver {
         })?;
         // Registered so Stop/quit/delete can kill a hung handshake right away.
         let generation = ctx.begin_start_with(peer.clone());
-        let result = Self::connect(ctx.clone(), &opts, peer.clone(), rx, generation).await;
+        let result = Self::connect(
+            ctx.clone(),
+            &opts,
+            peer.clone(),
+            rx,
+            generation,
+            wrapped.active,
+        )
+        .await;
         ctx.end_start(generation);
         match result {
             Ok(d) => Ok(d),
@@ -158,6 +178,7 @@ impl AcpDriver {
         peer: Arc<Peer>,
         rx: mpsc::UnboundedReceiver<Incoming>,
         generation: u64,
+        sandbox_active: Option<crate::sandbox::ActiveSandbox>,
     ) -> anyhow::Result<Arc<AcpDriver>> {
         let driver = Arc::new(AcpDriver {
             peer: peer.clone(),
@@ -179,6 +200,7 @@ impl AcpDriver {
             config_src: Mutex::default(),
             guided: std::sync::atomic::AtomicBool::new(false),
             sent_files: Mutex::default(),
+            sandbox_active,
         });
         tokio::spawn(event_loop(
             Arc::downgrade(&driver),
@@ -304,6 +326,10 @@ impl AcpDriver {
     /// ignores one, so it needs the note in a message instead).
     pub fn guided(&self) -> bool {
         self.guided.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn sandbox_active(&self) -> Option<crate::sandbox::ActiveSandbox> {
+        self.sandbox_active.clone()
     }
 
     fn apply_session_config(&self, resp: &Value) {

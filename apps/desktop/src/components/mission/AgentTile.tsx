@@ -1,4 +1,14 @@
-import { CalendarClock, Check, Gauge, GitBranch, MessageCircleQuestion, ShieldAlert, Workflow, X } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  Gauge,
+  GitBranch,
+  MessageCircleQuestion,
+  ShieldAlert,
+  ShieldCheck,
+  Workflow,
+  X,
+} from "lucide-react";
 import { memo, useState } from "react";
 import { AccountAvatar } from "@/components/AccountAvatar";
 import { ProviderGlyph } from "@/components/ProviderGlyph";
@@ -148,6 +158,15 @@ export const AgentTile = memo(function AgentTile({
               aria-label="Scheduled"
             >
               <CalendarClock className="h-3 w-3" />
+            </span>
+          )}
+          {agent.sandboxActive && (
+            <span
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-ok/35 bg-ok/10 text-ok"
+              title={`Sandboxed (${agent.sandboxActive.backend} · ${agent.sandboxActive.network ? "network allowed" : "no network"})`}
+              aria-label={`Sandboxed (${agent.sandboxActive.backend} · ${agent.sandboxActive.network ? "network allowed" : "no network"})`}
+            >
+              <ShieldCheck className="h-3 w-3" />
             </span>
           )}
           {summary.subagents > 0 && (

@@ -21,6 +21,7 @@ pub mod project_config;
 pub mod providers;
 pub mod questions;
 pub mod redact;
+pub mod sandbox;
 pub mod scripts;
 pub mod skill_prefs;
 pub mod skills;

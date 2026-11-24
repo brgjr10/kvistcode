@@ -122,6 +122,8 @@ pub struct CodexDriver {
     steering: std::sync::atomic::AtomicBool,
     /// Kvistcode's note went in as the thread's developer instructions.
     guided: bool,
+    /// Active sandbox metadata when this process was wrapped in bwrap or Docker.
+    sandbox_active: Option<crate::sandbox::ActiveSandbox>,
 }
 
 pub struct StartOptions<'a> {
@@ -145,6 +147,8 @@ pub struct StartOptions<'a> {
     /// For local-model agents: the models the server offers (replaces the OpenAI
     /// model list in the model picker).
     pub local_models: Option<&'a [LocalModel]>,
+    /// Optional Bubblewrap / Docker sandbox wrapping this agent process.
+    pub sandbox: Option<&'a crate::sandbox::LaunchSandbox>,
 }
 
 const APPROVAL_CHOICES: [(&str, &str, &str); 3] = [
@@ -170,9 +174,17 @@ impl CodexDriver {
         ctx: Arc<AgentCtx>,
         opts: StartOptions<'_>,
     ) -> anyhow::Result<Arc<CodexDriver>> {
+        let wrapped = crate::sandbox::maybe_wrap_command(
+            opts.sandbox,
+            opts.program,
+            opts.args,
+            opts.cwd,
+            opts.env,
+            opts.env_remove,
+        )?;
         let (peer, rx) = Peer::spawn(SpawnOptions {
-            program: opts.program,
-            args: opts.args,
+            program: &wrapped.program,
+            args: &wrapped.args,
             cwd: opts.cwd,
             env: opts.env,
             env_remove: opts.env_remove,
@@ -181,7 +193,15 @@ impl CodexDriver {
         })?;
         // Registered so Stop/quit/delete can kill a hung handshake right away.
         let generation = ctx.begin_start_with(peer.clone());
-        let result = Self::connect(ctx.clone(), &opts, peer.clone(), rx, generation).await;
+        let result = Self::connect(
+            ctx.clone(),
+            &opts,
+            peer.clone(),
+            rx,
+            generation,
+            wrapped.active,
+        )
+        .await;
         ctx.end_start(generation);
         match result {
             Ok(d) => Ok(d),
@@ -206,6 +226,7 @@ impl CodexDriver {
         peer: Arc<Peer>,
         rx: mpsc::UnboundedReceiver<Incoming>,
         generation: u64,
+        sandbox_active: Option<crate::sandbox::ActiveSandbox>,
     ) -> anyhow::Result<Arc<CodexDriver>> {
         peer.request_timeout(
             "initialize",
@@ -293,6 +314,7 @@ impl CodexDriver {
             effort: Mutex::new(resp["reasoningEffort"].as_str().map(str::to_string)),
             steering: std::sync::atomic::AtomicBool::new(true),
             guided,
+            sandbox_active,
         });
         tokio::spawn(event_loop(
             Arc::downgrade(&driver),
@@ -333,6 +355,10 @@ impl CodexDriver {
     /// Whether Kvistcode's note went in as this thread's developer instructions.
     pub fn guided(&self) -> bool {
         self.guided
+    }
+
+    pub fn sandbox_active(&self) -> Option<crate::sandbox::ActiveSandbox> {
+        self.sandbox_active.clone()
     }
 
     async fn publish_config(&self) {

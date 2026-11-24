@@ -249,6 +249,8 @@ export interface Agent {
   budget?: BudgetCap | null;
   /** Present while a worktree agent's setup hooks are running, waiting for approval, or failed. */
   worktreeSetup?: WorktreeSetupState | null;
+  /** Present while the agent's live process is running inside a Bubblewrap or Docker sandbox. */
+  sandboxActive?: ActiveSandbox | null;
   /** Set while the agent waits at a spending limit for you to choose (a "Needs you" item). */
   budgetHold?: BudgetHold | null;
   /** Turns this agent has completed (counted by the backend; null = not counted yet). Turn limits measure this. */
@@ -660,6 +662,8 @@ export interface Settings {
   projectWorktrees?: Record<string, ProjectWorktreeConfig>;
   /** Approved repo-level worktree script hashes, by project folder. */
   trustedWorktreeHooks?: Record<string, string>;
+  /** Per-project OS/container sandbox configuration, by project folder. */
+  projectSandboxes?: Record<string, ProjectSandboxConfig>;
   /** Slack, Discord and webhook targets for alerts (ntfy has its own field above). */
   alertTargets: AlertTarget[];
   /** Claude agents summarize their conversation at this many tokens (100k..1M); null = Claude Code's default. */
@@ -1362,4 +1366,31 @@ export interface WorkspaceFile {
 export interface WorkspaceFileSave {
   saved: boolean;
   file: WorkspaceFile;
+}
+
+export type SandboxMode = "off" | "auto" | "bwrap" | "docker";
+
+export type SandboxBackend = "bwrap" | "docker";
+
+/** Active sandbox status on a running agent. */
+export interface ActiveSandbox {
+  backend: SandboxBackend;
+  network: boolean;
+}
+
+/** Per-project OS/container sandbox configuration stored in Settings. */
+export interface ProjectSandboxConfig {
+  mode: SandboxMode;
+  allowNetwork: boolean;
+  dockerImage: string | null;
+  extraReadPaths: string[];
+}
+
+/** Detected sandbox backends installed on this machine. */
+export interface SandboxCapabilities {
+  bwrapAvailable: boolean;
+  bwrapPath: string | null;
+  dockerAvailable: boolean;
+  dockerPath: string | null;
+  platform: string;
 }

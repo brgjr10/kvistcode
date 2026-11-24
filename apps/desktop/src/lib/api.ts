@@ -66,6 +66,7 @@ import type {
   WakeStatus,
   WorkflowProgress,
   ResolvedWorktreeHooks,
+  SandboxCapabilities,
   EditorInfo,
   WorkspaceFile,
   WorkspaceFileSave,
@@ -472,6 +473,8 @@ const tauriApi = {
 
   // editors & lightweight workspace files
   detectEditors: () => invoke<EditorInfo[]>("detect_editors"),
+  /** Detects available OS/container sandbox runtimes (Bubblewrap on Linux, Docker cross-platform). */
+  detectSandboxBackends: () => invoke<SandboxCapabilities>("detect_sandbox_backends"),
   openInEditor: (path: string, opts?: { editorId?: string | null; line?: number | null; column?: number | null }) =>
     invoke<EditorInfo>("open_in_editor", {
       editorId: opts?.editorId ?? null,

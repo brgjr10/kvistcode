@@ -1597,7 +1597,12 @@ impl AgentCtx {
         );
         // `begin_turn` can have set "running" after the exit was handled: a dead
         // process can't be running.
-        self.with_current_generation(generation, || self.update_agent(|a| a.running = false));
+        self.with_current_generation(generation, || {
+            self.update_agent(|a| {
+                a.running = false;
+                a.sandbox_active = None;
+            })
+        });
     }
 
     /// At a turn boundary: the spending limit the agent must wait at, if one is hit.
@@ -2101,7 +2106,10 @@ impl AgentCtx {
         if !current {
             return;
         }
-        self.update_agent(|a| a.running = false);
+        self.update_agent(|a| {
+            a.running = false;
+            a.sandbox_active = None;
+        });
         // Starting: the starter sees the failed handshake and reports it.
         // Cancelled mid-start (Stop, cancel, "send now"): killing it was the point;
         // whoever cancelled settles the turn (the exit can land after the starter
@@ -2123,7 +2131,10 @@ impl AgentCtx {
                 // it too would run it twice).
                 self.finish_turn(Some(generation), None, TurnOutcome::Failed(msg), was_up);
                 // `begin_turn` can have raced the exit handler and set this again.
-                self.update_agent(|a| a.running = false);
+                self.update_agent(|a| {
+                    a.running = false;
+                    a.sandbox_active = None;
+                });
             }
             ExitIntent::Stop | ExitIntent::Shutdown => {
                 self.end_turn_early_for(Some(generation), intent)

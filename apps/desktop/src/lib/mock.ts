@@ -1574,6 +1574,15 @@ export const mockApi: KvistcodeApi = {
       .replace(/[^a-z0-9]+/g, "-")
       .slice(0, 28)
       .replace(/-+$/, "");
+    const sbKey = req.projectPath.trim().replace(/[\\/]+$/, "");
+    const sbCfg = db.settings.projectSandboxes?.[sbKey] ?? db.settings.projectSandboxes?.[req.projectPath];
+    const sandboxActive =
+      sbCfg && sbCfg.mode !== "off"
+        ? {
+            backend: (sbCfg.mode === "docker" ? "docker" : "bwrap") as "bwrap" | "docker",
+            network: sbCfg.allowNetwork,
+          }
+        : null;
     const agent: Agent = {
       id,
       title:
@@ -1591,6 +1600,7 @@ export const mockApi: KvistcodeApi = {
       sessionId: null,
       status: "starting",
       running: true,
+      sandboxActive,
       groupId: req.groupId,
       createdAt: now,
       updatedAt: now,
@@ -3335,6 +3345,17 @@ export const mockApi: KvistcodeApi = {
       { id: "zed", name: "Zed", command: "/usr/bin/zed", terminal: false },
       { id: "nvim", name: "Neovim", command: "/usr/bin/nvim", terminal: true },
     ];
+  },
+
+  async detectSandboxBackends() {
+    await sleep(30);
+    return {
+      bwrapAvailable: true,
+      bwrapPath: "/usr/bin/bwrap",
+      dockerAvailable: true,
+      dockerPath: "/usr/bin/docker",
+      platform: "linux",
+    };
   },
 
   async openInEditor(path, opts) {

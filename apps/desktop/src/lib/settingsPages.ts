@@ -182,6 +182,12 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
     tab: "worktrees",
     keywords: ["worktree", "setup", "teardown", "copy", ".env", "kvistcode.json", "cursor", "conductor"],
   },
+  {
+    label: "Sandbox (Bubblewrap & Docker)",
+    page: "projects",
+    tab: "sandbox",
+    keywords: ["sandbox", "bwrap", "bubblewrap", "docker", "container", "isolation", "network", "unattended"],
+  },
   { label: "Templates", page: "templates", keywords: ["prompts", "snippets"] },
   {
     label: "Remote access",

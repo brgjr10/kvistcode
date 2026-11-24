@@ -158,6 +158,7 @@ pub fn settings_section(settings: &Settings) -> String {
             "projectBudgets",
             "projectWorktrees",
             "trustedWorktreeHooks",
+            "projectSandboxes",
         ] {
             if let Some(slot) = o.get_mut(key) {
                 let n = slot
@@ -729,10 +730,24 @@ mod tests {
         );
         s.trusted_worktree_hooks
             .insert("/home/zed/secret-wt-project".into(), "a".repeat(64));
+        s.project_sandboxes.insert(
+            "/home/zed/secret-sandbox-project".into(),
+            kvistcode_core::sandbox::ProjectSandboxConfig {
+                mode: kvistcode_core::sandbox::SandboxMode::Docker,
+                allow_network: false,
+                docker_image: Some("registry.internal.corp/private-img:1".into()),
+                extra_read_paths: vec!["/home/zed/private-certs".into()],
+            },
+        );
         let out = settings_section(&s);
         assert!(!out.contains("webhooksecret123") && !out.contains("hooks.slack.com"));
         assert!(!out.contains("ops-room") && !out.contains("secret-project"));
         assert!(!out.contains("secret-wt-project") && !out.contains("internal.corp"));
+        assert!(!out.contains("secret-sandbox-project") && !out.contains("private-certs"));
+        assert!(
+            out.contains("\"projectSandboxes\": \"1 configured (hidden)\""),
+            "{out}"
+        );
         assert!(out.contains("1 configured (hidden)"), "{out}");
     }
 

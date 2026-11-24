@@ -327,6 +327,7 @@ export function seedSettings(onboarded: boolean): Settings {
     projectBudgets: {},
     projectWorktrees: {},
     trustedWorktreeHooks: {},
+    projectSandboxes: {},
     alertTargets: [],
     autoCompactWindow: 250_000,
     autoCompactPercent: null,

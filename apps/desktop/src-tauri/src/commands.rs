@@ -2016,6 +2016,14 @@ pub async fn detect_editors() -> CmdResult<Vec<kvistcode_core::editors::EditorIn
         .map_err(|e| e.to_string())
 }
 
+/// Detects available OS/container sandbox backends (Bubblewrap on Linux, Docker cross-platform).
+#[tauri::command]
+pub async fn detect_sandbox_backends() -> CmdResult<kvistcode_core::sandbox::SandboxCapabilities> {
+    tauri::async_runtime::spawn_blocking(kvistcode_core::sandbox::detect_sandbox_backends)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Opens a folder or file (optionally at `line`/`column`) in a detected code editor.
 #[tauri::command]
 pub async fn open_in_editor(

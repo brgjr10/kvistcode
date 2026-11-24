@@ -56,9 +56,9 @@ Agents in Kvistcode can consume MCP servers today, but cannot inspect or coordin
 ### 6. Optional OS / container sandboxing for unattended runs
 Git worktrees isolate repository files, not the broader filesystem or network—especially important in "Run without asking" mode (which auto-approves sandbox escapes as of v0.7.4).
 
-- [ ] Optional per-project sandbox mode using Bubblewrap (`bwrap`) on Linux and/or Docker containers cross-platform
-- [ ] Restrict write access to the agent's worktree + temp dir and make network access opt-in per project
-- [ ] Show a clear sandbox badge in the agent header when active
+- [x] Optional per-project sandbox mode using Bubblewrap (`bwrap`) on Linux and/or Docker containers cross-platform
+- [x] Restrict write access to the agent's worktree + temp dir and make network access opt-in per project
+- [x] Show a clear sandbox badge in the agent header when active
 
 ---
 

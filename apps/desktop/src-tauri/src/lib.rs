@@ -221,6 +221,7 @@ macro_rules! handler {
             commands::retry_worktree_setup,
             commands::skip_worktree_hooks,
             commands::detect_editors,
+            commands::detect_sandbox_backends,
             commands::open_in_editor,
             commands::list_workspace_files,
             commands::read_workspace_file,
