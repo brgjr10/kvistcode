@@ -15,6 +15,7 @@ import { validateAlertUrl } from "./alertTargets";
 import { sameAccelerator } from "../components/settings/acceleratorLabels";
 import { WAKE_MODEL, wakePhraseProblem } from "./wakePhrase";
 import { isMac } from "./utils";
+import { seedBoardCards } from "./mock-board";
 import { seedCompanions } from "./mock-companions";
 import { mockProjectConfig, mockSaveRules } from "./mock-project-config";
 import {
@@ -46,6 +47,7 @@ import {
 } from "./mock-data";
 import type {
   Account,
+  BoardCard,
   Checkpoint,
   ForkAgentRequest,
   RestorePreview,
@@ -1456,6 +1458,8 @@ function mockHealth(kind: LocalKind, baseUrl: string): LocalHealth {
 const mockBase: Record<string, BaseBranchStatus> = {};
 /** Pull requests merged / taken out of draft in this session (the browser preview has no GitHub). */
 const mockMerged = new Set<string>();
+let mockCardSeq = 0;
+const mockBoard: BoardCard[] = seedBoardCards();
 /** Agents whose pull request got a new commit since the mock first showed it (see `mockPushToPr`). */
 const mockPushes = new Map<string, number>();
 /** A stable fake commit id for an agent's pull request; each mock push gives it a new one. */
@@ -2301,6 +2305,44 @@ export const mockApi: KvistcodeApi = {
       return delay(bigDiff(lfs === "ok" ? "ok" : lfs === "none" ? "none" : "missing"), 400);
     }
     return delay(withoutReverted(seedDiff(itemsOf(agentId)), revertedPatches.get(agentId) ?? []), 400);
+  },
+
+  async boardCards(projectPath) {
+    return delay(
+      mockBoard.filter((c) => c.projectPath === projectPath).sort((a, b) => a.position - b.position),
+      80,
+    );
+  },
+
+  async addBoardCard(projectPath, title, notes) {
+    if (!title.trim()) throw new Error("A card needs a title");
+    const mine = mockBoard.filter((c) => c.projectPath === projectPath);
+    const now = Date.now();
+    const card: BoardCard = {
+      id: `card-${++mockCardSeq}`,
+      projectPath,
+      title: title.trim(),
+      notes: notes.trim(),
+      position: mine.reduce((m, c) => Math.max(m, c.position + 1), 0),
+      createdAt: now,
+      updatedAt: now,
+    };
+    mockBoard.push(card);
+    return delay(card, 80);
+  },
+
+  async updateBoardCard(id, title, notes) {
+    const card = mockBoard.find((c) => c.id === id);
+    if (!card) throw new Error("That card is gone");
+    if (!title.trim()) throw new Error("A card needs a title");
+    Object.assign(card, { title: title.trim(), notes: notes.trim(), updatedAt: Date.now() });
+    return delay(undefined, 80);
+  },
+
+  async deleteBoardCard(id) {
+    const i = mockBoard.findIndex((c) => c.id === id);
+    if (i >= 0) mockBoard.splice(i, 1);
+    return delay(undefined, 80);
   },
 
   async listCheckpoints(agentId) {

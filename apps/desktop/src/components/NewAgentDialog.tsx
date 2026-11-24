@@ -328,6 +328,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
         }
         launchedAll.current = true;
         onDone();
+        preset?.onLaunched?.();
         if (groupId && allLaunched.length >= 2) {
           // A comparison (one agent per account) has its own page; several copies of one agent
           // are shown together as a grid of conversations.

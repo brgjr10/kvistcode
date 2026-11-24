@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod auto_review;
+pub mod board;
 pub mod budget;
 pub mod checkpoints;
 pub mod childenv;

@@ -493,6 +493,42 @@ pub async fn get_diff(core: State<'_, Core>, agent_id: String) -> CmdResult<Agen
     git_review::get_diff(&agent).await.map_err(err)
 }
 
+// ---- project board -----------------------------------------------------------
+
+#[tauri::command]
+pub async fn board_cards(
+    core: State<'_, Core>,
+    project_path: String,
+) -> CmdResult<Vec<kvistcode_core::board::BoardCard>> {
+    core.board_cards(&project_path).map_err(err)
+}
+
+#[tauri::command]
+pub async fn add_board_card(
+    core: State<'_, Core>,
+    project_path: String,
+    title: String,
+    notes: String,
+) -> CmdResult<kvistcode_core::board::BoardCard> {
+    core.add_board_card(&project_path, &title, &notes)
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn update_board_card(
+    core: State<'_, Core>,
+    id: String,
+    title: String,
+    notes: String,
+) -> CmdResult<()> {
+    core.update_board_card(&id, &title, &notes).map_err(err)
+}
+
+#[tauri::command]
+pub async fn delete_board_card(core: State<'_, Core>, id: String) -> CmdResult<()> {
+    core.delete_board_card(&id).map_err(err)
+}
+
 // ---- checkpoints -------------------------------------------------------------
 
 #[tauri::command]

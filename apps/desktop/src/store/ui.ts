@@ -15,7 +15,7 @@ import type { Agent, Provider, Schedule } from "@/lib/types";
 export type View = "agents" | "mission" | "compare" | "schedules" | "usage" | "accounts" | "settings";
 
 /** Mission Control's two lenses on the fleet: the agents that need you, and every agent. */
-export type MissionTab = "needs" | "all";
+export type MissionTab = "needs" | "all" | "board";
 
 export type SettingsSection =
   | "appearance"
@@ -63,6 +63,8 @@ export interface NewAgentPreset {
   /** Title for the agent, and whether it starts in its own worktree (an issue's agent does). */
   title?: string;
   worktree?: boolean;
+  /** Called once everything has started (a board card removes itself). */
+  onLaunched?: () => void;
 }
 
 interface UiStore {

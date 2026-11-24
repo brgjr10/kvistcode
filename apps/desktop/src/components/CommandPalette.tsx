@@ -453,6 +453,12 @@ function Palette({ onClose }: { onClose: () => void }) {
                 onSelect={() => run(() => ui.openMission("all"))}
               />
               <PaletteAction
+                icon={<Columns3 />}
+                label="Go to Board"
+                keywords={["kanban", "tasks", "backlog", "project board"]}
+                onSelect={() => run(() => ui.openMission("board"))}
+              />
+              <PaletteAction
                 icon={<Settings />}
                 label="Open Settings"
                 shortcut={[modKey, ","]}

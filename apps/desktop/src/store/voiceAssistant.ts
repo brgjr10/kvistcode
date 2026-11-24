@@ -32,7 +32,7 @@ const SETTINGS_SECTIONS: ReadonlySet<string> = new Set([
 export function applyNavigation(view: string, agentId: string | null, section: string | null = null) {
   const ui = useUi.getState();
   if (view === "mission_control") {
-    if (section === "needs" || section === "all") ui.openMission(section as MissionTab);
+    if (section === "needs" || section === "all" || section === "board") ui.openMission(section as MissionTab);
     else ui.setView("mission");
   } else if (view === "settings")
     ui.openSettings(section && SETTINGS_SECTIONS.has(section) ? (section as SettingsSection) : undefined);

@@ -29,6 +29,7 @@ import type {
   CommitSummary,
   PrPrompt,
   PrStatus,
+  BoardCard,
   IssueList,
   IssueStart,
   MergeMethod,
@@ -285,6 +286,14 @@ const tauriApi = {
 
   // review / git
   getDiff: (agentId: string) => invoke<AgentDiff>("get_diff", { agentId }),
+
+  // project board (Backlog cards)
+  boardCards: (projectPath: string) => invoke<BoardCard[]>("board_cards", { projectPath }),
+  addBoardCard: (projectPath: string, title: string, notes: string) =>
+    invoke<BoardCard>("add_board_card", { projectPath, title, notes }),
+  updateBoardCard: (id: string, title: string, notes: string) =>
+    invoke<void>("update_board_card", { id, title, notes }),
+  deleteBoardCard: (id: string) => invoke<void>("delete_board_card", { id }),
 
   // checkpoints (rewind)
   listCheckpoints: (agentId: string) => invoke<CheckpointList>("list_checkpoints", { agentId }),
