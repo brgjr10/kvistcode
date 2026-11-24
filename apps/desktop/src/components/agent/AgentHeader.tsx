@@ -77,7 +77,7 @@ import {
 import { Tooltip } from "../ui/tooltip";
 import { PrChip } from "./PrChip";
 import { ResumesAt } from "./ResumesAt";
-import { HelperOfLine, HelpersChip, SyncChip, TileToggle } from "./HelperBits";
+import { ForkedFromLine, HelperOfLine, HelpersChip, SyncChip, TileToggle } from "./HelperBits";
 
 const EMPTY_CUSTOM: CustomAgent[] = [];
 
@@ -258,6 +258,8 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
                   <HelperOfLine agent={agent} />
                   <SyncChip agent={agent} />
                 </>
+              ) : agent.forkedFrom ? (
+                <ForkedFromLine agent={agent} />
               ) : tail ? (
                 <>
                   <Spinner className="h-3 w-3 shrink-0" />

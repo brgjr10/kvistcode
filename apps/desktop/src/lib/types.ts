@@ -255,6 +255,8 @@ export interface Agent {
   budgetHold?: BudgetHold | null;
   /** Turns this agent has completed (counted by the backend; null = not counted yet). Turn limits measure this. */
   turns?: number | null;
+  /** Set when this agent was forked from another agent's checkpoint. */
+  forkedFrom?: string | null;
 }
 
 export type HelperSyncState = "inSync" | "pendingToMain" | "pendingFromMain" | "merging" | "conflict";
@@ -509,7 +511,22 @@ export type KvistcodeEvent =
   | { type: "update_available"; update: UpdateInfo }
   | { type: "update_progress"; downloaded: number; total: number | null }
   /** Settings changed from the phone: show them, so the window doesn't save an older copy over them. */
-  | { type: "settings_changed"; settings: Settings };
+  | { type: "settings_changed"; settings: Settings }
+  /** A non-interrupting `/btw` side-chat question started, streamed text, or finished. */
+  | { type: "side_chat_updated"; entry: SideChatEntry };
+
+export type SideChatStatus = "running" | "done" | "error";
+
+export interface SideChatEntry {
+  id: string;
+  agentId: string;
+  question: string;
+  answer: string;
+  status: SideChatStatus;
+  error: string | null;
+  createdAt: number;
+  finishedAt: number | null;
+}
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -1126,6 +1143,33 @@ export interface RestoreResult {
   /** Restore this checkpoint to undo the restore. */
   safetyId: string;
   filesChanged: number;
+}
+
+export interface TurnDiffFile {
+  path: string;
+  status: "added" | "deleted" | "modified";
+  additions: number;
+  deletions: number;
+}
+
+export interface TurnDiff {
+  files: TurnDiffFile[];
+  patch: string;
+  additions: number;
+  deletions: number;
+  fromSeq: number;
+  /** Next turn checkpoint seq, or null when compared against current working files (latest turn). */
+  toSeq: number | null;
+  truncated: boolean;
+}
+
+export interface ForkAgentRequest {
+  provider?: Provider | null;
+  accountId?: string | null;
+  customAgentId?: string | null;
+  model?: string | null;
+  title?: string | null;
+  instruction?: string | null;
 }
 
 export interface SearchHit {

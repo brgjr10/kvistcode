@@ -50,6 +50,7 @@ fn coalesce(batch: Vec<KvistcodeEvent>) -> Vec<KvistcodeEvent> {
     let mut deltas: HashMap<(String, String, DeltaField), (usize, usize)> = HashMap::new();
     let mut terminals: HashMap<String, usize> = HashMap::new();
     let mut agents: HashMap<String, usize> = HashMap::new();
+    let mut side_chats: HashMap<String, usize> = HashMap::new();
     for event in batch {
         match event {
             KvistcodeEvent::TextDelta {
@@ -94,6 +95,12 @@ fn coalesce(batch: Vec<KvistcodeEvent>) -> Vec<KvistcodeEvent> {
                     out[slot] = None;
                 }
                 out.push(Some(KvistcodeEvent::AgentUpdated { agent }));
+            }
+            KvistcodeEvent::SideChatUpdated { entry } => {
+                if let Some(slot) = side_chats.insert(entry.id.clone(), out.len()) {
+                    out[slot] = None;
+                }
+                out.push(Some(KvistcodeEvent::SideChatUpdated { entry }));
             }
             other => {
                 // Later deltas must not merge across a full replacement or removal.

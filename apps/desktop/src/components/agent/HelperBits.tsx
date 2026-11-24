@@ -53,6 +53,31 @@ export function HelperOfLine({ agent }: { agent: Agent }) {
   );
 }
 
+/** "Forked from <source>" line under a forked agent's title; opens the source agent when still present. */
+export function ForkedFromLine({ agent }: { agent: Agent }) {
+  const src = useApp((s) => (agent.forkedFrom ? s.agents[agent.forkedFrom] : undefined));
+  if (!agent.forkedFrom) return null;
+  if (!src) {
+    return (
+      <span className="flex min-w-0 shrink items-center gap-1.5 text-meta leading-none text-steel">
+        <GitFork className="h-3 w-3 shrink-0 text-accent" />
+        <span className="truncate">Forked session</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => useUi.getState().openAgent(src.id)}
+      className="flex min-w-0 shrink items-center gap-1.5 text-left text-meta leading-none text-steel transition-colors hover:text-fg"
+    >
+      <GitFork className="h-3 w-3 shrink-0 text-accent" />
+      <span className="shrink-0">Forked from</span>
+      <span className="min-w-0 truncate text-muted">{src.title}</span>
+    </button>
+  );
+}
+
 /** Sync state of a helper with its main agent; the popover holds the actions. */
 export function SyncChip({ agent }: { agent: Agent }) {
   const ctx = useMain(agent);

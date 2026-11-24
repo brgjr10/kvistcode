@@ -18,8 +18,10 @@ use crate::session::{AgentCtx, ExitIntent, Prompt, StartCancelled, Steer, TurnOu
 use crate::{accounts, git, local, providers, EventSink, Result};
 
 mod budgets;
+mod fork;
 mod helper_sync;
 mod limit_wait;
+mod side_chat;
 mod worktree_setup;
 
 /// Starts an agent as a helper of `parent_id`, from `commit` (a snapshot of the
@@ -2037,7 +2039,7 @@ impl Core {
     /// Creates the worktree (if requested), spawns the adapter, opens a session and
     /// sends the first prompt. Returns once the agent row exists (status `starting`).
     pub async fn create_agent(&self, req: CreateAgentRequest) -> Result<Agent> {
-        self.create_agent_inner(req, None, None, None).await
+        self.create_agent_inner(req, None, None, None, None).await
     }
 
     async fn create_agent_inner(
@@ -2046,6 +2048,7 @@ impl Core {
         shared_checkout: Option<&Agent>,
         schedule_id: Option<String>,
         helper: Option<HelperSeed>,
+        fork: Option<fork::ForkSeed>,
     ) -> Result<Agent> {
         // A prompt is optional: without one the agent starts up and waits for you.
         let prompt = req.prompt.trim().to_string();
@@ -2095,74 +2098,106 @@ impl Core {
         });
 
         let mut worktree_error = None;
-        let (cwd, worktree, branch, base_branch, base_commit) = match (shared_checkout, &helper) {
-            (Some(src), _) => (
-                src.cwd.clone(),
-                false,
-                src.branch.clone(),
-                src.base_branch.clone(),
-                src.base_commit.clone(),
-            ),
-            // A helper always gets its own worktree, started from a snapshot of the
-            // main agent's files (a failure is an error, never a shared folder).
-            (None, Some(seed)) => {
-                let repo = git::repo_info(&project)
-                    .await
-                    .ok_or_else(|| anyhow!(crate::helpers::NOT_GIT))?;
-                let from_snapshot = git::RepoInfo {
-                    head_commit: seed.commit.clone(),
-                    ..repo
-                };
-                let wt = git::create_worktree(
-                    &project,
-                    &from_snapshot,
-                    &self.inner.data_dir,
-                    &id,
-                    &format!("helper {title}"),
-                )
-                .await?;
-                (
-                    wt.cwd.to_string_lossy().into_owned(),
-                    true,
-                    Some(wt.branch),
-                    seed.base_branch.clone(),
-                    Some(seed.commit.clone()),
-                )
-            }
-            (None, None) => match git::repo_info(&project).await {
-                Some(repo) if req.worktree => {
-                    match git::create_worktree(&project, &repo, &self.inner.data_dir, &id, &title)
+        let (cwd, worktree, branch, base_branch, base_commit) =
+            match (shared_checkout, &helper, &fork) {
+                (Some(src), _, _) => (
+                    src.cwd.clone(),
+                    false,
+                    src.branch.clone(),
+                    src.base_branch.clone(),
+                    src.base_commit.clone(),
+                ),
+                // A helper always gets its own worktree, started from a snapshot of the
+                // main agent's files (a failure is an error, never a shared folder).
+                (None, Some(seed), _) => {
+                    let repo = git::repo_info(&project)
                         .await
-                    {
-                        Ok(wt) => (
-                            wt.cwd.to_string_lossy().into_owned(),
-                            true,
-                            Some(wt.branch),
-                            repo.branch,
-                            Some(repo.head_commit),
-                        ),
-                        Err(e) => {
-                            worktree_error = Some(format!("{e:#}"));
-                            (
-                                req.project_path.clone(),
-                                false,
-                                None,
+                        .ok_or_else(|| anyhow!(crate::helpers::NOT_GIT))?;
+                    let from_snapshot = git::RepoInfo {
+                        head_commit: seed.commit.clone(),
+                        ..repo
+                    };
+                    let wt = git::create_worktree(
+                        &project,
+                        &from_snapshot,
+                        &self.inner.data_dir,
+                        &id,
+                        &format!("helper {title}"),
+                    )
+                    .await?;
+                    (
+                        wt.cwd.to_string_lossy().into_owned(),
+                        true,
+                        Some(wt.branch),
+                        seed.base_branch.clone(),
+                        Some(seed.commit.clone()),
+                    )
+                }
+                // A fork always gets its own isolated worktree rooted at the checkpoint commit.
+                (None, None, Some(seed)) => {
+                    let repo = git::repo_info(&project)
+                        .await
+                        .ok_or_else(|| anyhow!("Forking needs a git repository"))?;
+                    let from_snapshot = git::RepoInfo {
+                        head_commit: seed.commit.clone(),
+                        ..repo
+                    };
+                    let wt = git::create_worktree(
+                        &project,
+                        &from_snapshot,
+                        &self.inner.data_dir,
+                        &id,
+                        &format!("fork {title}"),
+                    )
+                    .await?;
+                    (
+                        wt.cwd.to_string_lossy().into_owned(),
+                        true,
+                        Some(wt.branch),
+                        seed.base_branch.clone(),
+                        Some(seed.commit.clone()),
+                    )
+                }
+                (None, None, None) => match git::repo_info(&project).await {
+                    Some(repo) if req.worktree => {
+                        match git::create_worktree(
+                            &project,
+                            &repo,
+                            &self.inner.data_dir,
+                            &id,
+                            &title,
+                        )
+                        .await
+                        {
+                            Ok(wt) => (
+                                wt.cwd.to_string_lossy().into_owned(),
+                                true,
+                                Some(wt.branch),
                                 repo.branch,
                                 Some(repo.head_commit),
-                            )
+                            ),
+                            Err(e) => {
+                                worktree_error = Some(format!("{e:#}"));
+                                (
+                                    req.project_path.clone(),
+                                    false,
+                                    None,
+                                    repo.branch,
+                                    Some(repo.head_commit),
+                                )
+                            }
                         }
                     }
-                }
-                Some(repo) => (
-                    req.project_path.clone(),
-                    false,
-                    None,
-                    repo.branch,
-                    Some(repo.head_commit),
-                ),
-                None => (req.project_path.clone(), false, None, None, None),
-            },
-        };
+                    Some(repo) => (
+                        req.project_path.clone(),
+                        false,
+                        None,
+                        repo.branch,
+                        Some(repo.head_commit),
+                    ),
+                    None => (req.project_path.clone(), false, None, None, None),
+                },
+            };
 
         let now = now_ms();
         let agent = Agent {
@@ -2226,6 +2261,7 @@ impl Core {
             }),
             worktree_setup: None,
             sandbox_active: None,
+            forked_from: fork.as_ref().map(|f| f.forked_from.clone()),
         };
         {
             // Under the agents lock, which `delete_account` holds across its checks:
@@ -2287,6 +2323,8 @@ impl Core {
             );
         }
         if let Some(seed) = &helper {
+            ctx.set_preamble(seed.preamble.clone());
+        } else if let Some(seed) = &fork {
             ctx.set_preamble(seed.preamble.clone());
         }
         let pending = worktree_setup::PendingStart {
@@ -2505,6 +2543,16 @@ impl Core {
     ) -> Result<crate::checkpoints::RestorePreview> {
         let agent = self.agent(agent_id)?;
         crate::checkpoints::preview(&self.inner.db, &agent, checkpoint_id).await
+    }
+
+    /// Unified diff of a single turn (`checkpoint_id` to next turn checkpoint, or current files).
+    pub async fn turn_diff(
+        &self,
+        agent_id: &str,
+        checkpoint_id: &str,
+    ) -> Result<crate::checkpoints::TurnDiff> {
+        let agent = self.agent(agent_id)?;
+        crate::checkpoints::turn_diff(&self.inner.db, &agent, checkpoint_id).await
     }
 
     /// Puts the agent's files back to a checkpoint (saving the current state first).
@@ -2863,12 +2911,11 @@ impl Core {
                 .any(|r| r.agent.id != agent.id && r.agent.cwd == agent.cwd);
         let project = PathBuf::from(&agent.project_path);
         let cwd = PathBuf::from(&agent.cwd);
-        // A helper's branch starts at a snapshot of the main agent's files, a commit no other
-        // branch contains. It isn't the helper's work, so it doesn't count as unsaved.
-        let start = agent
-            .parent_id
-            .as_ref()
-            .and(agent.base_commit.as_deref())
+        // A helper's or fork's branch starts at a snapshot of the source agent's files, a commit
+        // no other branch contains. It isn't new work, so it doesn't count as unsaved.
+        let start = (agent.parent_id.is_some() || agent.forked_from.is_some())
+            .then_some(agent.base_commit.as_deref())
+            .flatten()
             .filter(|_| !force);
         // Checked before stopping anything, so a refused delete leaves the agent be.
         if remove && !force {
@@ -3339,7 +3386,8 @@ impl Core {
             attachments: Vec::new(),
             config_choices: Default::default(),
         };
-        self.create_agent_inner(req, Some(&src), None, None).await
+        self.create_agent_inner(req, Some(&src), None, None, None)
+            .await
     }
 
     /// Files the agent edited, deleted or moved (absolute or cwd-relative paths).
@@ -3804,7 +3852,7 @@ impl Core {
             config_choices: Default::default(),
         };
         let result = self
-            .create_agent_inner(req, None, Some(schedule.id.clone()), None)
+            .create_agent_inner(req, None, Some(schedule.id.clone()), None, None)
             .await;
         // The schedule may have been edited or deleted meanwhile: change only the outcome.
         let outcome = self

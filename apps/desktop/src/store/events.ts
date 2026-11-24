@@ -9,6 +9,7 @@ import { switchAccount, switchCandidates } from "@/lib/actions";
 import type { Agent, KvistcodeEvent } from "@/lib/types";
 import { errorMessage } from "@/lib/utils";
 import { useApp } from "./app";
+import { useSideChat } from "./sideChat";
 import { useUi } from "./ui";
 
 function handleUiEvent(e: KvistcodeEvent) {
@@ -52,6 +53,9 @@ function handleUiEvent(e: KvistcodeEvent) {
       break;
     case "schedule_removed":
       publishScheduleEvent({ type: "removed", scheduleId: e.scheduleId });
+      break;
+    case "side_chat_updated":
+      useSideChat.getState().upsert(e.entry);
       break;
     case "agent_removed": {
       const ui = useUi.getState();

@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { GitFork, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -7,6 +7,7 @@ import type { RestorePreview, TimelineItem } from "@/lib/types";
 import { basename, cn, errorMessage } from "@/lib/utils";
 import { ensureCheckpoints, refreshCheckpoints, useCheckpoints } from "@/store/checkpoints";
 import { useApp } from "@/store/app";
+import { useUi } from "@/store/ui";
 import { insertIntoDraft } from "../agent/drafts";
 import { Button } from "../ui/button";
 import { Dialog, DialogBody, DialogContent, DialogFooter } from "../ui/dialog";
@@ -83,6 +84,22 @@ export function RestoreAction({ item }: { item: UserItem }) {
 
   return (
     <>
+      <button
+        type="button"
+        aria-label="Fork a new agent from this checkpoint"
+        title="Fork a new agent from before this message"
+        onClick={() =>
+          useUi.getState().setForkTarget({
+            agent,
+            checkpointId: checkpoint.id,
+            label: `checkpoint #${checkpoint.seq}`,
+          })
+        }
+        className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-micro text-steel transition-colors hover:bg-raised hover:text-fg"
+      >
+        <GitFork className="h-3.5 w-3.5" />
+        <span>Fork</span>
+      </button>
       <button
         type="button"
         aria-label="Restore files to before this message"

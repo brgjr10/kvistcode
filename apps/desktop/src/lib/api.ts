@@ -11,9 +11,12 @@ import type {
   CompanionInfo,
   ProjectRefresh,
   CheckpointList,
+  ForkAgentRequest,
   QuestionAnswers,
   RestorePreview,
   RestoreResult,
+  SideChatEntry,
+  TurnDiff,
   Account,
   Agent,
   AgentDiff,
@@ -234,6 +237,16 @@ const tauriApi = {
       instruction,
       customAgentId: customAgentId ?? null,
     }),
+  /** Branch a new parallel agent on its own worktree from a checkpoint (or current state when null). */
+  forkAgent: (agentId: string, checkpointId: string | null, req: ForkAgentRequest) =>
+    invoke<Agent>("fork_agent", {
+      agentId,
+      checkpointId: checkpointId ?? null,
+      req,
+    }),
+  /** Ask a quick read-only side question (`/btw`) against the agent's workspace without interrupting its turn. */
+  askSideQuestion: (agentId: string, question: string) =>
+    invoke<SideChatEntry>("ask_side_question", { agentId, question }),
   /** Move the agent (and its session) to another account of the same provider. */
   switchAccount: (agentId: string, accountId: string) => invoke<Agent>("switch_account", { agentId, accountId }),
   /** Shows a native save dialog (Markdown or JSON) and writes the transcript; returns the saved path, or null if cancelled. */
@@ -276,6 +289,9 @@ const tauriApi = {
   /** What restoring would change: files that differ between now and the checkpoint. */
   previewCheckpoint: (agentId: string, checkpointId: string) =>
     invoke<RestorePreview>("preview_checkpoint", { agentId, checkpointId }),
+  /** Unified diff for a single turn (`checkpointId` to the next turn checkpoint, or current files). */
+  turnDiff: (agentId: string, checkpointId: string) =>
+    invoke<TurnDiff>("turn_diff", { agentId, checkpointId }),
   /** Saves the current state, then restores the checkpoint. Restoring `safetyId` undoes it. */
   restoreCheckpoint: (agentId: string, checkpointId: string) =>
     invoke<RestoreResult>("restore_checkpoint", { agentId, checkpointId }),
