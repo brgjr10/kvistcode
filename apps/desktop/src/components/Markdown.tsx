@@ -40,6 +40,8 @@ import { openFileLineTarget } from "@/store/editors";
 import { RunButton } from "./RunButton";
 import { CODE_PREVIEW_LINES, codeCollapses } from "./timeline/collapse";
 import { FindTargetContext } from "./timeline/findInConversation";
+import { ArtifactFrame, ArtifactModal, ArtifactTools } from "./ArtifactFrame";
+import { artifactKind, previewByDefault, withinCap } from "@/lib/artifact";
 
 /** Agent whose terminal shell code blocks can run in; null (default) hides the Run button. */
 const RunContext = createContext<string | null>(null);
@@ -80,6 +82,12 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
   const command = useMemo(() => (shellish && !hidden ? commandText(code, lang) : ""), [shellish, hidden, code, lang]);
   const shown = hidden ? revealHidden(code) : code;
   const runFn = useRef<() => void>(() => {});
+  // HTML/SVG blocks can render in a sandbox (see lib/artifact.ts). Whole documents open on Preview, snippets on Code.
+  const kind = !streaming && withinCap(code) ? artifactKind(lang, code) : null;
+  const [pick, setPick] = useState<"preview" | "code" | null>(null);
+  const previewing = kind !== null && (pick ?? (previewByDefault(kind, code) ? "preview" : "code")) === "preview";
+  const [reload, setReload] = useState(0);
+  const [big, setBig] = useState(false);
   return (
     <div dir="ltr" className="group/code my-3 overflow-hidden rounded-xl border border-line bg-code">
       <div className="flex h-8 items-center justify-between border-b border-line/70 bg-panel/50 pl-3.5 pr-1.5">
@@ -90,6 +98,27 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
           )}
         </span>
         <div className="flex items-center gap-0.5">
+          {kind && (
+            <>
+              <span role="group" aria-label="View" className="mr-1 flex rounded-md bg-raised/50 p-px">
+                {(["code", "preview"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={previewing === (v === "preview")}
+                    onClick={() => setPick(v)}
+                    className={cn(
+                      "h-5 rounded px-2 text-micro capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                      previewing === (v === "preview") ? "bg-panel text-fg" : "text-steel hover:text-fg",
+                    )}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </span>
+              {previewing && <ArtifactTools onReload={() => setReload((n) => n + 1)} onOpen={() => setBig(true)} />}
+            </>
+          )}
           {runAgent && command && (
             <RunButton
               agentId={runAgent}
@@ -107,7 +136,10 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
           This command contains hidden characters and can't be run from here.
         </div>
       )}
+      {kind && previewing && <ArtifactFrame kind={kind} code={code} reloadKey={reload} />}
+      {kind && big && <ArtifactModal kind={kind} code={code} open onClose={() => setBig(false)} />}
       <pre
+        hidden={previewing}
         ref={preRef}
         // Focusable so the keyboard can scroll a wide block sideways (and run a command with Ctrl/⌘+Enter).
         tabIndex={0}
@@ -149,7 +181,7 @@ function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
           )}
         </code>
       </pre>
-      {foldable && (
+      {foldable && !previewing && (
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}

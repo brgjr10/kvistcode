@@ -2415,6 +2415,12 @@ export function seedItems(): Record<string, TimelineItem[]> {
       kind: "agent_message",
       text: "and testing. That would distort its results.\n\nThe fixture parses in **182 ms** on average (p95 214 ms).",
     },
+    { kind: "user_message", text: "Chart those runs for me, and a small badge for the p95." },
+    {
+      kind: "agent_message",
+      text: "Here is the chart as a page you can preview:\n\n```html\n<!doctype html>\n<html><body style=\"font:14px system-ui;margin:12px\">\n<h3 style=\"margin:0 0 8px\">Parse time by run (ms)</h3>\n<canvas id=\"c\" width=\"420\" height=\"140\"></canvas>\n<script>\nvar v=[190,176,182,214,171,180,185],c=document.getElementById(\"c\").getContext(\"2d\");\nv.forEach(function(x,i){c.fillStyle=\"#4f8cff\";c.fillRect(10+i*58,140-x*0.6,44,x*0.6)});\n</script></body></html>\n```\n\nAnd the badge:\n\n```svg\n<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 240 80\" width=\"240\" height=\"80\">\n  <rect x=\"4\" y=\"4\" width=\"232\" height=\"72\" rx=\"10\" fill=\"#10231a\" stroke=\"#3ecf8e\"/>\n  <text x=\"120\" y=\"46\" fill=\"#3ecf8e\" font-family=\"sans-serif\" font-size=\"18\" text-anchor=\"middle\">p95 214 ms</text>\n</svg>\n```",
+
+    },
   ]);
 
   return out;
