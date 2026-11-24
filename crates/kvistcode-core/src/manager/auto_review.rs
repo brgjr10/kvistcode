@@ -192,6 +192,11 @@ impl Core {
         };
         let prompt = auto_review::format_findings_prompt(&chosen, &reviewer_label, false);
         self.send_prompt(agent_id, &prompt, Vec::new()).await?;
+        // `send_prompt` treats this as a new user prompt and re-arms the auto-fix. Sending
+        // findings is a fix of the same work, so the review of that fix must not auto-send
+        // yet another turn.
+        self.inner.auto_fix_used.lock().insert(agent_id.to_string());
+        state.auto_fix_sent = true;
 
         let sent_ids: std::collections::HashSet<&str> =
             chosen.iter().map(|f| f.id.as_str()).collect();
