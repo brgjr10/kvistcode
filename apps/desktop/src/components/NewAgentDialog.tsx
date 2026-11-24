@@ -24,6 +24,7 @@ import {
 import { useApp } from "@/store/app";
 import { useUi, type NewAgentPreset } from "@/store/ui";
 import { AccountAvatar } from "./AccountAvatar";
+import { ImportSessionsButton } from "./ImportSessions";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { AgentCount } from "./home/AgentCount";
 import { useAttachments } from "@/hooks/useAttachments";
@@ -432,6 +433,7 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
               <CircleDot />
               Issues
             </Button>
+            <ImportSessionsButton project={project} onDone={onDone} />
           </div>
           <ProjectPicker value={project} onChange={setProject} recent={recent} defaultOpen={recent.length === 0} />
         </div>

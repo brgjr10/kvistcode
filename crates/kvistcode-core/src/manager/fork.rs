@@ -197,7 +197,7 @@ impl Core {
             preamble,
         };
         let forked = self
-            .create_agent_inner(create_req, None, None, None, Some(seed))
+            .create_agent_inner(create_req, None, None, None, Some(seed), None)
             .await?;
         self.ctx(&forked.id).notice(
             NoticeLevel::Info,

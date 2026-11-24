@@ -961,7 +961,13 @@ const C = {
 async function runLogin(t: MockTerminal) {
   const acc = db.accounts.find((a) => a.id === t.accountId);
   const cli =
-    acc?.provider === "codex" ? "codex" : acc?.provider === "grok" ? "grok" : acc?.provider === "gemini" ? "gemini" : "claude";
+    acc?.provider === "codex"
+      ? "codex"
+      : acc?.provider === "grok"
+        ? "grok"
+        : acc?.provider === "gemini"
+          ? "gemini"
+          : "claude";
   await sleep(350);
   termOut(t.id, `${C.dim}$ ${cli} ${cli === "claude" ? "/login" : "login"}${C.reset}\r\n\r\n`);
   await sleep(500);
@@ -3093,6 +3099,38 @@ export const mockApi: KvistcodeApi = {
 
   async workspaceScripts() {
     return delay(clone(MOCK_SCRIPTS), 80);
+  },
+
+  async listExternalSessions(provider, projectPath) {
+    if (provider !== "claude" && provider !== "codex") return [];
+    return delay(
+      [
+        {
+          provider,
+          id: "11111111-2222-3333-4444-555555555555",
+          cwd: projectPath,
+          title: "Fix the flaky login test",
+          startedAt: Date.now() - 3_600_000,
+          messages: 14,
+        },
+      ],
+      80,
+    );
+  },
+
+  async importExternalSession(req) {
+    return mockApi.createAgent({
+      provider: req.provider,
+      accountId: req.accountId,
+      projectPath: req.projectPath,
+      prompt: "",
+      title: "Fix the flaky login test",
+      worktree: false,
+      model: null,
+      groupId: null,
+      customAgentId: null,
+      attachments: [],
+    });
   },
 
   async terminalResize() {

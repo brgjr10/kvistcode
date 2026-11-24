@@ -2215,3 +2215,31 @@ pub async fn send_auto_review_findings(
         .await
         .map_err(err)
 }
+
+/// Terminal sessions (Claude Code, Codex) started in this project, newest first.
+#[tauri::command]
+pub async fn list_external_sessions(
+    core: State<'_, Core>,
+    provider: Provider,
+    project_path: String,
+) -> CmdResult<Vec<kvistcode_core::external_sessions::ExternalSession>> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        core.list_external_sessions(provider, &project_path)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Starts an agent that continues a session from a terminal.
+#[tauri::command]
+pub async fn import_external_session(
+    core: State<'_, Core>,
+    req: kvistcode_core::external_sessions::ImportRequest,
+) -> CmdResult<Agent> {
+    let agent = core.import_external_session(req).await.map_err(err)?;
+    if let Err(e) = remember_project(&core, &agent.project_path) {
+        warn!("could not update recent projects: {e:#}");
+    }
+    Ok(agent)
+}

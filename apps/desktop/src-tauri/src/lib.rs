@@ -247,6 +247,8 @@ macro_rules! handler {
             commands::revoke_share_link,
             commands::local_mcp_status,
             commands::local_mcp_rotate_token,
+            commands::list_external_sessions,
+            commands::import_external_session,
         ]
     };
 }

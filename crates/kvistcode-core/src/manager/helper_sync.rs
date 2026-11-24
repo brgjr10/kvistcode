@@ -189,7 +189,7 @@ impl Core {
             preamble: preamble_for(&parent.title),
         };
         let helper = match self
-            .create_agent_inner(req, None, None, Some(seed), None)
+            .create_agent_inner(req, None, None, Some(seed), None, None)
             .await
         {
             Ok(a) => a,

@@ -19,6 +19,7 @@ use crate::{accounts, git, local, providers, EventSink, Result};
 
 mod auto_review;
 mod budgets;
+mod external;
 mod fork;
 mod helper_sync;
 mod limit_wait;
@@ -2054,7 +2055,8 @@ impl Core {
     /// Creates the worktree (if requested), spawns the adapter, opens a session and
     /// sends the first prompt. Returns once the agent row exists (status `starting`).
     pub async fn create_agent(&self, req: CreateAgentRequest) -> Result<Agent> {
-        self.create_agent_inner(req, None, None, None, None).await
+        self.create_agent_inner(req, None, None, None, None, None)
+            .await
     }
 
     async fn create_agent_inner(
@@ -2064,6 +2066,7 @@ impl Core {
         schedule_id: Option<String>,
         helper: Option<HelperSeed>,
         fork: Option<fork::ForkSeed>,
+        imported: Option<external::ImportSeed>,
     ) -> Result<Agent> {
         // A prompt is optional: without one the agent starts up and waits for you.
         let prompt = req.prompt.trim().to_string();
@@ -2226,7 +2229,7 @@ impl Core {
             branch,
             base_branch,
             base_commit,
-            session_id: None,
+            session_id: imported.as_ref().map(|i| i.session_id.clone()),
             status: AgentStatus::Starting,
             running: false,
             group_id: req.group_id.clone(),
@@ -2350,6 +2353,9 @@ impl Core {
         };
         if self.begin_worktree_setup(&agent, pending) {
             return self.agent(&id);
+        }
+        if let Some(seed) = &imported {
+            external::seed_timeline(&ctx, seed);
         }
         if !has_prompt {
             self.warm_up(&id, req.model.clone());
@@ -3423,7 +3429,7 @@ impl Core {
             attachments: Vec::new(),
             config_choices: Default::default(),
         };
-        self.create_agent_inner(req, Some(&src), None, None, None)
+        self.create_agent_inner(req, Some(&src), None, None, None, None)
             .await
     }
 
@@ -3889,7 +3895,7 @@ impl Core {
             config_choices: Default::default(),
         };
         let result = self
-            .create_agent_inner(req, None, Some(schedule.id.clone()), None, None)
+            .create_agent_inner(req, None, Some(schedule.id.clone()), None, None, None)
             .await;
         // The schedule may have been edited or deleted meanwhile: change only the outcome.
         let outcome = self

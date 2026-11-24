@@ -9,6 +9,7 @@ pub mod checkpoints;
 pub mod childenv;
 pub mod companions;
 pub mod editors;
+pub mod external_sessions;
 pub mod hardware;
 pub mod limit_resume;
 pub mod local;
