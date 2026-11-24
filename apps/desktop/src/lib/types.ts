@@ -1284,3 +1284,20 @@ export interface PrCheck {
   runId: string | null;
   durationSecs: number | null;
 }
+
+/** A Claude Code or Codex session started in a terminal. */
+export interface ExternalSession {
+  provider: Provider;
+  id: string;
+  cwd: string;
+  title: string;
+  startedAt: number;
+  messages: number;
+}
+
+export interface ImportExternalRequest {
+  provider: Provider;
+  accountId: string;
+  projectPath: string;
+  sessionId: string;
+}

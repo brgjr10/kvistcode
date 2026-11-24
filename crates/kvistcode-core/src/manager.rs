@@ -18,6 +18,7 @@ use crate::session::{AgentCtx, ExitIntent, Prompt, StartCancelled, Steer, TurnOu
 use crate::{accounts, git, local, providers, EventSink, Result};
 
 mod budgets;
+mod external;
 mod helper_sync;
 mod limit_wait;
 
@@ -1991,7 +1992,7 @@ impl Core {
     /// Creates the worktree (if requested), spawns the adapter, opens a session and
     /// sends the first prompt. Returns once the agent row exists (status `starting`).
     pub async fn create_agent(&self, req: CreateAgentRequest) -> Result<Agent> {
-        self.create_agent_inner(req, None, None, None).await
+        self.create_agent_inner(req, None, None, None, None).await
     }
 
     async fn create_agent_inner(
@@ -2000,6 +2001,7 @@ impl Core {
         shared_checkout: Option<&Agent>,
         schedule_id: Option<String>,
         helper: Option<HelperSeed>,
+        imported: Option<external::ImportSeed>,
     ) -> Result<Agent> {
         // A prompt is optional: without one the agent starts up and waits for you.
         let prompt = req.prompt.trim().to_string();
@@ -2130,7 +2132,7 @@ impl Core {
             branch,
             base_branch,
             base_commit,
-            session_id: None,
+            session_id: imported.as_ref().map(|i| i.session_id.clone()),
             status: AgentStatus::Starting,
             running: false,
             group_id: req.group_id.clone(),
@@ -2240,6 +2242,9 @@ impl Core {
         }
         if let Some(seed) = &helper {
             ctx.set_preamble(seed.preamble.clone());
+        }
+        if let Some(seed) = &imported {
+            external::seed_timeline(&ctx, seed);
         }
         if !has_prompt {
             self.warm_up(&id, req.model.clone());
@@ -3237,7 +3242,8 @@ impl Core {
             attachments: Vec::new(),
             config_choices: Default::default(),
         };
-        self.create_agent_inner(req, Some(&src), None, None).await
+        self.create_agent_inner(req, Some(&src), None, None, None)
+            .await
     }
 
     /// Files the agent edited, deleted or moved (absolute or cwd-relative paths).
@@ -3701,7 +3707,7 @@ impl Core {
             config_choices: Default::default(),
         };
         let result = self
-            .create_agent_inner(req, None, Some(schedule.id.clone()), None)
+            .create_agent_inner(req, None, Some(schedule.id.clone()), None, None)
             .await;
         // The schedule may have been edited or deleted meanwhile: change only the outcome.
         let outcome = self

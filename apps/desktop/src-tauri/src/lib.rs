@@ -222,6 +222,8 @@ macro_rules! handler {
             commands::remote_revoke_device,
             commands::create_share_link,
             commands::revoke_share_link,
+            commands::list_external_sessions,
+            commands::import_external_session,
         ]
     };
 }

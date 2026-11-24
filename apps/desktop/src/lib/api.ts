@@ -8,6 +8,8 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  ExternalSession,
+  ImportExternalRequest,
   CompanionInfo,
   ProjectRefresh,
   CheckpointList,
@@ -399,6 +401,11 @@ const tauriApi = {
   workspaceTerminalOpen: (agentId: string, scriptId?: string) =>
     invoke<string>("workspace_terminal_open", { agentId, scriptId: scriptId ?? null }),
   workspaceScripts: (agentId: string) => invoke<ProjectScript[]>("workspace_scripts", { agentId }),
+  /** Claude Code / Codex sessions started in a terminal in this project (read from ~/.claude, ~/.codex). */
+  listExternalSessions: (provider: Provider, projectPath: string) =>
+    invoke<ExternalSession[]>("list_external_sessions", { provider, projectPath }),
+  /** Starts an agent that continues one of them. */
+  importExternalSession: (req: ImportExternalRequest) => invoke<Agent>("import_external_session", { req }),
   /** Subset of `ports` accepting TCP connections on loopback (Preview tab). */
   probePorts: (ports: number[]) => invoke<number[]>("probe_ports", { ports }),
   /** Like probePorts, but says which loopback families (127.0.0.1 / [::1]) accept on each live port. */

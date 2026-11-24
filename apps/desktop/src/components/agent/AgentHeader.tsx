@@ -30,6 +30,9 @@ import {
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { archiveAgent, attempt, exportConversation, renameAgent, resumeAgent, stopAgent } from "@/lib/actions";
 import { liveTail } from "@/lib/agents";
+import { terminalResumeCommand } from "@/lib/externalSessions";
+import { ptyPayload } from "@/lib/shellRun";
+import { runInNewTerminal } from "@/store/workspace";
 import { resumesShort } from "@/lib/limitResume";
 import { agentDerived } from "./derived";
 import { editStats } from "./editStats";
@@ -154,6 +157,8 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
   const overlay = useUi((s) => s.inspectorOverlay);
   const inspectorOpen = docked ? inspectorPref : overlay;
   const workspaceOpen = useUi((s) => s.workspaceOpen);
+  // Only when Kvistcode knows the provider's own session id.
+  const resumeCommand = terminalResumeCommand(agent);
   const workspaceRoom = useUi((s) => s.workspaceRoom);
   const toggleInspector = () =>
     docked ? useUi.getState().setInspectorOpen(!inspectorPref) : useUi.getState().setInspectorOverlay(!overlay);
@@ -460,6 +465,17 @@ function AgentHeaderImpl({ agent, tile }: { agent: Agent; tile?: HeaderTile }) {
               >
                 <Pencil /> Rename
               </DropdownMenuItem>
+              {resumeCommand && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    void attempt("Couldn't open a terminal", () =>
+                      runInNewTerminal(agent.id, "Resume in CLI", ptyPayload(resumeCommand, true)),
+                    )
+                  }
+                >
+                  <SquareTerminal /> Open in terminal
+                </DropdownMenuItem>
+              )}
               {!tile && !(minimal && !tight) && (
                 <DropdownMenuItem
                   shortcut={`${modKey}+\``}
