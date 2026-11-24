@@ -5,6 +5,22 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.8.0 — 2026-11-24
+
+A big one: two new agents, a project board, event triggers, automatic cross-agent review, sandboxing, and a lot more control over each turn.
+
+- New agents: OpenCode and Cursor CLI are built in, next to Claude Code, Codex, Gemini and Grok, with sign-in, accounts, model picker and token counts.
+- Project board: Mission Control has a Board for each project, with Backlog, Working, Needs review and Merged. Start a card to open a prefilled new agent, or drag it onto Working. You can import open GitHub issues as cards, and open the board from a project's menu in the sidebar.
+- Event triggers: start an agent when a GitHub check fails on an open PR, when someone mentions a keyword, or when a webhook arrives. The webhook listener is off until you turn it on and only listens on this computer. Each trigger has a daily cap and asks before acting unless you allow it to run on its own.
+- Cross-agent review: when an agent finishes, another provider can review its changes before the agent asks for you, and send the findings back for one round of fixes.
+- Per-turn control: see the diff of each turn, fork an agent from any earlier checkpoint, and ask a quick side question with `/btw` without disturbing the main conversation.
+- Sandboxing: optionally run agents inside Bubblewrap (Linux) or Docker, so they can only touch their project.
+- Import terminal sessions: pick up Claude Code and Codex sessions you started in a terminal, and open any agent in a terminal.
+- Worktree hooks: run a setup and teardown script when Kvistcode creates or removes a worktree. Hooks from a repo only run after you trust that repo.
+- Open in your editor, plus a light Files tab to browse an agent's workspace.
+- Inline previews: HTML and SVG code blocks in replies can be previewed right in the conversation, in a sandboxed frame with no network access.
+- Local MCP server: let other tools see and drive your Kvistcode agents through an opt-in MCP server on this computer.
+
 ## v0.7.5 — 2026-11-23
 
 Fixes Gemini usage bars and dedicated Gemini profiles, along with a sweep of stability, keyboard, privacy and phone-app fixes.
