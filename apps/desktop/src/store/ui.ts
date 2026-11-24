@@ -100,6 +100,10 @@ interface UiStore {
   /** GitHub issues of a project, from which an agent can be started. */
   issues: { open: boolean; projectPath: string | null };
   handoffAgent: Agent | null;
+  /** Per-turn diff modal (`checkpoint[n-1]..checkpoint[n]` or current working tree). */
+  turnDiff: { agentId: string; checkpointId: string; label?: string } | null;
+  /** Checkpoint fork dialog (`checkpointId === null` forks from current files). */
+  forkTarget: { agent: Agent; checkpointId: string | null; label?: string } | null;
   deleteAgent: Agent | null;
   /** Agent being moved to another account. */
   moveAgent: Agent | null;
@@ -155,6 +159,8 @@ interface UiStore {
   openIssues: (projectPath: string) => void;
   closeIssues: () => void;
   setHandoffAgent: (a: Agent | null) => void;
+  setTurnDiff: (t: { agentId: string; checkpointId: string; label?: string } | null) => void;
+  setForkTarget: (f: { agent: Agent; checkpointId: string | null; label?: string } | null) => void;
   setDeleteAgent: (a: Agent | null) => void;
   setMoveAgent: (a: Agent | null) => void;
   setShareAgent: (a: Agent | null) => void;
@@ -374,6 +380,8 @@ export const useUi = create<UiStore>((set) => ({
   newAgent: { open: false, preset: null },
   issues: { open: false, projectPath: null },
   handoffAgent: null,
+  turnDiff: null,
+  forkTarget: null,
   deleteAgent: null,
   moveAgent: null,
   shareAgent: null,
@@ -466,6 +474,8 @@ export const useUi = create<UiStore>((set) => ({
   openIssues: (projectPath) => set({ issues: { open: true, projectPath } }),
   closeIssues: () => set((s) => ({ issues: { ...s.issues, open: false } })),
   setHandoffAgent: (handoffAgent) => set({ handoffAgent }),
+  setTurnDiff: (turnDiff) => set({ turnDiff }),
+  setForkTarget: (forkTarget) => set({ forkTarget }),
   setDeleteAgent: (deleteAgent) => set({ deleteAgent }),
   setMoveAgent: (moveAgent) => set({ moveAgent }),
   setShareAgent: (shareAgent) => set({ shareAgent }),

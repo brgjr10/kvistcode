@@ -17,7 +17,9 @@ import { useAttachments } from "@/hooks/useAttachments";
 import { latestPendingQuestion } from "@/lib/question";
 import { latestPending } from "../timeline/usePermissionKeys";
 import { useApp } from "@/store/app";
+import { useSideChat } from "@/store/sideChat";
 import { useUi } from "@/store/ui";
+import { parseBtwCommand } from "../timeline/turnCheckpoint";
 import { getDraft, getDraftAttachments, onAttachmentsInsert, onDraftInsert, setDraft } from "./drafts";
 import { AttachButton, DropOverlay } from "../AttachControls";
 import { ComposerVoiceButtons } from "../voice/ComposerVoiceButtons";
@@ -34,7 +36,16 @@ import { ConfigOverflowMenu, ConfigSelect } from "./ConfigSelect";
 import { HelperSelect, HelperSubmenu, hasHelperChoice } from "./HelperSelect";
 import { plainConfigOptions } from "./composerModes";
 import { PinnedDock } from "./PinnedDock";
+import { SideChatDock } from "./SideChatDock";
 import { useToolbarFit } from "./toolbarFit";
+
+const BUILTIN_COMMANDS: readonly SlashCommand[] = [
+  {
+    name: "btw",
+    description: "Ask a quick read-only side question without interrupting the current turn",
+    hint: "<question>",
+  },
+];
 
 const ESC_ARM_MS = 1500;
 /** The textarea sizes itself to its text in CSS (`field-sizing: content`); otherwise the layout effect measures. */
@@ -136,8 +147,13 @@ function ComposerImpl({
   const query = slashQuery(text);
   const matches = useMemo(() => {
     if (query === null) return [];
+    const seen = new Set(agent.availableCommands.map((c) => c.name.toLowerCase()));
+    const combined = [
+      ...BUILTIN_COMMANDS.filter((c) => !seen.has(c.name.toLowerCase())),
+      ...agent.availableCommands,
+    ];
     // Names first, then initials ("rc" finds remote-control), then anywhere in the name.
-    return agent.availableCommands
+    return combined
       .map((c) => ({ c, rank: commandRank(c.name, query) }))
       .filter((m): m is { c: SlashCommand; rank: number } => m.rank !== null)
       .sort((a, b) => a.rank - b.rank)
@@ -492,9 +508,32 @@ function ComposerImpl({
   /** The agent takes messages into a running turn (so the menu may offer it). */
   const agentTakesMidTurn = !!agent.steerable && !agent.queuePaused;
 
+  /** Non-interrupting read-only side question (`/btw <question>`). Never stops or queues behind the main turn. */
+  const askSide = async (question: string) => {
+    const raw = text.trim();
+    if (!question) {
+      toast.info("Type a question after /btw");
+      return;
+    }
+    setSending(true);
+    update("");
+    setHint(null);
+    try {
+      const entry = await api.askSideQuestion(agent.id, question);
+      useSideChat.getState().upsert(entry);
+    } catch (e) {
+      update(restoreDraft(textRef.current, raw));
+      toast.error("Couldn't run side question", { description: errorMessage(e) });
+    } finally {
+      setSending(false);
+    }
+  };
+
   /** One send gesture. While busy: into the running turn, queued, or a helper, per setting and gesture. */
   const send = async (intent: BusyIntent = "enter") => {
     if (!canSend) return;
+    const btw = parseBtwCommand(text);
+    if (btw) return void askSide(btw.question);
     if (busy) {
       const d = decideBusySend(busySend, intent, helperAllowed, canDeliver);
       if (d === "helper") return void startHelper();
@@ -640,6 +679,7 @@ function ComposerImpl({
   return (
     <div ref={wrapRef} data-dictation-scope className={cn("shrink-0 pb-4 pt-1", tight ? "px-3" : "px-6")}>
       <div className={cn("mx-auto w-full", width >= 1330 ? "max-w-[1000px]" : "max-w-[860px]")}>
+        <SideChatDock agentId={agent.id} />
         <PinnedDock
           agent={agent}
           focused={focused}

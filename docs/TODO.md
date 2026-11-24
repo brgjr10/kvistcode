@@ -28,9 +28,9 @@ Fresh worktrees currently run only `git worktree add`, leaving out `.env` / untr
 ### 3. Per-turn diffs & Thread Forking
 Kvistcode already snapshots a git ref before every user message (`refs/kvistcode/*`), making turn-scoped diffs and branching relatively small lifts.
 
-- [ ] Add per-turn diff inspection (`checkpoint[n-1]..checkpoint[n]`) directly from a turn's summary / "Worked for…" line
-- [ ] Add **Fork from here**: create a new worktree/branch at a chosen checkpoint and launch a parallel agent seeded with the conversation context (same or different provider)
-- [ ] Optional **Side-chat (`/btw`)**: ask a quick non-interrupting question against the same workspace while a main turn is still running
+- [x] Add per-turn diff inspection (`checkpoint[n-1]..checkpoint[n]`) directly from a turn's summary / "Worked for…" line
+- [x] Add **Fork from here**: create a new worktree/branch at a chosen checkpoint and launch a parallel agent seeded with the conversation context (same or different provider)
+- [x] Optional **Side-chat (`/btw`)**: ask a quick non-interrupting question against the same workspace while a main turn is still running
 - **Touchpoints:** `crates/kvistcode-core/src/checkpoints.rs`, `crates/kvistcode-core/src/manager.rs`, `apps/desktop/src/components/timeline/`, `apps/desktop/src/components/ReviewSheet.tsx`
 
 ### 4. Automatic cross-provider review ("Review before Needs you")

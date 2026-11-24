@@ -400,6 +400,29 @@ pub async fn handoff_agent(
     .map_err(err)
 }
 
+#[tauri::command]
+pub async fn fork_agent(
+    core: State<'_, Core>,
+    agent_id: String,
+    checkpoint_id: Option<String>,
+    req: kvistcode_core::ForkAgentRequest,
+) -> CmdResult<Agent> {
+    core.fork_agent(&agent_id, checkpoint_id.as_deref(), req)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn ask_side_question(
+    core: State<'_, Core>,
+    agent_id: String,
+    question: String,
+) -> CmdResult<kvistcode_core::SideChatEntry> {
+    core.ask_side_question(&agent_id, &question)
+        .await
+        .map_err(err)
+}
+
 /// The "Save tokens" preset: a shorter conversation window, concise replies and medium effort
 /// for new agents. Returns the saved settings.
 #[tauri::command]
@@ -488,6 +511,15 @@ pub async fn preview_checkpoint(
     core.preview_checkpoint(&agent_id, &checkpoint_id)
         .await
         .map_err(err)
+}
+
+#[tauri::command]
+pub async fn turn_diff(
+    core: State<'_, Core>,
+    agent_id: String,
+    checkpoint_id: String,
+) -> CmdResult<kvistcode_core::checkpoints::TurnDiff> {
+    core.turn_diff(&agent_id, &checkpoint_id).await.map_err(err)
 }
 
 /// Restores the agent's files to a checkpoint. Also used to undo a restore (restore

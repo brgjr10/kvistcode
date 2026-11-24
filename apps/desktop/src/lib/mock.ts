@@ -47,7 +47,10 @@ import {
 import type {
   Account,
   Checkpoint,
+  ForkAgentRequest,
   RestorePreview,
+  SideChatEntry,
+  TurnDiff,
   ShipResult,
   BaseBranchStatus,
   GithubStatus,
@@ -2103,6 +2106,60 @@ export const mockApi: KvistcodeApi = {
     return agent;
   },
 
+  async forkAgent(agentId, checkpointId, req: ForkAgentRequest) {
+    const src = getAgent(agentId);
+    const provider = req.provider ?? src.provider;
+    const accountId =
+      req.accountId ??
+      (provider === src.provider
+        ? src.accountId
+        : (db.accounts.find((a) => a.provider === provider)?.id ?? src.accountId));
+    const created = await mockApi.createAgent({
+      provider,
+      accountId,
+      projectPath: src.projectPath,
+      prompt: req.instruction?.trim() ?? "",
+      title: req.title?.trim() || `${src.title} (fork)`,
+      worktree: true,
+      model: req.model ?? null,
+      groupId: src.groupId,
+      customAgentId: provider === "custom" ? (req.customAgentId ?? src.customAgentId) : null,
+      attachments: [],
+    });
+    patchAgent(created.id, { forkedFrom: src.id });
+    addItem(created.id, {
+      kind: "notice",
+      level: "info",
+      text: `Forked from “${src.title}” (${checkpointId ? "checkpoint" : "current state"}). Working on an isolated branch.`,
+    });
+    return clone(getAgent(created.id));
+  },
+
+  async askSideQuestion(agentId, question) {
+    getAgent(agentId);
+    const q = question.trim();
+    if (!q) throw new Error("Ask a question after /btw");
+    const entry: SideChatEntry = {
+      id: `btw-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      agentId,
+      question: q,
+      answer: "",
+      status: "running",
+      error: null,
+      createdAt: Date.now(),
+      finishedAt: null,
+    };
+    emit({ type: "side_chat_updated", entry: clone(entry) });
+    const reply = `Quick read-only answer for “${q}”: checked the workspace without interrupting the main turn.`;
+    setTimeout(() => {
+      emit({
+        type: "side_chat_updated",
+        entry: { ...entry, answer: reply, status: "done", finishedAt: Date.now() },
+      });
+    }, 350);
+    return clone(entry);
+  },
+
   async switchAccount(agentId, accountId) {
     const a = getAgent(agentId);
     const acc = db.accounts.find((x) => x.id === accountId);
@@ -2260,6 +2317,30 @@ export const mockApi: KvistcodeApi = {
         deletions: files.reduce((n, f) => n + f.deletions, 0),
       },
       250,
+    );
+  },
+
+  async turnDiff(agentId, checkpointId): Promise<TurnDiff> {
+    getAgent(agentId);
+    if (!checkpointId) throw new Error("That checkpoint no longer exists");
+    const d = seedDiff(itemsOf(agentId));
+    const files: TurnDiff["files"] = d.files.map((f) => ({
+      path: f.path,
+      status: f.status === "added" || f.status === "deleted" ? f.status : "modified",
+      additions: f.additions,
+      deletions: f.deletions,
+    }));
+    return delay(
+      {
+        files,
+        patch: d.patch,
+        additions: files.reduce((n, f) => n + f.additions, 0),
+        deletions: files.reduce((n, f) => n + f.deletions, 0),
+        fromSeq: 1,
+        toSeq: null,
+        truncated: false,
+      },
+      200,
     );
   },
 

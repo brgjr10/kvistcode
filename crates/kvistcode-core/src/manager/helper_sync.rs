@@ -188,7 +188,10 @@ impl Core {
             base_branch: parent.base_branch.clone().or(repo.branch),
             preamble: preamble_for(&parent.title),
         };
-        let helper = match self.create_agent_inner(req, None, None, Some(seed)).await {
+        let helper = match self
+            .create_agent_inner(req, None, None, Some(seed), None)
+            .await
+        {
             Ok(a) => a,
             Err(e) => {
                 helpers::forget(Path::new(&parent.cwd), &id).await;

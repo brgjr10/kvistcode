@@ -1,7 +1,9 @@
-import { Check, OctagonX, Square } from "lucide-react";
-import { useState } from "react";
+import { Check, GitCompare, OctagonX, Square } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useMinimal } from "@/hooks/useLook";
 import { cn } from "@/lib/utils";
+import { ensureCheckpoints, useCheckpoints } from "@/store/checkpoints";
+import { useUi } from "@/store/ui";
 import { formatElapsed, type TurnEnd } from "./thinking";
 
 const TONE = {
@@ -14,7 +16,24 @@ const TONE = {
  * Compact end-of-turn line that takes the thinking indicator's place: same box, so the spinner
  * reads as morphing into a drawn check (and a soft glow when the turn just ended).
  */
-export function TurnEndLine({ end, lastActivityAt }: { end: TurnEnd; lastActivityAt: number }) {
+export function TurnEndLine({
+  end,
+  lastActivityAt,
+  agentId,
+  turnPromptId,
+}: {
+  end: TurnEnd;
+  lastActivityAt: number;
+  agentId?: string;
+  turnPromptId?: string | null;
+}) {
+  useEffect(() => {
+    if (agentId) ensureCheckpoints(agentId);
+  }, [agentId]);
+  const checkpoint = useCheckpoints((s) =>
+    agentId && turnPromptId ? s.byAgent[agentId]?.byItem[turnPromptId] : undefined,
+  );
+  const available = useCheckpoints((s) => (agentId ? (s.byAgent[agentId]?.available ?? false) : false));
   // Animate only when it appears live, not when an old conversation is opened.
   const [fresh] = useState(() => Date.now() - lastActivityAt < 10_000);
   const tone = TONE[end.tone];
@@ -59,6 +78,23 @@ export function TurnEndLine({ end, lastActivityAt }: { end: TurnEnd; lastActivit
         )}
         {end.note && <span className="text-2xs font-normal text-accent">· {end.note}</span>}
       </span>
+      {end.tone === "done" && agentId && available && checkpoint && (
+        <button
+          type="button"
+          onClick={() =>
+            useUi.getState().setTurnDiff({
+              agentId,
+              checkpointId: checkpoint.id,
+              label: `checkpoint #${checkpoint.seq}`,
+            })
+          }
+          title="Inspect changes made during this turn"
+          className="ml-auto inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-micro text-steel transition-colors hover:bg-raised hover:text-fg"
+        >
+          <GitCompare className="h-3 w-3" />
+          <span>Turn diff</span>
+        </button>
+      )}
     </div>
   );
 }

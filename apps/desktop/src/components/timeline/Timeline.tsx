@@ -42,6 +42,7 @@ import { useBackground, useBackgroundStore } from "@/store/background";
 import { shouldShowThinking, turnEndOf, turnStart, waitingStatus } from "./thinking";
 import { EverythingFinishedLine, TurnEndLine } from "./TurnEndLine";
 import { TurnSummaryCard, TurnSummaryLine } from "./TurnSummaryCard";
+import { latestTurnPromptId, turnPromptByItemId } from "./turnCheckpoint";
 import { applyFolds, turnFolds, type FoldedRows, type TurnFold } from "./turnFold";
 import { WorkedLine } from "./WorkedLine";
 import { QuestionCard, questionCardSelector } from "./QuestionCard";
@@ -139,6 +140,8 @@ export function Timeline({
   const structureKey = `${list.length}:${list[0]?.id ?? ""}:${list[list.length - 1]?.id ?? ""}:${attributed}:${[...unattributed].join(",")}`;
   // Keyed on structure on purpose: it reads the current list, but deltas never change the structure.
   const view = useMemo(() => buildView(list, unattributed), [structureKey]);
+  const turnPrompts = useMemo(() => turnPromptByItemId(list), [structureKey]);
+  const latestPromptId = useMemo(() => latestTurnPromptId(list), [structureKey]);
   const childrenOf = useResolvedLists(view.children, list, isToolItem);
   const groupItems = useResolvedLists(view.groups, list);
   // Runs of consecutive agent messages (one continuous text), resolved to the current items.
@@ -795,6 +798,7 @@ export function Timeline({
                       questionId,
                       reasonFor,
                       reasonHandler,
+                      turnPromptId: turnPrompts.get(it.id) ?? null,
                     })
                   );
                   return (
@@ -820,6 +824,8 @@ export function Timeline({
                             durationMs={fold.durationMs}
                             open={step}
                             onToggle={toggleFold}
+                            agentId={stableAgent.id}
+                            turnPromptId={turnPrompts.get(it.id) ?? null}
                           />
                         )}
                         {step ? (
@@ -847,7 +853,14 @@ export function Timeline({
               onToggle={toggleSubagents}
             />
           )}
-          {turnEnd && <TurnEndLine end={turnEnd} lastActivityAt={agent.lastActivityAt} />}
+          {turnEnd && (
+            <TurnEndLine
+              end={turnEnd}
+              lastActivityAt={agent.lastActivityAt}
+              agentId={stableAgent.id}
+              turnPromptId={latestPromptId}
+            />
+          )}
           {everything && !showThinking && <EverythingFinishedLine />}
           {footer}
         </div>
@@ -1220,6 +1233,7 @@ function renderItem(
     questionId: string | null;
     reasonFor: string | null;
     reasonHandler: (requestId: string) => (open: boolean) => void;
+    turnPromptId: string | null;
   },
 ) {
   const { agent, liveTail, view } = ctx;
@@ -1292,7 +1306,11 @@ function renderItem(
     case "notice":
       return <NoticeBanner item={it} agent={agent} lastPrompt={ctx.lastPrompt} isLatest={it.id === view.lastErrorId} />;
     case "turn_summary":
-      return it.id === view.lastSummaryId ? <TurnSummaryCard item={it} agent={agent} /> : <TurnSummaryLine item={it} />;
+      return it.id === view.lastSummaryId ? (
+        <TurnSummaryCard item={it} agent={agent} turnPromptId={ctx.turnPromptId} />
+      ) : (
+        <TurnSummaryLine item={it} agent={agent} turnPromptId={ctx.turnPromptId} />
+      );
     default:
       return null;
   }

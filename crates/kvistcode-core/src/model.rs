@@ -360,6 +360,9 @@ pub struct Agent {
     /// Present while a worktree agent's setup hooks are running, waiting for trust, or failed.
     #[serde(default)]
     pub worktree_setup: Option<crate::worktree_hooks::WorktreeSetupState>,
+    /// Set when this agent was forked from another agent's checkpoint.
+    #[serde(default)]
+    pub forked_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1044,6 +1047,33 @@ pub enum KvistcodeEvent {
     SettingsChanged {
         settings: Box<Settings>,
     },
+    /// A non-interrupting `/btw` side-chat question started, streamed text, or finished.
+    SideChatUpdated {
+        entry: SideChatEntry,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SideChatStatus {
+    Running,
+    Done,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SideChatEntry {
+    pub id: String,
+    pub agent_id: String,
+    pub question: String,
+    pub answer: String,
+    pub status: SideChatStatus,
+    #[serde(default)]
+    pub error: Option<String>,
+    pub created_at: i64,
+    #[serde(default)]
+    pub finished_at: Option<i64>,
 }
 
 /// A newer Kvistcode release on GitHub.
@@ -2039,6 +2069,30 @@ pub struct CreateAgentRequest {
     /// defaults. Only `model` and `effort` are taken; see `config_memory::requested_choices`.
     #[serde(default)]
     pub config_choices: std::collections::BTreeMap<String, String>,
+}
+
+/// Options for `Core::fork_agent`: branch a new parallel agent from a checkpoint.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkAgentRequest {
+    /// Target provider (None = same as source agent).
+    #[serde(default)]
+    pub provider: Option<Provider>,
+    /// Target account (None = source agent's account if same provider, else first account of target provider).
+    #[serde(default)]
+    pub account_id: Option<String>,
+    /// Target custom agent id when `provider == Some(Provider::Custom)`.
+    #[serde(default)]
+    pub custom_agent_id: Option<String>,
+    /// Optional model override for the forked agent.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Optional title override.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Optional steering instruction to run right away in the forked agent.
+    #[serde(default)]
+    pub instruction: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

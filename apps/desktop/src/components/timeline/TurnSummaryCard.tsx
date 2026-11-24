@@ -4,12 +4,13 @@ import {
   FileCode2,
   GitCommitHorizontal,
   GitCompare,
+  GitFork,
   GitMerge,
   GitPullRequest,
   MessageSquarePlus,
   Undo2,
 } from "lucide-react";
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { attempt } from "@/lib/actions";
@@ -21,6 +22,7 @@ import { basename, cn, errorMessage } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useBackground } from "@/store/background";
 import { backgroundActive, backgroundDetail } from "@/lib/background";
+import { ensureCheckpoints, useCheckpoints } from "@/store/checkpoints";
 import { useUi } from "@/store/ui";
 import { useMinimal } from "@/hooks/useLook";
 import { PushBaseNotice } from "../git/PushBaseNotice";
@@ -31,6 +33,7 @@ import { Spinner } from "../ui/misc";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tooltip } from "../ui/tooltip";
 import { formatElapsed } from "./thinking";
+import { afterTurnCheckpointId } from "./turnCheckpoint";
 import { turnFileStats } from "./turnFiles";
 
 type Summary = Extract<TimelineItem, { kind: "turn_summary" }>;
@@ -45,14 +48,66 @@ export function formatDuration(ms: number): string {
 }
 
 /** One-line recap used for earlier turns (only the latest gets the full card). */
-export const TurnSummaryLine = memo(function TurnSummaryLine({ item }: { item: Summary }) {
+export const TurnSummaryLine = memo(function TurnSummaryLine({
+  item,
+  agent,
+  turnPromptId,
+}: {
+  item: Summary;
+  agent?: Agent;
+  turnPromptId?: string | null;
+}) {
+  useEffect(() => {
+    ensureCheckpoints(item.agentId);
+  }, [item.agentId]);
+  const entry = useCheckpoints((s) => s.byAgent[item.agentId]);
+  const checkpoint = turnPromptId ? entry?.byItem[turnPromptId] : undefined;
+  const available = entry?.available ?? false;
+  const forkCheckpointId = useMemo(
+    () => afterTurnCheckpointId(entry?.byItem, turnPromptId),
+    [entry?.byItem, turnPromptId],
+  );
   return (
-    <div className="flex items-center gap-2 px-1 text-meta text-steel minimal:px-0">
+    <div className="flex flex-wrap items-center gap-2 px-1 text-meta text-steel minimal:px-0">
       <CircleCheckBig className="h-3.5 w-3.5 text-ok/70 minimal:text-steel" />
       <span>
         Done in {formatDuration(item.durationMs)} · {pluralize(item.files.length, "file")} ·{" "}
         {pluralize(item.toolCalls, "tool call")} · {formatCost(item.costUsd)}
       </span>
+      {available && checkpoint && (
+        <span className="ml-auto inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              useUi.getState().setTurnDiff({
+                agentId: item.agentId,
+                checkpointId: checkpoint.id,
+                label: `checkpoint #${checkpoint.seq}`,
+              })
+            }
+            className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-micro text-steel transition-colors hover:bg-raised hover:text-fg"
+          >
+            <GitCompare className="h-3 w-3" />
+            <span>Turn diff</span>
+          </button>
+          {agent && (
+            <button
+              type="button"
+              onClick={() =>
+                useUi.getState().setForkTarget({
+                  agent,
+                  checkpointId: forkCheckpointId,
+                  label: forkCheckpointId ? `after turn #${checkpoint.seq}` : "current state",
+                })
+              }
+              className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-micro text-steel transition-colors hover:bg-raised hover:text-fg"
+            >
+              <GitFork className="h-3 w-3" />
+              <span>Fork</span>
+            </button>
+          )}
+        </span>
+      )}
     </div>
   );
 });
@@ -79,7 +134,25 @@ export function visibleFiles(
 }
 
 /** Ready-to-ship card after a turn that used tools: what changed, and what to do next. */
-export const TurnSummaryCard = memo(function TurnSummaryCard({ item, agent }: { item: Summary; agent: Agent }) {
+export const TurnSummaryCard = memo(function TurnSummaryCard({
+  item,
+  agent,
+  turnPromptId,
+}: {
+  item: Summary;
+  agent: Agent;
+  turnPromptId?: string | null;
+}) {
+  useEffect(() => {
+    ensureCheckpoints(agent.id);
+  }, [agent.id]);
+  const ckEntry = useCheckpoints((s) => s.byAgent[agent.id]);
+  const turnCheckpoint = turnPromptId ? ckEntry?.byItem[turnPromptId] : undefined;
+  const ckAvailable = ckEntry?.available ?? false;
+  const forkCheckpointId = useMemo(
+    () => afterTurnCheckpointId(ckEntry?.byItem, turnPromptId),
+    [ckEntry?.byItem, turnPromptId],
+  );
   const setReviewAgent = useUi((s) => s.setReviewAgent);
   const focusComposer = useUi((s) => s.focusComposer);
   const [busy, setBusy] = useState<null | "commit" | "ship">(null);
@@ -212,7 +285,28 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({ item, agent }: { 
                 </span>
               )}
               {chips}
-              <Button size="xs" variant="secondary" className="ml-auto" onClick={() => setReviewAgent(agent.id)}>
+              {ckAvailable && turnCheckpoint && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className={cn("ml-auto", quiet)}
+                  onClick={() =>
+                    useUi.getState().setTurnDiff({
+                      agentId: agent.id,
+                      checkpointId: turnCheckpoint.id,
+                      label: `checkpoint #${turnCheckpoint.seq}`,
+                    })
+                  }
+                >
+                  <GitCompare /> Turn diff
+                </Button>
+              )}
+              <Button
+                size="xs"
+                variant="secondary"
+                className={ckAvailable && turnCheckpoint ? undefined : "ml-auto"}
+                onClick={() => setReviewAgent(agent.id)}
+              >
                 <GitCompare /> Open diff
               </Button>
             </header>
@@ -346,6 +440,22 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({ item, agent }: { 
                 <GitPullRequest /> Open PR
               </Button>
             )}
+            {ckAvailable && (
+              <Button
+                size="xs"
+                variant="ghost"
+                className={quiet}
+                onClick={() =>
+                  useUi.getState().setForkTarget({
+                    agent,
+                    checkpointId: forkCheckpointId,
+                    label: turnCheckpoint && forkCheckpointId ? `after turn #${turnCheckpoint.seq}` : "current state",
+                  })
+                }
+              >
+                <GitFork /> Fork
+              </Button>
+            )}
             <Button size="xs" variant="ghost" className={cn("-mr-2 ml-auto", quiet)} onClick={focusComposer}>
               <MessageSquarePlus /> Continue
             </Button>
@@ -475,6 +585,21 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({ item, agent }: { 
             <GitCompare /> Review diff
           </Button>
         )}
+        {ckAvailable && turnCheckpoint && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              useUi.getState().setTurnDiff({
+                agentId: agent.id,
+                checkpointId: turnCheckpoint.id,
+                label: `checkpoint #${turnCheckpoint.seq}`,
+              })
+            }
+          >
+            <GitCompare /> Turn diff
+          </Button>
+        )}
         {hasFiles && (
           <MessagePopover
             trigger={
@@ -511,6 +636,21 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({ item, agent }: { 
         {hasFiles && agent.branch && (
           <Button size="sm" variant="ghost" onClick={() => setReviewAgent(agent.id, null, "pr")}>
             <GitPullRequest /> Open PR
+          </Button>
+        )}
+        {ckAvailable && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              useUi.getState().setForkTarget({
+                agent,
+                checkpointId: forkCheckpointId,
+                label: turnCheckpoint && forkCheckpointId ? `after turn #${turnCheckpoint.seq}` : "current state",
+              })
+            }
+          >
+            <GitFork /> Fork
           </Button>
         )}
         <Button size="sm" variant="ghost" className="ml-auto" onClick={focusComposer}>

@@ -30,6 +30,8 @@ const KEEP: usize = 100;
 const GIT_TIMEOUT: Duration = Duration::from_secs(120);
 /// Files listed in a restore preview (the totals always cover everything).
 const MAX_PREVIEW_FILES: usize = 300;
+/// Largest unified patch returned for a single turn's diff; cut cleanly at a file boundary.
+const MAX_TURN_PATCH_BYTES: usize = 4 * 1024 * 1024;
 const GITLINK: &[u8] = b"160000";
 /// Limits on untracked (non-ignored) files, which every snapshot copies into the
 /// repository's object store. Over them, that message gets no checkpoint.
@@ -88,6 +90,30 @@ pub struct RestoreResult {
     /// The checkpoint of the state before the restore; restoring it undoes this.
     pub safety_id: String,
     pub files_changed: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnDiffFile {
+    pub path: String,
+    /// "added", "deleted", or "modified".
+    pub status: String,
+    pub additions: i64,
+    pub deletions: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnDiff {
+    pub files: Vec<TurnDiffFile>,
+    pub patch: String,
+    pub additions: i64,
+    pub deletions: i64,
+    pub from_seq: i64,
+    /// Next turn checkpoint sequence number, or None when compared against current files (latest turn).
+    pub to_seq: Option<i64>,
+    /// True when `patch` was cut at a file boundary because it exceeded the size cap.
+    pub truncated: bool,
 }
 
 /// A folder younger than this since its last edit can't be vouched for by stat data.
@@ -884,6 +910,186 @@ fn find(db: &Db, agent: &Agent, checkpoint_id: &str) -> anyhow::Result<Checkpoin
         .ok_or_else(|| anyhow!("That checkpoint no longer exists"))
 }
 
+/// Cuts a unified git patch at the last `diff --git ` file boundary within `limit` bytes.
+fn truncate_patch(raw: &[u8], limit: usize) -> (String, bool) {
+    if raw.len() <= limit {
+        return (String::from_utf8_lossy(raw).into_owned(), false);
+    }
+    let slice = &raw[..limit];
+    let marker = b"\ndiff --git ";
+    let cut = slice
+        .windows(marker.len())
+        .rposition(|w| w == marker)
+        .map(|pos| pos + 1)
+        .unwrap_or_else(|| {
+            // Fall back to the last newline if the very first file alone exceeds the cap.
+            slice
+                .iter()
+                .rposition(|&b| b == b'\n')
+                .map_or(slice.len(), |p| p + 1)
+        });
+    (String::from_utf8_lossy(&raw[..cut]).into_owned(), true)
+}
+
+/// Unified diff of a single turn: from `checkpoint_id` to the next turn checkpoint,
+/// or to the current working tree when `checkpoint_id` is the latest turn.
+pub(crate) async fn turn_diff(
+    db: &Db,
+    agent: &Agent,
+    checkpoint_id: &str,
+) -> anyhow::Result<TurnDiff> {
+    let cwd = agent_dir(agent).ok_or_else(|| anyhow!("The agent's folder no longer exists"))?;
+    let git = Git::new(cwd).await?;
+    if !git.available().await {
+        bail!("This folder isn't a git repository");
+    }
+    let all = db.checkpoints(&agent.id)?;
+    let from = all
+        .iter()
+        .find(|c| c.id == checkpoint_id)
+        .cloned()
+        .ok_or_else(|| anyhow!("That checkpoint no longer exists"))?;
+    let next_turn = all
+        .iter()
+        .find(|c| c.seq > from.seq && c.kind == "turn")
+        .cloned();
+    let _guard = lock_agent(&agent.id).await;
+    git.run(
+        &["cat-file", "-e", &format!("{}^{{tree}}", from.tree)],
+        None,
+        &[],
+    )
+    .await
+    .context("The saved files for that checkpoint are gone")?;
+    let (to_tree, to_seq) = match next_turn {
+        Some(next) => {
+            git.run(
+                &["cat-file", "-e", &format!("{}^{{tree}}", next.tree)],
+                None,
+                &[],
+            )
+            .await
+            .context("The saved files for the next checkpoint are gone")?;
+            (next.tree, Some(next.seq))
+        }
+        None => (git.snapshot_tree(None).await?, None),
+    };
+    if from.tree == to_tree {
+        return Ok(TurnDiff {
+            files: Vec::new(),
+            patch: String::new(),
+            additions: 0,
+            deletions: 0,
+            from_seq: from.seq,
+            to_seq,
+            truncated: false,
+        });
+    }
+    let list = changes(&git, &from.tree, &to_tree).await?;
+    let numstat = git
+        .run(
+            &[
+                "diff-tree",
+                "-r",
+                "-z",
+                "--numstat",
+                "--no-renames",
+                "--no-ext-diff",
+                "--no-textconv",
+                &from.tree,
+                &to_tree,
+            ],
+            None,
+            &[],
+        )
+        .await?;
+    let mut counts: HashMap<Vec<u8>, (i64, i64)> = HashMap::new();
+    for rec in numstat.split(|b| *b == 0).filter(|p| !p.is_empty()) {
+        let mut f = rec.splitn(3, |b| *b == b'\t');
+        let (Some(a), Some(d), Some(path)) = (f.next(), f.next(), f.next()) else {
+            continue;
+        };
+        let num = |x: &[u8]| String::from_utf8_lossy(x).parse::<i64>().unwrap_or(0);
+        counts.insert(path.to_vec(), (num(a), num(d)));
+    }
+    let mut files = Vec::with_capacity(list.len());
+    let (mut additions, mut deletions) = (0, 0);
+    for c in &list {
+        let (a, d) = counts.get(&c.path).copied().unwrap_or((0, 0));
+        additions += a;
+        deletions += d;
+        files.push(TurnDiffFile {
+            path: String::from_utf8_lossy(&c.path).into_owned(),
+            status: match c.status {
+                b'A' => "added",
+                b'D' => "deleted",
+                _ => "modified",
+            }
+            .to_string(),
+            additions: a,
+            deletions: d,
+        });
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let raw_patch = git
+        .run(
+            &[
+                "diff-tree",
+                "-p",
+                "-r",
+                "--no-renames",
+                "--no-ext-diff",
+                "--no-textconv",
+                &from.tree,
+                &to_tree,
+            ],
+            None,
+            &[],
+        )
+        .await?;
+    let (patch, truncated) = truncate_patch(&raw_patch, MAX_TURN_PATCH_BYTES);
+    Ok(TurnDiff {
+        files,
+        patch,
+        additions,
+        deletions,
+        from_seq: from.seq,
+        to_seq,
+        truncated,
+    })
+}
+
+/// Checks that `checkpoint.commit` still exists in git (so a worktree can be rooted on it).
+pub(crate) async fn verify_commit(agent: &Agent, commit: &str) -> anyhow::Result<()> {
+    let cwd = agent_dir(agent).ok_or_else(|| anyhow!("The agent's folder no longer exists"))?;
+    let git = Git::new(cwd).await?;
+    if !git.available().await {
+        bail!("This folder isn't a git repository");
+    }
+    git.run(
+        &["cat-file", "-e", &format!("{commit}^{{commit}}")],
+        None,
+        &[],
+    )
+    .await
+    .context("The saved snapshot for that checkpoint is no longer in git")?;
+    Ok(())
+}
+
+/// Snapshots the agent's current files into a commit (parented on HEAD) so a fork can
+/// create a worktree from the latest state without touching HEAD or the index.
+pub(crate) async fn snapshot_current_commit(agent: &Agent) -> anyhow::Result<String> {
+    let cwd = agent_dir(agent).ok_or_else(|| anyhow!("The agent's folder no longer exists"))?;
+    let git = Git::new(cwd).await?;
+    if !git.available().await {
+        bail!("Forking needs a git repository");
+    }
+    let _guard = lock_agent(&agent.id).await;
+    let tree = git.snapshot_tree(None).await?;
+    let head = git.head().await;
+    git.commit_tree(&tree, head.as_deref()).await
+}
+
 /// Puts the folder's files back to how they were at the checkpoint. The caller
 /// makes sure the agent isn't working. The current state is checkpointed first.
 pub(crate) async fn restore(
@@ -1411,5 +1617,67 @@ mod tests {
         let c = parse_raw(raw);
         assert_eq!(c.len(), 2);
         assert_eq!(c[1].status, b'A');
+    }
+
+    #[tokio::test]
+    async fn turn_diff_isolates_each_turn_and_compares_latest_against_working_tree() {
+        let r = Repo::new();
+        // Turn 1 starts at c1: modifies a.txt and adds b.txt.
+        let c1 = take_for_turn(&r.db, &r.agent, Some("u1".into()))
+            .await
+            .unwrap()
+            .unwrap();
+        r.write("a.txt", "one\ntwo\n");
+        r.write("b.txt", "hello\n");
+
+        // Turn 2 starts at c2: modifies b.txt and adds c.txt.
+        let c2 = take_for_turn(&r.db, &r.agent, Some("u2".into()))
+            .await
+            .unwrap()
+            .unwrap();
+        r.write("b.txt", "hello\nworld\n");
+        r.write("c.txt", "third\n");
+
+        // Turn 1 diff = c1..c2 (must NOT include c.txt or the second line of b.txt).
+        let d1 = turn_diff(&r.db, &r.agent, &c1.id).await.unwrap();
+        assert_eq!(d1.from_seq, 1);
+        assert_eq!(d1.to_seq, Some(2));
+        assert!(!d1.truncated);
+        assert_eq!(d1.files.len(), 2);
+        assert!(d1
+            .files
+            .iter()
+            .any(|f| f.path == "a.txt" && f.status == "modified" && f.additions == 1));
+        assert!(d1
+            .files
+            .iter()
+            .any(|f| f.path == "b.txt" && f.status == "added" && f.additions == 1));
+        assert!(d1.patch.contains("+two"));
+        assert!(!d1.patch.contains("world"));
+        assert!(!d1.patch.contains("c.txt"));
+
+        // Turn 2 diff = c2..current working tree (to_seq is None).
+        let d2 = turn_diff(&r.db, &r.agent, &c2.id).await.unwrap();
+        assert_eq!(d2.from_seq, 2);
+        assert_eq!(d2.to_seq, None);
+        assert_eq!(d2.files.len(), 2);
+        assert!(d2
+            .files
+            .iter()
+            .any(|f| f.path == "b.txt" && f.status == "modified" && f.additions == 1));
+        assert!(d2
+            .files
+            .iter()
+            .any(|f| f.path == "c.txt" && f.status == "added" && f.additions == 1));
+        assert!(d2.patch.contains("+world"));
+        assert!(!d2.patch.contains("a.txt"));
+    }
+
+    #[test]
+    fn truncate_patch_cuts_at_file_boundary() {
+        let p = b"diff --git a/one.txt b/one.txt\n+1\ndiff --git a/two.txt b/two.txt\n+2\n";
+        let (cut, truncated) = truncate_patch(p, 45);
+        assert!(truncated);
+        assert_eq!(cut, "diff --git a/one.txt b/one.txt\n+1\n");
     }
 }

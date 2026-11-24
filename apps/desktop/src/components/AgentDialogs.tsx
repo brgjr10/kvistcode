@@ -11,7 +11,9 @@ import { cn, errorMessage, modKey } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useUi } from "@/store/ui";
 import { AccountAvatar } from "./AccountAvatar";
+import { ForkDialog } from "./agent/ForkDialog";
 import { ProviderGlyph } from "./ProviderGlyph";
+import { TurnDiffDialog } from "./timeline/TurnDiffDialog";
 import { ConfirmDialog } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -31,6 +33,8 @@ export function AgentDialogs() {
     <>
       <MoveAccountDialog agent={move} onClose={() => useUi.getState().setMoveAgent(null)} />
       <HandoffDialog agent={handoff} onClose={() => useUi.getState().setHandoffAgent(null)} />
+      <ForkDialog />
+      <TurnDiffDialog />
       <DeleteDialog agent={del} onClose={() => useUi.getState().setDeleteAgent(null)} />
     </>
   );
