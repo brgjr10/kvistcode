@@ -135,7 +135,11 @@ export function placeLabel(p: Place): string {
       return agent?.title || "Projects";
     }
     case "mission":
-      return p.missionTab === "all" ? "Mission Control: All agents" : "Mission Control: Needs you";
+      return p.missionTab === "all"
+        ? "Mission Control: All agents"
+        : p.missionTab === "board"
+          ? "Mission Control: Board"
+          : "Mission Control: Needs you";
     case "compare":
       return "Compare";
     case "schedules":

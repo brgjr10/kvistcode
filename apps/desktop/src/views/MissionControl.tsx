@@ -1,5 +1,6 @@
 import { LayoutGrid, Plus, Rows3, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { BoardPane } from "@/components/board/Board";
 import { AllAgentsPane, type Density } from "@/components/mission/AllAgents";
 import { NeedsYouPane } from "@/components/mission/NeedsYou";
 import { useFleet, type Filter } from "@/components/mission/useFleet";
@@ -143,6 +144,7 @@ export function MissionControlView() {
             options={[
               { value: "needs", label: chip("Needs you", needs, "var(--warn)") },
               { value: "all", label: chip("All agents", agents.length) },
+              { value: "board", label: "Board" },
             ]}
           />
           {tab === "all" && agents.length > 0 && (
@@ -167,6 +169,10 @@ export function MissionControlView() {
       {tab === "needs" ? (
         <div className="min-h-0 flex-1">
           <NeedsYouPane hasAgents={agents.length > 0} />
+        </div>
+      ) : tab === "board" ? (
+        <div className="flex min-h-0 flex-1 flex-col px-4 py-4 @2xl:px-6 @2xl:py-5">
+          <BoardPane />
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 @2xl:px-6 @2xl:py-5">

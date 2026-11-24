@@ -66,7 +66,7 @@ Git worktrees isolate repository files, not the broader filesystem or network—
 
 - [ ] **Import & resume external CLI sessions:** Pull sessions started in a regular terminal (`claude`, `codex`, etc.) into Kvistcode, or open a Kvistcode session back in a terminal CLI
 - [ ] **Inbound event triggers:** Start agents from inbound webhooks, GitHub PR mentions / CI failures, Linear issues, Sentry errors, or Slack messages (complementing existing cron Schedules and outbound alerts)
-- [ ] **Project task board (Kanban view):** Optional board view over agents/issues per project (Backlog → Working → Needs review → Merged)
+- [x] **Project task board (Kanban view):** Optional board view over agents/issues per project (Backlog → Working → Needs review → Merged)
 - [ ] **First-class providers:** Promote popular ACP agents (OpenCode, Cursor CLI, etc.) from generic custom ACP to built-in install/auth/model-picker/usage parity
 - [ ] **Interactive inline artifacts:** Render sandboxed HTML/SVG/chart artifacts inline in the conversation timeline
 - [ ] **Package-manager distribution & macOS:** Winget, Scoop, Homebrew cask, and revisiting macOS release builds (currently held on v0.6.1)

@@ -74,6 +74,16 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     commit_oid TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS checkpoints_agent_seq ON checkpoints(agent_id, seq);
+CREATE TABLE IF NOT EXISTS board_cards (
+    id           TEXT PRIMARY KEY,
+    project_path TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    notes        TEXT NOT NULL DEFAULT '',
+    position     INTEGER NOT NULL,
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS board_cards_project ON board_cards(project_path, position);
 CREATE TABLE IF NOT EXISTS settings (
     id   INTEGER PRIMARY KEY CHECK (id = 1),
     data TEXT NOT NULL
@@ -297,6 +307,11 @@ impl Db {
             reader: Mutex::new(reader),
             dir: path.parent().map(Path::to_path_buf).unwrap_or_default(),
         })
+    }
+
+    /// The write connection, for sibling modules that own a table (see `board.rs`).
+    pub(crate) fn write_conn(&self) -> parking_lot::MutexGuard<'_, Connection> {
+        self.conn.lock()
     }
 
     // ---- accounts ----

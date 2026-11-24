@@ -2,6 +2,7 @@
 //! accounts and local storage. UI-agnostic; the Tauri shell wires it to the window.
 
 pub mod accounts;
+pub mod board;
 pub mod budget;
 pub mod checkpoints;
 pub mod childenv;

@@ -1089,6 +1089,17 @@ export interface Checkpoint {
   kind: "turn" | "safety";
 }
 
+/** A Backlog card on a project's board: work noted down but not started. */
+export interface BoardCard {
+  id: string;
+  projectPath: string;
+  title: string;
+  notes: string;
+  position: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface CheckpointList {
   /** False when the folder isn't (the root of) a git repository. */
   available: boolean;
