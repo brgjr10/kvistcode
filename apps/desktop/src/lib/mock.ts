@@ -961,19 +961,19 @@ const C = {
 async function runLogin(t: MockTerminal) {
   const acc = db.accounts.find((a) => a.id === t.accountId);
   const cli =
-    acc?.provider === "codex"
-      ? "codex"
-      : acc?.provider === "grok"
-        ? "grok"
-        : acc?.provider === "gemini"
+    acc?.provider === "codex" ? "codex" : acc?.provider === "grok" ? "grok" : acc?.provider === "gemini"
           ? "gemini"
-          : "claude";
+          : acc?.provider === "opencode"
+            ? "opencode"
+            : acc?.provider === "cursor"
+              ? "cursor-agent"
+              : "claude";
   await sleep(350);
   termOut(t.id, `${C.dim}$ ${cli} ${cli === "claude" ? "/login" : "login"}${C.reset}\r\n\r\n`);
   await sleep(500);
   termOut(
     t.id,
-    `${C.bold}Sign in to ${acc ? (cli === "codex" ? "ChatGPT" : cli === "grok" ? "Grok" : cli === "gemini" ? "Gemini" : "Claude") : "provider"}${C.reset}\r\n\r\n`,
+    `${C.bold}Sign in to ${acc ? (cli === "codex" ? "ChatGPT" : cli === "grok" ? "Grok" : cli === "gemini" ? "Gemini" : cli === "opencode" ? "OpenCode" : cli === "cursor-agent" ? "Cursor" : "Claude") : "provider"}${C.reset}\r\n\r\n`,
   );
   await sleep(300);
   termOut(t.id, `Opening your browser to complete sign-in…\r\n`);

@@ -10,6 +10,10 @@ pub enum Provider {
     Grok,
     /// Google's Antigravity CLI (`agy acp`), which runs Gemini models.
     Gemini,
+    /// OpenCode (`opencode acp`).
+    Opencode,
+    /// Cursor CLI (`cursor-agent acp`).
+    Cursor,
     /// A model running on this machine (or a LAN box) behind an OpenAI-compatible
     /// server. Driven by the Codex CLI, pointed at the server instead of OpenAI.
     Local,
@@ -19,11 +23,13 @@ pub enum Provider {
 
 impl Provider {
     /// The built-in providers (custom agents are configured separately).
-    pub const ALL: [Provider; 4] = [
+    pub const ALL: [Provider; 6] = [
         Provider::Claude,
         Provider::Codex,
         Provider::Grok,
         Provider::Gemini,
+        Provider::Opencode,
+        Provider::Cursor,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -32,6 +38,8 @@ impl Provider {
             Provider::Codex => "codex",
             Provider::Grok => "grok",
             Provider::Gemini => "gemini",
+            Provider::Opencode => "opencode",
+            Provider::Cursor => "cursor",
             Provider::Local => "local",
             Provider::Custom => "custom",
         }
@@ -43,6 +51,8 @@ impl Provider {
             "codex" => Some(Provider::Codex),
             "grok" => Some(Provider::Grok),
             "gemini" => Some(Provider::Gemini),
+            "opencode" => Some(Provider::Opencode),
+            "cursor" => Some(Provider::Cursor),
             "local" => Some(Provider::Local),
             "custom" => Some(Provider::Custom),
             _ => None,
@@ -55,6 +65,8 @@ impl Provider {
             Provider::Codex => "ChatGPT (Codex)",
             Provider::Grok => "Grok",
             Provider::Gemini => "Gemini",
+            Provider::Opencode => "OpenCode",
+            Provider::Cursor => "Cursor",
             Provider::Local => "Local model",
             Provider::Custom => "Custom agent",
         }

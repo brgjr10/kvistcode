@@ -120,7 +120,7 @@ export function spendByAccount(agents: readonly Pick<Agent, "accountId" | "costU
   return out;
 }
 
-const PROVIDER_ORDER = ["claude", "codex", "grok", "gemini", "local", "custom"];
+const PROVIDER_ORDER = ["claude", "codex", "grok", "gemini", "opencode", "cursor", "local", "custom"];
 
 /** Accounts by provider (Claude, Codex, Grok, Gemini, local, custom), then by name. */
 export function sortAccounts<A extends Pick<RemoteAccount, "provider" | "name">>(accounts: readonly A[]): A[] {

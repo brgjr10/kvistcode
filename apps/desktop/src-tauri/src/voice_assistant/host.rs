@@ -153,6 +153,8 @@ fn provider_label(p: Provider) -> &'static str {
         Provider::Claude => "Claude",
         Provider::Codex => "Codex",
         Provider::Grok => "Grok",
+        Provider::Opencode => "OpenCode",
+        Provider::Cursor => "Cursor",
         Provider::Gemini => "Gemini",
         Provider::Local => "Local",
         Provider::Custom => "Custom",
@@ -630,6 +632,8 @@ impl KvistcodeTools {
             "codex" => Provider::Codex,
             "grok" => Provider::Grok,
             "gemini" => Provider::Gemini,
+            "opencode" => Provider::Opencode,
+            "cursor" => Provider::Cursor,
             _ => Provider::Claude,
         };
         let known = self.known_projects().await;

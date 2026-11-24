@@ -546,7 +546,7 @@ impl Core {
             Provider::Codex => &[Provider::Claude, Provider::Gemini, Provider::Grok],
             Provider::Gemini => &[Provider::Claude, Provider::Codex, Provider::Grok],
             Provider::Grok => &[Provider::Claude, Provider::Codex, Provider::Gemini],
-            Provider::Local | Provider::Custom => &[
+            Provider::Local | Provider::Custom | Provider::Opencode | Provider::Cursor => &[
                 Provider::Claude,
                 Provider::Codex,
                 Provider::Gemini,
@@ -711,7 +711,12 @@ impl Core {
                 )
                 .await
             }
-            Provider::Claude | Provider::Grok | Provider::Gemini | Provider::Custom => {
+            Provider::Claude
+            | Provider::Grok
+            | Provider::Gemini
+            | Provider::Opencode
+            | Provider::Cursor
+            | Provider::Custom => {
                 acp::one_shot_prompt(
                     &program,
                     &args,

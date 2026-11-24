@@ -2,7 +2,7 @@
 // Field names are camelCase on the wire; Rust uses #[serde(rename_all = "camelCase")].
 // Keep this file in sync with crates/kvistcode-core/src/model.rs.
 
-export type Provider = "claude" | "codex" | "grok" | "gemini" | "local" | "custom";
+export type Provider = "claude" | "codex" | "grok" | "gemini" | "opencode" | "cursor" | "local" | "custom";
 
 export type AuthKind = "default" | "oauth" | "api_key";
 

@@ -318,6 +318,13 @@ pub fn collect_mounts(
             Provider::Codex | Provider::Local => &[".codex"],
             Provider::Grok => &[".grok"],
             Provider::Gemini => &[".gemini"],
+            Provider::Opencode => &[
+                ".config/opencode",
+                ".local/share/opencode",
+                ".local/state/opencode",
+                ".cache/opencode",
+            ],
+            Provider::Cursor => &[".cursor", ".config/cursor"],
             Provider::Custom => &[],
         };
         for rel in rels {

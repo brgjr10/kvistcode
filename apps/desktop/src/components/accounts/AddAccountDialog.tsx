@@ -24,14 +24,19 @@ const SUBSCRIPTION: Record<CloudProvider, string> = {
   codex: "ChatGPT Plus, Pro or Team",
   grok: "SuperGrok or X Premium+",
   gemini: "Google account (Free, Pro or Ultra)",
+  opencode: "OpenCode's free models or your own provider login",
+  cursor: "Cursor Pro or Business",
 };
 
-const KEY_HINT: Record<CloudProvider, { env: string; placeholder: string }> = {
+// OpenCode keeps one key per model provider in its own login, so it has no single API key here.
+const KEY_HINT: Record<Exclude<CloudProvider, "opencode">, { env: string; placeholder: string }> = {
   claude: { env: "ANTHROPIC_API_KEY", placeholder: "sk-ant-…" },
   codex: { env: "OPENAI_API_KEY", placeholder: "sk-proj-…" },
   grok: { env: "XAI_API_KEY", placeholder: "xai-…" },
   gemini: { env: "GEMINI_API_KEY", placeholder: "AIza…" },
+  cursor: { env: "CURSOR_API_KEY", placeholder: "key_…" },
 };
+type KeyProvider = keyof typeof KEY_HINT;
 
 export function AddAccountDialog({
   open,
@@ -190,26 +195,28 @@ export function AddAccountDialog({
                       title="Subscription"
                       description={SUBSCRIPTION[provider as CloudProvider]}
                     />
-                    <AuthOption
-                      active={auth === "api_key"}
-                      onClick={() => setAuth("api_key")}
-                      icon={<KeyRound />}
-                      title="API key"
-                      description="Billed per token"
-                    />
+                    {provider !== "opencode" && (
+                      <AuthOption
+                        active={auth === "api_key"}
+                        onClick={() => setAuth("api_key")}
+                        icon={<KeyRound />}
+                        title="API key"
+                        description="Billed per token"
+                      />
+                    )}
                   </div>
                 </div>
 
                 {auth === "api_key" ? (
                   <div>
-                    <Label htmlFor="add-acc-key">{KEY_HINT[provider as CloudProvider].env}</Label>
+                    <Label htmlFor="add-acc-key">{KEY_HINT[provider as KeyProvider].env}</Label>
                     <div className="relative">
                       <Input
                         id="add-acc-key"
                         type={showKey ? "text" : "password"}
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
-                        placeholder={KEY_HINT[provider as CloudProvider].placeholder}
+                        placeholder={KEY_HINT[provider as KeyProvider].placeholder}
                         autoComplete="off"
                         aria-describedby={keyTooShort ? "add-acc-key-hint" : undefined}
                         className="pr-10 font-mono"

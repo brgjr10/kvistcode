@@ -52,6 +52,24 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
     hex: "#4285F4",
     tagline: "Antigravity CLI",
   },
+  opencode: {
+    id: "opencode",
+    name: "OpenCode",
+    short: "OpenCode",
+    vendor: "OpenCode",
+    colorVar: "var(--ok)",
+    hex: "#3DDC97",
+    tagline: "OpenCode CLI",
+  },
+  cursor: {
+    id: "cursor",
+    name: "Cursor",
+    short: "Cursor",
+    vendor: "Anysphere",
+    colorVar: "var(--steel)",
+    hex: "#9AA4B2",
+    tagline: "Cursor CLI",
+  },
   local: {
     id: "local",
     name: "Local model",
@@ -72,7 +90,7 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
   },
 };
 
-export const PROVIDER_ORDER: BuiltinProvider[] = ["claude", "codex", "grok", "gemini", "local"];
+export const PROVIDER_ORDER: BuiltinProvider[] = ["claude", "codex", "grok", "gemini", "opencode", "cursor", "local"];
 
 export const CUSTOM_ACCOUNT_ID = "system-custom";
 

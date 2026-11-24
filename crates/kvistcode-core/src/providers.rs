@@ -19,10 +19,13 @@ pub const CODEX_PKG: &str = "@openai/codex";
 pub const CODEX_VERSION: &str = "0.166.0";
 pub const GROK_PKG: &str = "@xai-official/grok";
 pub const GROK_VERSION: &str = "1.0.70";
+pub const OPENCODE_PKG: &str = "opencode-ai";
+pub const OPENCODE_VERSION: &str = "1.19.6";
 
 pub fn cli_name(provider: Provider) -> &'static str {
     match provider {
         Provider::Gemini => "agy",
+        Provider::Cursor => "cursor-agent",
         _ => provider.as_str(),
     }
 }
@@ -365,12 +368,13 @@ pub fn set_data_dir(dir: &Path) {
 pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
     match provider {
         Provider::Claude => bundled_claude(data_dir),
-        Provider::Codex | Provider::Grok => {
+        Provider::Codex | Provider::Grok | Provider::Opencode => {
             let bin = crate::toolchain::tools_bin_dir(data_dir);
             which::which_in(cli_name(provider), Some(&bin), data_dir).ok()
         }
         Provider::Gemini => Some(crate::toolchain::agy_binary(data_dir)).filter(|p| p.is_file()),
-        Provider::Local | Provider::Custom => None,
+        // Cursor's installer is its own script; Kvistcode uses the system copy.
+        Provider::Cursor | Provider::Local | Provider::Custom => None,
     }
 }
 
@@ -580,9 +584,33 @@ pub fn launch_spec_for_account(
                 });
             Ok((cli, crate::gemini::acp_args(&profile)))
         }
+        Provider::Opencode => {
+            let cli = find_cli(Provider::Opencode).ok_or_else(|| {
+                anyhow::anyhow!("OpenCode is not installed. Install it from Settings → Providers.")
+            })?;
+            Ok((cli, opencode_acp_args()))
+        }
+        Provider::Cursor => {
+            let cli = find_cli(Provider::Cursor).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cursor CLI is not installed. Install it from Settings → Providers."
+                )
+            })?;
+            Ok((cli, cursor_acp_args()))
+        }
         Provider::Local => launch_spec_for_account(Provider::Codex, account, data_dir),
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
     }
+}
+
+/// Arguments that start OpenCode as an ACP agent on stdio.
+pub fn opencode_acp_args() -> Vec<String> {
+    vec!["acp".into()]
+}
+
+/// Arguments that start the Cursor CLI as an ACP agent on stdio (`cursor-agent acp`).
+pub fn cursor_acp_args() -> Vec<String> {
+    vec!["acp".into()]
 }
 
 /// Manual equivalent of what Kvistcode's one-click installer does (shown in the UI
@@ -605,6 +633,8 @@ pub fn install_command(provider: Provider, data_dir: &Path) -> String {
         Provider::Codex | Provider::Local => "npm install -g @openai/codex".into(),
         Provider::Grok => "npm install -g @xai-official/grok".into(),
         Provider::Gemini => "curl -fsSL https://antigravity.google/cli/install.sh | bash".into(),
+        Provider::Opencode => "npm install -g opencode-ai".into(),
+        Provider::Cursor => "curl https://cursor.com/install -fsS | bash".into(),
         Provider::Custom => String::new(),
     }
 }
@@ -616,6 +646,8 @@ pub fn docs_url(provider: Provider) -> &'static str {
         Provider::Local => "https://ollama.com/download",
         Provider::Grok => "https://docs.x.ai",
         Provider::Gemini => "https://antigravity.google/docs/cli/getting-started",
+        Provider::Opencode => "https://opencode.ai/docs/acp/",
+        Provider::Cursor => "https://cursor.com/docs/cli/acp",
         Provider::Custom => "https://agentclientprotocol.com/overview/agents",
     }
 }
@@ -712,6 +744,17 @@ pub async fn detect(data_dir: &Path) -> Vec<ProviderInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opencode_and_cursor_start_in_acp_mode() {
+        assert_eq!(opencode_acp_args(), vec!["acp"]);
+        assert_eq!(cursor_acp_args(), vec!["acp"]);
+        assert_eq!(cli_name(Provider::Opencode), "opencode");
+        assert_eq!(cli_name(Provider::Cursor), "cursor-agent");
+        let dir = std::path::Path::new("/nonexistent-kvistcode");
+        assert!(install_command(Provider::Opencode, dir).contains("opencode-ai"));
+        assert!(install_command(Provider::Cursor, dir).contains("cursor.com/install"));
+    }
 
     /// What this machine resolves (run with --ignored --nocapture to see).
     #[test]
