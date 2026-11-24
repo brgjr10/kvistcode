@@ -9,7 +9,10 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 const applyEvents = vi.fn();
-vi.mock("./app", () => ({ useApp: { getState: () => ({ agents: {}, applyEvents }), setState: vi.fn() } }));
+vi.mock("./app", () => ({
+  useApp: { getState: () => ({ agents: {}, applyEvents }), setState: vi.fn() },
+  onAgentRemoved: vi.fn(),
+}));
 vi.mock("./ui", () => ({ useUi: { getState: () => ({}), setState: vi.fn() } }));
 vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), { dismiss: vi.fn(), warning: vi.fn(), error: vi.fn(), success: vi.fn() }),

@@ -443,6 +443,7 @@ function ReviewBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
         side: "new",
         line: matched?.newNo ?? wantedLine,
         code: matched?.text ?? "",
+        type: matched?.type ?? "context",
       };
       const text =
         finding.body && finding.body !== finding.title
