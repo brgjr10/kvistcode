@@ -334,6 +334,13 @@ export function seedSettings(onboarded: boolean): Settings {
     projectLayout: { customOrder: false, order: [], sections: [] },
     preferredEditor: null,
     remote: { enabled: false, lan: false, port: 47821, tailscale: false, lanAddress: null },
+    localMcp: {
+      enabled: false,
+      port: 47822,
+      allowReadTools: true,
+      allowWriteTools: false,
+      exposeToAgents: false,
+    },
     voice: { inputDevice: null, model: "base.en", language: "auto", autoSend: false },
     voiceAssistant: {
       enabled: true,

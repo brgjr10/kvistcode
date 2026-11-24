@@ -14,6 +14,7 @@ mod github;
 mod github_work;
 mod hotkey;
 mod local;
+mod local_mcp_server;
 mod log_writer;
 mod login_item;
 mod notify;
@@ -232,6 +233,8 @@ macro_rules! handler {
             commands::remote_revoke_device,
             commands::create_share_link,
             commands::revoke_share_link,
+            commands::local_mcp_status,
+            commands::local_mcp_rotate_token,
         ]
     };
 }
@@ -310,7 +313,11 @@ fn manage_state(
     app: &AppHandle,
     core: &Core,
     data_dir: &Path,
-) -> (Arc<remote::Remote>, Arc<Attention>) {
+) -> (
+    Arc<remote::Remote>,
+    Arc<local_mcp_server::LocalMcpServer>,
+    Arc<Attention>,
+) {
     app.manage(core.clone());
     app.manage(Shell::new(data_dir.to_path_buf()));
     app.manage(Terminals::default());
@@ -326,10 +333,12 @@ fn manage_state(
         data_dir.to_path_buf(),
     );
     app.manage(remote.clone());
+    let local_mcp = local_mcp_server::LocalMcpServer::new(core.clone(), data_dir.to_path_buf());
+    app.manage(local_mcp.clone());
     let icon_path = write_notification_icon(data_dir);
     let attention = Arc::new(Attention::new(app.clone(), icon_path));
     app.manage(attention.clone());
-    (remote, attention)
+    (remote, local_mcp, attention)
 }
 
 fn setup(app: &AppHandle, startup_data_dir: Option<&Path>) -> anyhow::Result<()> {
@@ -358,7 +367,7 @@ fn setup(app: &AppHandle, startup_data_dir: Option<&Path>) -> anyhow::Result<()>
     // blocks the core; the dispatcher forwards them to the window.
     let (sink, rx) = events::channel();
     let core = tauri::async_runtime::block_on(async { Core::open(data_dir.clone(), sink) })?;
-    let (remote, attention) = manage_state(app, &core, &data_dir);
+    let (remote, local_mcp, attention) = manage_state(app, &core, &data_dir);
 
     // Not fatal: some desktops have no tray (closing the window then quits).
     // On Linux the indicator library is loaded lazily and panics when it's missing.
@@ -395,6 +404,11 @@ fn setup(app: &AppHandle, startup_data_dir: Option<&Path>) -> anyhow::Result<()>
         let remote_settings = settings.remote.clone();
         let remote = remote.clone();
         tauri::async_runtime::spawn(async move { remote.apply(&remote_settings).await });
+    }
+    {
+        let local_mcp_settings = settings.local_mcp.clone();
+        let local_mcp = local_mcp.clone();
+        tauri::async_runtime::spawn(async move { local_mcp.apply(&local_mcp_settings).await });
     }
     {
         // Follow LAN address changes (new Wi-Fi, DHCP) even while the window is closed.
@@ -565,6 +579,9 @@ pub(crate) async fn shutdown_services(app: &AppHandle) {
         // Also keeps a still-running startup `apply` from starting it again.
         remote.shutdown().await;
     }
+    if let Some(local_mcp) = app.try_state::<Arc<local_mcp_server::LocalMcpServer>>() {
+        local_mcp.shutdown().await;
+    }
     let agents = async {
         if let Some(core) = app.try_state::<Core>().map(|c| c.inner().clone()) {
             info!("shutting down agents");
@@ -716,6 +733,8 @@ mod tests {
             "PreviewProxies",
             "preview_proxy::PreviewProxies",
             "Arc<Remote>",
+            "Arc<LocalMcpServer>",
+            "Arc<local_mcp_server::LocalMcpServer>",
             "Arc<Attention>",
             "TrayState",
         ];

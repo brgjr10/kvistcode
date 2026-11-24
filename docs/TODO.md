@@ -44,9 +44,9 @@ Turn Kvistcode's multi-provider accounts and Handoff into a local, BYOS equivale
 ### 5. Expose Kvistcode as a local MCP server
 Agents in Kvistcode can consume MCP servers today, but cannot inspect or coordinate sibling Kvistcode agents across providers.
 
-- [ ] Add an opt-in local-only MCP endpoint (e.g., on loopback or stdio bridge) with explicit permission controls
-- [ ] Expose safe fleet tools: `list_agents`, `get_agent_status`, `get_diff`, `read_summary`, `spawn_agent`, `send_message`
-- [ ] Allow one provider (e.g., Claude) to delegate a review or parallel subtask to another provider (e.g., Codex or Gemini) in its own worktree, and allow external terminal agents to inspect running Kvistcode threads
+- [x] Add an opt-in local-only MCP endpoint (e.g., on loopback or stdio bridge) with explicit permission controls
+- [x] Expose safe fleet tools: `list_agents`, `get_agent_status`, `get_diff`, `read_summary`, `spawn_agent`, `send_message`
+- [x] Allow one provider (e.g., Claude) to delegate a review or parallel subtask to another provider (e.g., Codex or Gemini) in its own worktree, and allow external terminal agents to inspect running Kvistcode threads
 - **Touchpoints:** `crates/kvistcode-core/src/mcp.rs`, `apps/desktop/src-tauri/src/remote.rs`, `crates/kvistcode-core/src/manager.rs`
 
 ---

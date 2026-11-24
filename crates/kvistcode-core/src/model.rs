@@ -1349,6 +1349,9 @@ pub struct Settings {
     /// or "ask" (the agent's default, which asks before acting).
     pub default_permission_mode: String,
     pub remote: RemoteSettings,
+    /// Opt-in loopback-only MCP server exposing Kvistcode's agent fleet.
+    #[serde(default)]
+    pub local_mcp: crate::local_mcp::LocalMcpSettings,
     pub voice: VoiceSettings,
     /// The OpenAI Realtime voice assistant (off by default).
     pub voice_assistant: VoiceAssistantSettings,
@@ -1698,6 +1701,9 @@ impl Settings {
         if self.remote.port == 0 {
             return Err("The remote control port must be between 1 and 65535".into());
         }
+        if let Some(problem) = self.local_mcp.problem() {
+            return Err(problem);
+        }
         if self.remote.lan && self.remote.tailscale {
             return Err("Choose either Tailscale or your local network for remote access".into());
         }
@@ -1813,6 +1819,9 @@ impl Settings {
         if self.remote.port == 0 {
             self.remote.port = defaults.remote.port;
             reset.push("remote.port");
+        }
+        if self.local_mcp.sanitize() {
+            reset.push("localMcp.port");
         }
         if self.remote.lan && self.remote.tailscale {
             self.remote.lan = false;
@@ -1988,6 +1997,7 @@ impl Default for Settings {
             custom_agents: Vec::new(),
             default_permission_mode: "auto".into(),
             remote: RemoteSettings::default(),
+            local_mcp: crate::local_mcp::LocalMcpSettings::default(),
             voice: VoiceSettings::default(),
             voice_assistant: VoiceAssistantSettings::default(),
             config_defaults: Default::default(),

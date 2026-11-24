@@ -37,6 +37,7 @@ import type {
   PullProgress,
   Hardware,
   LocalHealth,
+  LocalMcpStatus,
   LocalPrefs,
   SpeedResult,
   Provider,
@@ -496,6 +497,10 @@ const tauriApi = {
   /** `hours`: 1, 24 or 168 (7 days). */
   createShareLink: (agentId: string, hours?: number) => invoke<ShareLink>("create_share_link", { agentId, hours }),
   revokeShareLink: (id: string) => invoke<void>("revoke_share_link", { id }),
+
+  // local MCP server
+  localMcpStatus: () => invoke<LocalMcpStatus>("local_mcp_status"),
+  localMcpRotateToken: () => invoke<LocalMcpStatus>("local_mcp_rotate_token"),
 
   // updates
   checkForUpdate: () => invoke<UpdateInfo | null>("check_for_update"),

@@ -173,6 +173,13 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { label: "Custom agents", page: "providers", anchor: "agents", keywords: ["acp", "gemini", "goose"] },
   { label: "Project instructions", page: "projects", tab: "instructions", keywords: ["claude.md", "agents.md"] },
   { label: "MCP servers", page: "projects", tab: "mcp", keywords: ["mcp", "connectors", "tools"] },
+  {
+    label: "Local MCP server",
+    page: "projects",
+    tab: "mcp",
+    anchor: "local-mcp",
+    keywords: ["local mcp", "loopback", "fleet", "delegate", "spawn_agent", "bearer", "token"],
+  },
   { label: "Skills", page: "projects", tab: "skills", keywords: ["skill.md"] },
   { label: "Permission rules", page: "projects", tab: "permissions", keywords: ["allow", "deny", "ask"] },
   { label: "Hooks and slash commands", page: "projects", tab: "automation", keywords: ["hooks", "commands"] },

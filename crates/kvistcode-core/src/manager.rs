@@ -1540,8 +1540,9 @@ impl Core {
         );
         let children_file = self.inner.data_dir.join("children.json");
         let attachments_dir = self.attachments_dir();
-        let mcp_servers = crate::mcp::servers_for_project(
-            &self.inner.settings.lock().mcp_servers,
+        let mcp_servers = crate::mcp::servers_for_agent(
+            &self.inner.settings.lock(),
+            &self.inner.data_dir,
             &agent.project_path,
         );
         let ctx = self.ctx(agent_id);
