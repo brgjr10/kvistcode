@@ -81,6 +81,23 @@ export function ProviderMark({
       </svg>
     );
   }
+  if (provider === "opencode") {
+    // OpenCode: a square bracket pair around a prompt dot.
+    return (
+      <svg {...common}>
+        <path d="M8 5H5v14h3M16 5h3v14h-3" />
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (provider === "cursor") {
+    // Cursor: a pointer arrow.
+    return (
+      <svg {...common}>
+        <path d="M5.5 4.5 19 11l-6.2 1.9L10.5 19Z" />
+      </svg>
+    );
+  }
   // Grok: angular "G".
   return (
     <svg {...common}>

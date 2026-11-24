@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
  * Gemini); never vendor logos.
  * Custom agents get the first letter of their name.
  */
-export function ProviderMark({ provider, size }: { provider: "claude" | "codex" | "grok" | "gemini" | "local"; size: number }) {
+export function ProviderMark({ provider, size }: { provider: "claude" | "codex" | "grok" | "gemini" | "opencode" | "cursor" | "local"; size: number }) {
   const common = {
     width: size,
     height: size,
@@ -42,6 +42,21 @@ export function ProviderMark({ provider, size }: { provider: "claude" | "codex" 
       <svg {...common}>
         <circle cx="9" cy="12" r="5" />
         <circle cx="15" cy="12" r="5" />
+      </svg>
+    );
+  }
+  if (provider === "opencode") {
+    return (
+      <svg {...common}>
+        <path d="M8 5H5v14h3M16 5h3v14h-3" />
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (provider === "cursor") {
+    return (
+      <svg {...common}>
+        <path d="M5.5 4.5 19 11l-6.2 1.9L10.5 19Z" />
       </svg>
     );
   }

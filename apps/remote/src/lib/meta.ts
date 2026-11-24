@@ -14,6 +14,8 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
   codex: { name: "ChatGPT (Codex)", short: "Codex", color: "#10A37F" },
   grok: { name: "Grok", short: "Grok", color: "#E5E7EB" },
   gemini: { name: "Gemini", short: "Gemini", color: "#4285F4" },
+  opencode: { name: "OpenCode", short: "OpenCode", color: "#3DDC97" },
+  cursor: { name: "Cursor", short: "Cursor", color: "#9AA4B2" },
   local: { name: "Local model", short: "Local", color: "#4FC3F7" },
   custom: { name: "Custom agent", short: "Agent", color: CUSTOM_AGENT_COLOR },
 };

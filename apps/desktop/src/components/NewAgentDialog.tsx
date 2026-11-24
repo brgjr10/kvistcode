@@ -171,9 +171,9 @@ function NewAgentForm({ preset, onDone }: { preset: NewAgentPreset | null; onDon
     return () => clearTimeout(t);
   }, []);
 
-  // Alt+1..6 picks the agent: Claude, Codex, Grok, Gemini, Local, then the first custom agent.
+  // Alt+1..6 picks the agent: Claude, Codex, Grok, Gemini, Local, then the first custom agent (OpenCode and Cursor have no shortcut, so these keep their places).
   const keyChoices = useMemo<string[]>(
-    () => [...PROVIDER_ORDER, ...(customAgents[0] ? [`custom:${customAgents[0].id}`] : [])],
+    () => [...PROVIDER_ORDER.filter((p) => p !== "opencode" && p !== "cursor"), ...(customAgents[0] ? [`custom:${customAgents[0].id}`] : [])],
     [customAgents],
   );
 

@@ -474,6 +474,18 @@ fn packages_for(provider: Provider, data_dir: &Path) -> Vec<String> {
             providers::GROK_VERSION,
             data_dir,
         )),
+        Provider::Opencode => pkgs.extend(managed_pkg(
+            provider,
+            providers::OPENCODE_PKG,
+            providers::OPENCODE_VERSION,
+            data_dir,
+        )),
+        // Cursor's own installer is a shell script; Kvistcode only reports whether it is there.
+        Provider::Cursor => {
+            if providers::find_cli(provider).is_none() {
+                pkgs.push("cursor-agent".into());
+            }
+        }
         Provider::Gemini => {
             return if agy_binary(data_dir).is_file() {
                 Vec::new()
@@ -498,7 +510,11 @@ pub fn needs_install(provider: Provider, data_dir: &Path) -> bool {
 /// platform packages; Grok's only dependency, @iarna/toml, has no install script;
 /// transitive scripts never run. Antigravity CLI is downloaded with its published
 /// SHA-512 check rather than through npm.
-const SCRIPTED_PKGS: &[&str] = &[providers::CLAUDE_CODE_PKG, providers::GROK_PKG];
+const SCRIPTED_PKGS: &[&str] = &[
+    providers::CLAUDE_CODE_PKG,
+    providers::GROK_PKG,
+    providers::OPENCODE_PKG,
+];
 
 fn pkg_name(spec: &str) -> &str {
     match spec.rfind('@') {
@@ -863,6 +879,12 @@ async fn install_with(
         ));
         return Ok(());
     }
+    if provider == Provider::Cursor && !packages_for(provider, data_dir).is_empty() {
+        bail!(
+            "Cursor's installer runs in a terminal: {}",
+            providers::install_command(provider, data_dir)
+        );
+    }
     let pkgs = packages_for(provider, data_dir);
     if pkgs.is_empty() {
         log(&line_already(name));
@@ -959,7 +981,8 @@ pub fn tool_package(provider: Provider) -> Option<(&'static str, &'static str)> 
         )),
         Provider::Codex => Some((providers::CODEX_PKG, providers::CODEX_VERSION)),
         Provider::Grok => Some((providers::GROK_PKG, providers::GROK_VERSION)),
-        Provider::Gemini => None,
+        Provider::Opencode => Some((providers::OPENCODE_PKG, providers::OPENCODE_VERSION)),
+        Provider::Gemini | Provider::Cursor => None,
         Provider::Local | Provider::Custom => None,
     }
 }

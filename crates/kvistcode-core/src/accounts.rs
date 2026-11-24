@@ -59,6 +59,8 @@ fn provider_env_vars(provider: Provider) -> &'static [&'static str] {
             "GOOGLE_GEMINI_BASE_URL",
             "KVISTCODE_GEMINI_PROFILE",
         ],
+        Provider::Opencode => &[],
+        Provider::Cursor => &["CURSOR_API_KEY", "CURSOR_AUTH_TOKEN"],
         Provider::Custom => &[],
     }
 }
@@ -91,7 +93,7 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
             Provider::Codex | Provider::Local => Some("CODEX_HOME"),
             Provider::Grok => Some("GROK_HOME"),
             Provider::Gemini => Some("KVISTCODE_GEMINI_PROFILE"),
-            Provider::Custom => None,
+            Provider::Custom | Provider::Opencode | Provider::Cursor => None,
         };
         if let Some(var) = var {
             let value = if account.provider == Provider::Gemini {
@@ -121,7 +123,8 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
                 Provider::Gemini => env.push(("GEMINI_API_KEY".into(), key)),
                 // Codex reads the key stored by `codex login --with-api-key` in CODEX_HOME.
                 Provider::Codex => env.push(("OPENAI_API_KEY".into(), key)),
-                Provider::Custom | Provider::Local => {}
+                Provider::Cursor => env.push(("CURSOR_API_KEY".into(), key)),
+                Provider::Custom | Provider::Local | Provider::Opencode => {}
             }
         }
     }
@@ -163,6 +166,17 @@ pub fn login_command(provider: Provider, data_dir: &Path) -> Option<(String, Vec
         )),
         // No `gemini login`: a small script asks `gemini --acp` to sign in with Google.
         Provider::Gemini => crate::gemini::login_command(data_dir),
+        Provider::Opencode | Provider::Cursor => Some((
+            providers::find_cli(provider).map_or_else(
+                || providers::cli_name(provider).into(),
+                |p| p.to_string_lossy().into_owned(),
+            ),
+            if provider == Provider::Opencode {
+                vec!["auth".into(), "login".into()]
+            } else {
+                vec!["login".into()]
+            },
+        )),
         Provider::Custom | Provider::Local => None,
     }
 }
@@ -376,6 +390,39 @@ pub async fn check_status(account: &Account, data_dir: &Path) -> AccountStatus {
                 None => status.logged_in = false,
             }
         }
+        Provider::Opencode => match run(
+            providers::find_cli(Provider::Opencode).unwrap_or_else(|| "opencode".into()),
+            &["auth", "list"],
+            account,
+        )
+        .await
+        {
+            Ok((_, stdout, _)) => {
+                let (signed_in, label) = parse_opencode_auth(&stdout);
+                status.logged_in = signed_in;
+                status.label = Some(label);
+            }
+            Err(e) => status.error = Some(e.message("OpenCode")),
+        },
+        Provider::Cursor => match run(
+            providers::find_cli(Provider::Cursor).unwrap_or_else(|| "cursor-agent".into()),
+            &["status"],
+            account,
+        )
+        .await
+        {
+            Ok((ok, stdout, stderr)) => {
+                let (signed_in, email) = parse_cursor_status(ok, &format!("{stdout}\n{stderr}"));
+                status.logged_in = signed_in;
+                status.email = email;
+                if signed_in {
+                    status.label = Some("Cursor".into());
+                } else {
+                    status.error = Some("Sign in to use Cursor".into());
+                }
+            }
+            Err(e) => status.error = Some(e.message("Cursor CLI")),
+        },
         Provider::Gemini => {
             if let Some(dir) = crate::gemini::config_dir(account) {
                 let (signed_in, email) = crate::gemini::google_sign_in(&dir);
@@ -392,6 +439,61 @@ pub async fn check_status(account: &Account, data_dir: &Path) -> AccountStatus {
         }
     }
     status
+}
+
+/// `opencode auth list`: OpenCode runs its free models without any sign-in, so it counts as
+/// ready either way; the label says which. Returns (ready, label).
+fn parse_opencode_auth(stdout: &str) -> (bool, String) {
+    let clean = strip_ansi(stdout);
+    if clean.to_lowercase().contains("no authenticated") {
+        return (true, "Free models (no provider signed in)".into());
+    }
+    // A "N credentials" summary line, when present.
+    for line in clean.lines() {
+        let l = line.trim().trim_start_matches(['│', '└', '┌', '●', ' ']);
+        let lower = l.to_lowercase();
+        if l.starts_with(|c: char| c.is_ascii_digit())
+            && (lower.ends_with("credentials") || lower.ends_with("credential"))
+        {
+            return (true, l.to_string());
+        }
+    }
+    (true, "Signed in".into())
+}
+
+/// `cursor-agent status`: "Not logged in", or a line naming the account.
+fn parse_cursor_status(ok: bool, text: &str) -> (bool, Option<String>) {
+    let clean = strip_ansi(text);
+    let lower = clean.to_lowercase();
+    if !ok || lower.contains("not logged in") || lower.contains("not authenticated") {
+        return (false, None);
+    }
+    let email = clean
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c: char| !(c.is_alphanumeric() || "@.-_+".contains(c))))
+        .find(|t| t.contains('@') && t.contains('.'))
+        .map(str::to_string);
+    (true, email)
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for n in chars.by_ref() {
+                    if n.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// A local model account is "signed in" when its server answers.
@@ -585,5 +687,49 @@ mod gemini_tests {
         let env = account_env(&sys);
         assert!(!env.iter().any(|(k, _)| k == "KVISTCODE_GEMINI_PROFILE"));
         assert!(env.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod opencode_cursor_tests {
+    use super::*;
+
+    #[test]
+    fn opencode_without_credentials_still_has_free_models() {
+        let (ready, label) = parse_opencode_auth("\u{1b}[0m No authenticated integrations\n");
+        assert!(ready);
+        assert!(label.starts_with("Free models"));
+        let (ready, label) =
+            parse_opencode_auth("┌  Credentials\n│\n●  Anthropic api\n└  1 credentials\n");
+        assert!(ready);
+        assert_eq!(label, "1 credentials");
+    }
+
+    #[test]
+    fn cursor_status_is_read_from_the_cli_output() {
+        assert_eq!(parse_cursor_status(true, "Not logged in"), (false, None));
+        assert_eq!(parse_cursor_status(false, "boom"), (false, None));
+        assert_eq!(
+            parse_cursor_status(true, "✓ Logged in as dev@example.com\n"),
+            (true, Some("dev@example.com".into()))
+        );
+    }
+
+    #[test]
+    fn cursor_inherited_credentials_are_removed_for_dedicated_accounts() {
+        let a = Account {
+            id: "acc-cursor-test".into(),
+            provider: Provider::Cursor,
+            name: "Cursor".into(),
+            color: "#9AA4B2".into(),
+            auth_kind: AuthKind::ApiKey,
+            is_system: false,
+            config_dir: None,
+            created_at: 0,
+            status: None,
+            usage: None,
+            local: None,
+        };
+        assert!(env_to_remove(&a).contains(&"CURSOR_API_KEY".to_string()));
     }
 }

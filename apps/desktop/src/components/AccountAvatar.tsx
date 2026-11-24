@@ -1,6 +1,7 @@
 import type { Account } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ProviderMark } from "./ProviderGlyph";
+import { PROVIDERS } from "@/lib/providers";
 
 export function initials(name: string): string {
   const parts = name.replace(/[()]/g, "").split(/\s+/).filter(Boolean);
@@ -46,14 +47,7 @@ export function AccountAvatar({
           style={{
             width: Math.max(11, size * 0.46),
             height: Math.max(11, size * 0.46),
-            color:
-              account.provider === "claude"
-                ? "var(--claude)"
-                : account.provider === "codex"
-                  ? "var(--openai)"
-                  : account.provider === "gemini"
-                    ? "var(--gemini)"
-                    : "var(--grok)",
+            color: PROVIDERS[account.provider].colorVar,
           }}
         >
           <ProviderMark provider={account.provider} size={Math.max(7, size * 0.3)} />

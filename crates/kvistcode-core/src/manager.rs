@@ -234,6 +234,8 @@ fn provider_color(p: Provider) -> &'static str {
         Provider::Codex => "#10A37F",
         Provider::Grok => "#E5E7EB",
         Provider::Gemini => "#4285F4",
+        Provider::Opencode => "#3DDC97",
+        Provider::Cursor => "#9AA4B2",
         Provider::Local => "#4FC3F7",
         Provider::Custom => "#B39DDB",
     }
@@ -1596,27 +1598,30 @@ impl Core {
             )
             .await
             .map(Driver::Codex),
-            Provider::Claude | Provider::Grok | Provider::Gemini | Provider::Custom => {
-                AcpDriver::start(
-                    ctx.clone(),
-                    acp::StartOptions {
-                        program: &program,
-                        args: &args,
-                        cwd: &cwd,
-                        env: &env,
-                        env_remove: &env_remove,
-                        label: &label,
-                        children_file: Some(&children_file),
-                        resume,
-                        version: VERSION,
-                        mcp_servers: &mcp_servers,
-                        guidance: &guidance,
-                        session_meta,
-                    },
-                )
-                .await
-                .map(Driver::Acp)
-            }
+            Provider::Claude
+            | Provider::Grok
+            | Provider::Gemini
+            | Provider::Opencode
+            | Provider::Cursor
+            | Provider::Custom => AcpDriver::start(
+                ctx.clone(),
+                acp::StartOptions {
+                    program: &program,
+                    args: &args,
+                    cwd: &cwd,
+                    env: &env,
+                    env_remove: &env_remove,
+                    label: &label,
+                    children_file: Some(&children_file),
+                    resume,
+                    version: VERSION,
+                    mcp_servers: &mcp_servers,
+                    guidance: &guidance,
+                    session_meta,
+                },
+            )
+            .await
+            .map(Driver::Acp),
         };
         let driver = match started {
             Ok(d) => d,
