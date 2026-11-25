@@ -116,6 +116,10 @@ export function LiveStatus({
         ? stepText(step)
         : THINKING_VERBS[(verb + offset.current) % THINKING_VERBS.length];
   const expandable = subagents > 0 && running.length > 0;
+  // While waiting on sub-agents, time them the way the strip above the composer does (from the
+  // earliest one still running), not from the turn start: two different clocks for the same wait
+  // read as a bug, and the turn may have ended long before its background sub-agents.
+  const clockFrom = expandable ? Math.min(...running.map((r) => r.startedAt)) : since;
   const expanded = expandable && open;
 
   const text = (
@@ -159,7 +163,7 @@ export function LiveStatus({
             ))}
           </span>
         )}
-        <ElapsedText since={since} />
+        <ElapsedText since={clockFrom} />
       </span>
       {expandable && (
         <ChevronRight
