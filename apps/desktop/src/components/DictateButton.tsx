@@ -1,10 +1,10 @@
 import { Download, Loader2, Mic, Square } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useShortcutCaps } from "@/hooks/useShortcutMap";
 import { useVoiceModelDownload } from "@/hooks/useVoiceModelDownload";
 import { api } from "@/lib/api";
 import {
-  DICTATION_KEYS,
   dictationAvailable,
   registerDictationTarget,
   type DictationPhase,
@@ -77,6 +77,7 @@ function ActiveDictate({
   round?: boolean;
   className?: string;
 }) {
+  const dictKeys = useShortcutCaps("dictate");
   const level = useDictation((s) => s.level);
   const elapsedMs = useDictation((s) => s.elapsedMs);
   const maxMs = useDictation((s) => s.maxMs);
@@ -101,7 +102,7 @@ function ActiveDictate({
   {
     const nearLimit = elapsedMs > maxMs - 30_000;
     return (
-      <Tooltip content="Stop and transcribe (Enter). Esc cancels." shortcut={DICTATION_KEYS}>
+      <Tooltip content="Stop and transcribe (Enter). Esc cancels." shortcut={dictKeys}>
         <button
           type="button"
           onClick={() => void toggleDictation(id)}
@@ -144,12 +145,10 @@ function IdleDictate({
   round?: boolean;
   className?: string;
 }) {
+  const dictKeys = useShortcutCaps("dictate");
   return (
     <>
-      <Tooltip
-        content={round ? "Dictate · on-device" : "Dictate (speech to text, on this device)"}
-        shortcut={round ? [modKey, "⇧", "D"] : DICTATION_KEYS}
-      >
+      <Tooltip content={round ? "Dictate · on-device" : "Dictate (speech to text, on this device)"} shortcut={dictKeys}>
         <button
           type="button"
           onClick={() => void toggleDictation(id)}

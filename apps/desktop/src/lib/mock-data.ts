@@ -358,6 +358,7 @@ export function seedSettings(onboarded: boolean): Settings {
     defaultWorktree: true,
     launchAtLogin: false,
     globalHotkey: "CmdOrCtrl+Shift+Space",
+    shortcuts: {},
     escalateAfterMins: 5,
     ntfyUrl: null,
     ntfyDetail: "minimal",

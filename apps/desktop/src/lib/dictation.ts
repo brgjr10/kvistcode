@@ -5,7 +5,8 @@
 import { toast } from "sonner";
 import { create } from "zustand";
 import { api, isTauri, onVoiceLevel, onVoiceLimit } from "./api";
-import { errorMessage, isMac } from "./utils";
+import { matchesShortcut } from "./shortcuts";
+import { errorMessage } from "./utils";
 
 export type DictationPhase = "idle" | "starting" | "recording" | "transcribing";
 
@@ -122,8 +123,7 @@ function ensureListeners() {
 
 function onKey(e: KeyboardEvent) {
   const { phase } = useDictation.getState();
-  const mod = isMac ? e.metaKey : e.ctrlKey;
-  if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === "d") {
+  if (matchesShortcut(e, "dictate")) {
     e.preventDefault();
     e.stopPropagation();
     if (!e.repeat) void toggleDictation();
@@ -227,4 +227,3 @@ export async function cancelDictation(): Promise<void> {
 /** Dictation needs the desktop app (or the browser mock): not the mobile companion. */
 export const dictationAvailable = () => isTauri() || import.meta.env.DEV || import.meta.env.VITE_KVISTCODE_MOCK === "1";
 
-export const DICTATION_KEYS = [isMac ? "⌘" : "Ctrl", "⇧", "D"];

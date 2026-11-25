@@ -1,4 +1,4 @@
-import { ArrowUp, BookText, ChevronDown, FileText, GitFork, ListPlus, Play, RotateCcw, Square } from "lucide-react";
+import { ArrowUp, BookText, X, ChevronDown, FileText, GitFork, ListPlus, Play, RotateCcw, Square } from "lucide-react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cancelTurn, resumeAgent } from "@/lib/actions";
@@ -20,7 +20,25 @@ import { useApp } from "@/store/app";
 import { useSideChat } from "@/store/sideChat";
 import { useUi } from "@/store/ui";
 import { parseBtwCommand } from "../timeline/turnCheckpoint";
-import { getDraft, getDraftAttachments, onAttachmentsInsert, onDraftInsert, setDraft } from "./drafts";
+import {
+  caretOnFirstLine,
+  caretOnLastLine,
+  isBigPaste,
+  lineCount,
+  sentHistory,
+  sizeLabel,
+  withPastes,
+  type BigPaste,
+} from "@/lib/composerExtras";
+import {
+  getDraft,
+  getDraftAttachments,
+  getDraftPastes,
+  onAttachmentsInsert,
+  onDraftInsert,
+  setDraft,
+  setDraftPastes,
+} from "./drafts";
 import { AttachButton, DropOverlay } from "../AttachControls";
 import { ComposerVoiceButtons } from "../voice/ComposerVoiceButtons";
 import { AttachmentStrip } from "../AttachmentStrip";
@@ -98,6 +116,16 @@ function ComposerImpl({
   // Results tagged with the query they answer, so a fast Enter never picks a stale file.
   const [files, setFiles] = useState<{ query: string; list: string[] }>({ query: "", list: [] });
   const attach = useAttachments(getDraftAttachments(agent.id), agent.id);
+  const [pastes, setPastesRaw] = useState<BigPaste[]>(() => getDraftPastes(agent.id));
+  const pastesRef = useRef(pastes);
+  pastesRef.current = pastes;
+  const setPastes = (next: BigPaste[]) => {
+    pastesRef.current = next;
+    setDraftPastes(agent.id, next);
+    setPastesRaw(next);
+  };
+  // Up/Down through what you sent: the entry shown now (null = not browsing). Read at key time, never subscribed.
+  const histIdx = useRef<number | null>(null);
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
   const minimal = useMinimal();
   // The shortcut hints need about 520px; in a narrow tile they would be cut off mid-word.
@@ -142,7 +170,8 @@ function ComposerImpl({
   // Sending while the agent works queues the message; it runs right after this turn.
   const busySend = useApp((s) => s.settings?.busySend ?? "deliver");
   const helperAllowed = canStartHelper(agent);
-  const canSend = !resumable && (text.trim().length > 0 || attach.attachments.length > 0) && !sending;
+  const canSend =
+    !resumable && (text.trim().length > 0 || attach.attachments.length > 0 || pastes.length > 0) && !sending;
 
   const query = slashQuery(text);
   const matches = useMemo(() => {
@@ -226,6 +255,8 @@ function ComposerImpl({
     draftFor.current = agent.id;
     setText(getDraft(agent.id));
     setAttachmentsRef.current(getDraftAttachments(agent.id));
+    setPastesRaw(getDraftPastes(agent.id));
+    histIdx.current = null;
     setHint(null);
     setEscArmed(false);
   }, [agent.id]);
@@ -274,6 +305,7 @@ function ComposerImpl({
   }, [text]);
 
   const update = (v: string, nextCaret = v.length) => {
+    histIdx.current = null;
     setText(v);
     textRef.current = v;
     setCaret(nextCaret);
@@ -430,16 +462,20 @@ function ComposerImpl({
    */
   const submit = async (deliver: boolean) => {
     if (!canSend) return;
-    const value = expandCommandShortcut(text.trim(), agent.availableCommands);
+    const typed = expandCommandShortcut(text.trim(), agent.availableCommands);
+    const value = withPastes(typed, pastes);
     const images = attach.attachments;
+    const held = pastes;
     setSending(true);
     update("");
     attach.clear();
+    setPastes([]);
     setHint(null);
     try {
       await api.sendPrompt(agent.id, value, images, deliver);
     } catch (e) {
-      update(restoreDraft(textRef.current, value));
+      update(restoreDraft(textRef.current, typed));
+      setPastes(held);
       attach.setAttachments(images);
       toast.error("Couldn't send prompt", { description: errorMessage(e) });
     } finally {
@@ -450,11 +486,14 @@ function ComposerImpl({
   /** Run the message in a new helper agent, in parallel with this one. */
   const startHelper = async () => {
     if (!canSend || !helperAllowed) return;
-    const value = expandCommandShortcut(text.trim(), agent.availableCommands);
+    const typed = expandCommandShortcut(text.trim(), agent.availableCommands);
+    const value = withPastes(typed, pastes);
     const images = attach.attachments;
+    const held = pastes;
     setSending(true);
     update("");
     attach.clear();
+    setPastes([]);
     setHint(null);
     try {
       const helper = await api.spawnHelper(agent.id, value, images);
@@ -463,7 +502,8 @@ function ComposerImpl({
         action: { label: "Open", onClick: () => useUi.getState().openAgent(helper.id) },
       });
     } catch (e) {
-      update(restoreDraft(textRef.current, value));
+      update(restoreDraft(textRef.current, typed));
+      setPastes(held);
       attach.setAttachments(images);
       toast.error("Couldn't start a helper", { description: errorMessage(e) });
     } finally {
@@ -568,6 +608,38 @@ function ComposerImpl({
     escTimer.current = setTimeout(() => setEscArmed(false), ESC_ARM_MS);
   };
 
+  /** Shows entry `i` of what you sent (or the empty box again when `i` is null), caret at the end. */
+  const showHistory = (list: string[], i: number | null) => {
+    const v = i === null ? "" : list[i];
+    update(v);
+    histIdx.current = i;
+    requestAnimationFrame(() => ref.current?.setSelectionRange(v.length, v.length));
+  };
+
+  /** Up/Down like a shell, but only from an empty box or with the caret on the first/last line. */
+  const browseHistory = (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
+    const up = e.key === "ArrowUp";
+    const el = e.currentTarget;
+    const at = histIdx.current;
+    if (at === null && !(up && text === "" && attach.attachments.length === 0 && pastes.length === 0)) return false;
+    const list = sentHistory(useApp.getState().items[agent.id]);
+    if (at !== null && at >= list.length) histIdx.current = null;
+    if (list.length === 0) return false;
+    const s = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? s;
+    if (at === null) {
+      e.preventDefault();
+      showHistory(list, list.length - 1);
+      return true;
+    }
+    if (up ? !caretOnFirstLine(text, s, end) : !caretOnLastLine(text, s, end)) return false;
+    e.preventDefault();
+    if (up) showHistory(list, Math.max(0, at - 1));
+    else showHistory(list, at + 1 < list.length ? at + 1 : null);
+    return true;
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (composing(e)) return;
     if (slashOpen) {
@@ -608,6 +680,11 @@ function ComposerImpl({
       // repeats before the first answer is back: the same message would be taken twice, and "already ran" shown.)
       e.preventDefault();
       if (!e.repeat) void recallQueued();
+    } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !slashOpen && browseHistory(e)) {
+      // handled
+    } else if (e.key === "Escape" && histIdx.current !== null) {
+      e.preventDefault();
+      showHistory([], null);
     } else if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void send(e.metaKey || e.ctrlKey ? "modEnter" : "enter");
@@ -730,6 +807,44 @@ function ComposerImpl({
               className="px-4 pt-3"
               size={52}
             />
+            {pastes.length > 0 && (
+              <ul className="flex flex-wrap gap-2 px-4 pt-3" aria-label="Pasted text">
+                {pastes.map((p, i) => (
+                  <li
+                    key={p.id}
+                    className="flex h-7 items-center gap-1.5 rounded-lg border border-line-strong bg-base pl-2 pr-1 text-small"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-steel" />
+                    <span className="text-fg">{pastes.length > 1 ? `Pasted text ${i + 1}` : "Pasted text"}</span>
+                    <span className="text-steel">
+                      {sizeLabel(p.text.length)}, {lineCount(p.text).toLocaleString()} lines
+                    </span>
+                    <button
+                      type="button"
+                      className="rounded-md px-1.5 text-steel hover:bg-raised hover:text-fg"
+                      onClick={() => {
+                        setPastes(pastes.filter((q) => q.id !== p.id));
+                        const cur = textRef.current;
+                        const el = ref.current;
+                        const at = el ? Math.min(el.selectionStart ?? cur.length, cur.length) : cur.length;
+                        update(`${cur.slice(0, at)}${p.text}${cur.slice(at)}`, at + p.text.length);
+                        el?.focus();
+                      }}
+                    >
+                      Paste as text instead
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Remove pasted text"
+                      className="flex h-5 w-5 items-center justify-center rounded-md text-muted hover:bg-err hover:text-err-fg"
+                      onClick={() => setPastes(pastes.filter((q) => q.id !== p.id))}
+                    >
+                      <X className="h-3 w-3" strokeWidth={2.5} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {working && (
               <div className="shimmer-bar absolute inset-x-4 top-0 h-px overflow-hidden rounded-full" aria-hidden />
             )}
@@ -752,7 +867,15 @@ function ComposerImpl({
                 placeholder={placeholder}
                 onChange={(e) => update(e.target.value, e.target.selectionStart ?? e.target.value.length)}
                 onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
-                onPaste={attach.onPaste}
+                onPaste={(e) => {
+                  const big = e.clipboardData.getData("text/plain");
+                  if (isBigPaste(big)) {
+                    e.preventDefault();
+                    setPastes([...pastes, { id: Date.now(), text: big }]);
+                    return;
+                  }
+                  attach.onPaste(e);
+                }}
                 onKeyDown={onKeyDown}
                 onBlur={() => setSlashDismissed(true)}
                 onFocus={() => {

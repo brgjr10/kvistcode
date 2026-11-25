@@ -1,6 +1,7 @@
 // Per-agent composer drafts (text only). Kept in memory for instant switching and
 // persisted to localStorage (debounced) so they survive restarts. Bounded and pruned.
 import type { Attachment } from "@/lib/types";
+import type { BigPaste } from "@/lib/composerExtras";
 import { isSuppressed, useApp } from "@/store/app";
 
 const KEY = "armada.drafts";
@@ -110,6 +111,20 @@ export function setDraftAttachments(agentId: string, attachments: Attachment[]) 
   if (attachments.length === 0) return;
   pictures.set(agentId, attachments);
   if (pictures.size > MAX_PICTURE_DRAFTS) pictures.delete(pictures.keys().next().value!);
+}
+
+// Big pastes (kept as chips, not in the box), per agent. Memory only, like pictures.
+const pastes = new Map<string, BigPaste[]>();
+
+export function getDraftPastes(agentId: string): BigPaste[] {
+  return pastes.get(agentId) ?? [];
+}
+
+export function setDraftPastes(agentId: string, list: BigPaste[]) {
+  pastes.delete(agentId);
+  if (list.length === 0) return;
+  pastes.set(agentId, list);
+  if (pastes.size > MAX_PICTURE_DRAFTS) pastes.delete(pastes.keys().next().value!);
 }
 
 // Images sent in from elsewhere (e.g. Preview screenshots): the mounted composer owns its attachments

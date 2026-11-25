@@ -7,7 +7,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useVoiceModelDownload } from "@/hooks/useVoiceModelDownload";
 import { api } from "@/lib/api";
-import { DICTATION_KEYS } from "@/lib/dictation";
+import { useShortcutCaps } from "@/hooks/useShortcutMap";
 import { formatBytes } from "@/lib/format";
 import type { Settings, VoiceInputDevice, VoiceSettings, VoiceStatus } from "@/lib/types";
 import { errorMessage } from "@/lib/utils";
@@ -18,6 +18,7 @@ import { SectionHeader, SettingGroup, SettingRow } from "./SettingRow";
 const SYSTEM_DEFAULT = "__default__";
 
 export function VoiceSection({ settings }: { settings: Settings }) {
+  const dictKeys = useShortcutCaps("dictate");
   const voice = settings.voice;
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [devices, setDevices] = useState<VoiceInputDevice[] | null>(null);
@@ -94,7 +95,7 @@ export function VoiceSection({ settings }: { settings: Settings }) {
           <>
             Speak instead of typing: click the mic in a message box, or press{" "}
             <span className="inline-flex gap-0.5 align-middle">
-              {DICTATION_KEYS.map((k) => (
+              {(dictKeys ?? []).map((k) => (
                 <Kbd key={k}>{k}</Kbd>
               ))}
             </span>

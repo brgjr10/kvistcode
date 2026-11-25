@@ -75,6 +75,8 @@ import { openToolkit } from "@/store/toolkit";
 import type { Agent, SearchResults, Settings as SettingsT } from "@/lib/types";
 import { openSearchHit, searchTerm } from "@/lib/search";
 import { ConversationHits } from "./search/ConversationHits";
+import { useShortcutMap } from "@/hooks/useShortcutMap";
+import { capsFor, type ShortcutId } from "@/lib/shortcuts";
 import { basename, errorMessage, isMac, modKey } from "@/lib/utils";
 import { launchAgent, resolveLaunch, savedWorkChoices } from "@/lib/launchDefaults";
 import { useIdentity } from "@/hooks/useIdentity";
@@ -183,6 +185,12 @@ function paletteFilter(value: string, search: string, keywords?: string[]): numb
 }
 
 function Palette({ onClose }: { onClose: () => void }) {
+  // The keys on the right of each action are the user's own bindings.
+  const shortcutMap = useShortcutMap();
+  const caps = (id: ShortcutId) => {
+    const c = capsFor(id, shortcutMap);
+    return c.length > 0 ? c : undefined;
+  };
   // "Search conversations" opens the palette with "? " already typed.
   const [query, setQuery] = useState(() => useUi.getState().paletteSeed ?? "");
   useEffect(() => useUi.setState({ paletteSeed: null }), []);
@@ -430,26 +438,26 @@ function Palette({ onClose }: { onClose: () => void }) {
               <PaletteAction
                 icon={<Plus />}
                 label="New agent"
-                shortcut={[modKey, "N"]}
+                shortcut={caps("newAgent")}
                 onSelect={() => run(() => ui.openNewAgent())}
               />
               <PaletteAction
                 icon={<Search />}
                 label="Search conversations…"
-                shortcut={[modKey, "⇧", "F"]}
+                shortcut={caps("search")}
                 keywords={["find", "history", "messages", "grep", "files", "tools"]}
                 onSelect={() => setQuery("? ")}
               />
               <PaletteAction
                 icon={<ListTodo />}
                 label="Go to Mission Control: Needs you"
-                shortcut={[modKey, "J"]}
+                shortcut={caps("needs")}
                 onSelect={() => run(() => ui.openMission("needs"))}
               />
               <PaletteAction
                 icon={<LayoutGrid />}
                 label="Go to Mission Control: All agents"
-                shortcut={[modKey, "⇧", "M"]}
+                shortcut={caps("mission")}
                 onSelect={() => run(() => ui.openMission("all"))}
               />
               <PaletteAction
@@ -461,13 +469,13 @@ function Palette({ onClose }: { onClose: () => void }) {
               <PaletteAction
                 icon={<Settings />}
                 label="Open Settings"
-                shortcut={[modKey, ","]}
+                shortcut={caps("settings")}
                 onSelect={() => run(() => ui.openSettings())}
               />
               <PaletteAction
                 icon={<Keyboard />}
                 label="Keyboard shortcuts"
-                shortcut={[modKey, "/"]}
+                shortcut={caps("help")}
                 onSelect={() => run(() => openShortcutHelp())}
               />
             </Command.Group>
@@ -534,14 +542,14 @@ function Palette({ onClose }: { onClose: () => void }) {
                 <PaletteAction
                   icon={<SquareTerminal />}
                   label="Toggle workspace panel"
-                  shortcut={[modKey, "`"]}
+                  shortcut={caps("workspace")}
                   keywords={["terminal", "scripts", "shell", "console"]}
                   onSelect={() => run(() => ui.setWorkspaceOpen(!useUi.getState().workspaceOpen))}
                 />
                 <PaletteAction
                   icon={<Globe />}
                   label={previewOpen ? "Close preview" : "Open preview"}
-                  shortcut={[modKey, "⇧", "P"]}
+                  shortcut={caps("preview")}
                   keywords={["preview", "browser", "localhost", "web", "site", "dev server"]}
                   onSelect={() => run(() => togglePreview(current.id))}
                 />
@@ -562,7 +570,7 @@ function Palette({ onClose }: { onClose: () => void }) {
                   <PaletteAction
                     icon={<GitCompare />}
                     label="Review diff"
-                    shortcut={[modKey, "⇧", "R"]}
+                    shortcut={caps("review")}
                     keywords={["review", "diff", "changes", "commit", "merge"]}
                     onSelect={() => run(() => ui.setReviewAgent(current.id))}
                   />
@@ -667,14 +675,14 @@ function Palette({ onClose }: { onClose: () => void }) {
               <PaletteAction
                 icon={<Search />}
                 label="Search conversations…"
-                shortcut={[modKey, "⇧", "F"]}
+                shortcut={caps("search")}
                 keywords={["find", "history", "messages", "grep", "files", "tools"]}
                 onSelect={() => setQuery("? ")}
               />
               <PaletteAction
                 icon={<Plus />}
                 label="New agent"
-                shortcut={[modKey, "N"]}
+                shortcut={caps("newAgent")}
                 onSelect={() => run(() => ui.openNewAgent())}
               />
               <PaletteAction
@@ -692,14 +700,14 @@ function Palette({ onClose }: { onClose: () => void }) {
               <PaletteAction
                 icon={<ListTodo />}
                 label="Go to Mission Control: Needs you"
-                shortcut={[modKey, "J"]}
+                shortcut={caps("needs")}
                 keywords={["triage", "attention", "unread", "queue", "inbox", "approvals"]}
                 onSelect={() => run(() => ui.openMission("needs"))}
               />
               <PaletteAction
                 icon={<LayoutGrid />}
                 label="Go to Mission Control: All agents"
-                shortcut={[modKey, "⇧", "M"]}
+                shortcut={caps("mission")}
                 keywords={["fleet", "board", "tiles"]}
                 onSelect={() => run(() => ui.openMission("all"))}
               />
@@ -729,13 +737,13 @@ function Palette({ onClose }: { onClose: () => void }) {
               <PaletteAction
                 icon={<Settings />}
                 label="Open Settings"
-                shortcut={[modKey, ","]}
+                shortcut={caps("settings")}
                 onSelect={() => run(() => ui.openSettings())}
               />
               <PaletteAction
                 icon={<Keyboard />}
                 label="Keyboard shortcuts"
-                shortcut={[modKey, "/"]}
+                shortcut={caps("help")}
                 keywords={["help", "keys", "cheat sheet", "hotkeys"]}
                 onSelect={() => run(() => openShortcutHelp())}
               />
@@ -760,28 +768,28 @@ function Palette({ onClose }: { onClose: () => void }) {
               <PaletteAction
                 icon={<PanelLeft />}
                 label="Show or hide the agent list"
-                shortcut={[modKey, "B"]}
+                shortcut={caps("agentList")}
                 keywords={["sidebar", "agent list", "toggle", "drawer"]}
                 onSelect={() => run(showOrHideAgentList)}
               />
               <PaletteAction
                 icon={<AudioLines />}
                 label="Voice assistant"
-                shortcut={[modKey, "⇧", "A"]}
+                shortcut={caps("voice")}
                 keywords={["voice", "talk", "speak", "assistant", "microphone"]}
                 onSelect={() => run(toggleVoiceAssistant)}
               />
               <PaletteAction
                 icon={<ArrowLeft />}
                 label="Go back"
-                shortcut={isMac ? ["⌘", "["] : ["Alt", "←"]}
+                shortcut={caps("back")}
                 keywords={["back", "previous", "history"]}
                 onSelect={() => run(goBack)}
               />
               <PaletteAction
                 icon={<ArrowRight />}
                 label="Go forward"
-                shortcut={isMac ? ["⌘", "]"] : ["Alt", "→"]}
+                shortcut={caps("forward")}
                 keywords={["forward", "next", "history"]}
                 onSelect={() => run(goForward)}
               />
@@ -854,14 +862,14 @@ function Palette({ onClose }: { onClose: () => void }) {
                 <PaletteAction
                   icon={<ZoomIn />}
                   label="Interface scale: larger"
-                  shortcut={[modKey, "+"]}
+                  shortcut={caps("zoomIn")}
                   keywords={["zoom", "bigger", "font size", "text size", "scale"]}
                   onSelect={() => stepInterfaceScale(1)}
                 />
                 <PaletteAction
                   icon={<ZoomOut />}
                   label="Interface scale: smaller"
-                  shortcut={[modKey, "−"]}
+                  shortcut={caps("zoomOut")}
                   keywords={["zoom", "font size", "text size", "scale"]}
                   onSelect={() => stepInterfaceScale(-1)}
                 />
@@ -869,7 +877,7 @@ function Palette({ onClose }: { onClose: () => void }) {
                   <PaletteAction
                     icon={<Maximize />}
                     label={`Interface scale: reset to ${DEFAULT_SCALE}%`}
-                    shortcut={[modKey, "0"]}
+                    shortcut={caps("zoomReset")}
                     keywords={["zoom", "reset", "actual size", "scale"]}
                     onSelect={() => run(() => stepInterfaceScale(0))}
                   />
