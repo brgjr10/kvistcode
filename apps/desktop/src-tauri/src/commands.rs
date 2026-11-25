@@ -1547,6 +1547,24 @@ pub async fn test_alert_target(
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn open_chatgpt_webview(app: AppHandle) -> CmdResult<()> {
+    use tauri::WebviewUrl;
+    let webview =
+        tauri::WebviewWindowBuilder::new(&app, "chatgpt", WebviewUrl::External("https://chatgpt.com".into()))?;
+    webview.show().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_claude_webview(app: AppHandle) -> CmdResult<()> {
+    use tauri::WebviewUrl;
+    let webview =
+        tauri::WebviewWindowBuilder::new(&app, "claude", WebviewUrl::External("https://claude.ai".into()))?;
+    webview.show().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Opens a web link in the browser, opens a folder in the file manager, or reveals a
 /// file in its folder. Files are never launched: a path coming from agent output must
 /// not be able to run a program or script.

@@ -62,6 +62,7 @@ fn provider_env_vars(provider: Provider) -> &'static [&'static str] {
         Provider::Opencode => &[],
         Provider::Cursor => &["CURSOR_API_KEY", "CURSOR_AUTH_TOKEN"],
         Provider::Custom => &[],
+        Provider::Kilo | Provider::Nvidia => &[],
     }
 }
 
@@ -94,6 +95,7 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
             Provider::Grok => Some("GROK_HOME"),
             Provider::Gemini => Some("KVISTCODE_GEMINI_PROFILE"),
             Provider::Custom | Provider::Opencode | Provider::Cursor => None,
+            Provider::Kilo | Provider::Nvidia => None,
         };
         if let Some(var) = var {
             let value = if account.provider == Provider::Gemini {
@@ -125,6 +127,7 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
                 Provider::Codex => env.push(("OPENAI_API_KEY".into(), key)),
                 Provider::Cursor => env.push(("CURSOR_API_KEY".into(), key)),
                 Provider::Custom | Provider::Local | Provider::Opencode => {}
+                Provider::Kilo | Provider::Nvidia => {}
             }
         }
     }
@@ -178,6 +181,7 @@ pub fn login_command(provider: Provider, data_dir: &Path) -> Option<(String, Vec
             },
         )),
         Provider::Custom | Provider::Local => None,
+        Provider::Kilo | Provider::Nvidia => None,
     }
 }
 
@@ -437,6 +441,7 @@ pub async fn check_status(account: &Account, data_dir: &Path) -> AccountStatus {
                 }
             }
         }
+        Provider::Kilo | Provider::Nvidia => {}
     }
     status
 }

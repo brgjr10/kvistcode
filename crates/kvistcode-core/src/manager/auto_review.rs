@@ -557,6 +557,7 @@ impl Core {
                 Provider::Gemini,
                 Provider::Grok,
             ],
+            Provider::Kilo | Provider::Nvidia => &[],
         };
         for &p in preference {
             if let Some(acc) = self.best_account_for(p) {
@@ -721,7 +722,9 @@ impl Core {
             | Provider::Gemini
             | Provider::Opencode
             | Provider::Cursor
-            | Provider::Custom => {
+            | Provider::Custom
+            | Provider::Kilo
+            | Provider::Nvidia => {
                 acp::one_shot_prompt(
                     &program,
                     &args,

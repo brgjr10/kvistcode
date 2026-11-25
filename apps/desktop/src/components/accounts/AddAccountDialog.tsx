@@ -26,6 +26,8 @@ const SUBSCRIPTION: Record<CloudProvider, string> = {
   gemini: "Google account (Free, Pro or Ultra)",
   opencode: "OpenCode's free models or your own provider login",
   cursor: "Cursor Pro or Business",
+  kilo: "Kilo Code subscription",
+  nvidia: "NVIDIA API subscription",
 };
 
 // OpenCode keeps one key per model provider in its own login, so it has no single API key here.
@@ -35,6 +37,8 @@ const KEY_HINT: Record<Exclude<CloudProvider, "opencode">, { env: string; placeh
   grok: { env: "XAI_API_KEY", placeholder: "xai-…" },
   gemini: { env: "GEMINI_API_KEY", placeholder: "AIza…" },
   cursor: { env: "CURSOR_API_KEY", placeholder: "key_…" },
+  kilo: { env: "KILO_API_KEY", placeholder: "kilo-..." },
+  nvidia: { env: "NVIDIA_API_KEY", placeholder: "nvidia-..." },
 };
 type KeyProvider = keyof typeof KEY_HINT;
 

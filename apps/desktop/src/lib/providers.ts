@@ -88,9 +88,27 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
     hex: "#A78BFA",
     tagline: "Any ACP agent",
   },
+  kilo: {
+    id: "kilo",
+    name: "Kilo",
+    short: "Kilo",
+    vendor: "Kilo Code",
+    colorVar: "var(--accent)",
+    hex: "#7C6FF0",
+    tagline: "Kilo CLI",
+  },
+  nvidia: {
+    id: "nvidia",
+    name: "NVIDIA",
+    short: "NVIDIA",
+    vendor: "NVIDIA",
+    colorVar: "var(--accent)",
+    hex: "#76B900",
+    tagline: "NVIDIA API",
+  },
 };
 
-export const PROVIDER_ORDER: BuiltinProvider[] = ["claude", "codex", "grok", "gemini", "opencode", "cursor", "local"];
+export const PROVIDER_ORDER: BuiltinProvider[] = ["claude", "codex", "grok", "gemini", "opencode", "cursor", "local", "kilo", "nvidia"];
 
 export const CUSTOM_ACCOUNT_ID = "system-custom";
 

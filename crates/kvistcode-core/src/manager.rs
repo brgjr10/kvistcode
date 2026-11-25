@@ -255,6 +255,8 @@ fn provider_color(p: Provider) -> &'static str {
         Provider::Cursor => "#9AA4B2",
         Provider::Local => "#4FC3F7",
         Provider::Custom => "#B39DDB",
+        Provider::Kilo => "#6B4FA1",
+        Provider::Nvidia => "#76B900",
     }
 }
 
@@ -1634,6 +1636,7 @@ impl Core {
         let guidance = crate::guidance::guidance(response_style, &language);
         let guide_tag = crate::guidance::tag(response_style, &language);
         let started = match agent.provider {
+            Provider::Kilo | Provider::Nvidia => todo!(),
             Provider::Codex | Provider::Local => CodexDriver::start(
                 ctx.clone(),
                 codex::StartOptions {

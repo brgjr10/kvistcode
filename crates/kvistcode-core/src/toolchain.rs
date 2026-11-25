@@ -495,6 +495,7 @@ fn packages_for(provider: Provider, data_dir: &Path) -> Vec<String> {
         }
         Provider::Custom => {}
         Provider::Local => return packages_for(Provider::Codex, data_dir),
+        Provider::Kilo | Provider::Nvidia => {},
     }
     pkgs
 }
@@ -984,6 +985,7 @@ pub fn tool_package(provider: Provider) -> Option<(&'static str, &'static str)> 
         Provider::Opencode => Some((providers::OPENCODE_PKG, providers::OPENCODE_VERSION)),
         Provider::Gemini | Provider::Cursor => None,
         Provider::Local | Provider::Custom => None,
+        Provider::Kilo | Provider::Nvidia => None,
     }
 }
 

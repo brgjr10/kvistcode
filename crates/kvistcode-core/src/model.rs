@@ -17,19 +17,25 @@ pub enum Provider {
     /// A model running on this machine (or a LAN box) behind an OpenAI-compatible
     /// server. Driven by the Codex CLI, pointed at the server instead of OpenAI.
     Local,
-    /// Any other Agent Client Protocol agent, defined in `Settings::custom_agents`.
+    /// Any other Agent Client Protocol agent, defined in `Settings::custom_agents`.    
     Custom,
+    /// Kilo CLI (`kilo acp`).
+    Kilo,
+    /// NVIDIA provider (`nvidia acp`).
+    Nvidia,
 }
 
 impl Provider {
     /// The built-in providers (custom agents are configured separately).
-    pub const ALL: [Provider; 6] = [
+        pub const ALL: [Provider; 8] = [
         Provider::Claude,
         Provider::Codex,
         Provider::Grok,
         Provider::Gemini,
         Provider::Opencode,
         Provider::Cursor,
+        Provider::Kilo,
+        Provider::Nvidia,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -42,6 +48,8 @@ impl Provider {
             Provider::Cursor => "cursor",
             Provider::Local => "local",
             Provider::Custom => "custom",
+            Provider::Kilo => "kilo",
+            Provider::Nvidia => "nvidia",
         }
     }
 
@@ -55,6 +63,10 @@ impl Provider {
             "cursor" => Some(Provider::Cursor),
             "local" => Some(Provider::Local),
             "custom" => Some(Provider::Custom),
+            "kilo" => Some(Provider::Kilo),
+            "Kilo" => Some(Provider::Kilo),
+            "nvidia" => Some(Provider::Nvidia),
+            "Nvidia" => Some(Provider::Nvidia),
             _ => None,
         }
     }
@@ -69,6 +81,8 @@ impl Provider {
             Provider::Cursor => "Cursor",
             Provider::Local => "Local model",
             Provider::Custom => "Custom agent",
+            Provider::Kilo => "Kilo",
+            Provider::Nvidia => "NVIDIA",
         }
     }
 }

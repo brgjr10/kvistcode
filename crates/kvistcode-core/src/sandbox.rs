@@ -326,6 +326,7 @@ pub fn collect_mounts(
             ],
             Provider::Cursor => &[".cursor", ".config/cursor"],
             Provider::Custom => &[],
+            Provider::Kilo | Provider::Nvidia => &[],
         };
         for rel in rels {
             let candidate = home.join(rel);

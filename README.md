@@ -171,7 +171,10 @@ Notes: a GPU with enough memory for the model makes a big difference, and small 
 | ChatGPT | Codex CLI | `codex app-server` (JSON-RPC) |
 | Grok | Grok Build | ACP (`grok agent stdio`) |
 | Local | Codex CLI pointed at your Ollama / LM Studio / OpenAI-compatible server | `codex app-server` |
-| Anything else | Gemini CLI (`gemini --acp`), Goose (`goose acp`), OpenCode (`opencode acp`), ... | ACP |
+| Kilo | `kilo acp` | ACP |
+| NVIDIA | `nvidia acp` | ACP |
+| ChatGPT (web) | Embedded BrowserView | — |
+| Claude (web) | Embedded BrowserView | — |
 
 See [`docs/PLAN.md`](docs/PLAN.md) for the architecture and roadmap.
 
@@ -305,3 +308,21 @@ The same addresses are listed, with QR codes, at [kvistcode.com/support](https:/
 ## License
 
 [MIT](LICENSE)
+
+## Credits
+
+Kvistcode incorporates and adapts the following open-source projects and technologies:
+
+- **Tauri** — desktop application framework for embedding webviews and native system features (MIT-licensed)
+- **React** + **Vite** — the frontend UI framework and build tool (MIT-licensed)
+- **Agent Client Protocol (ACP)** — the agent communication protocol standard, enabling cross-provider agent support (MIT-licensed, https://agentclientprotocol.com)
+- **npm packages:**
+  - `@anthropic-ai/claude-code` — Claude Code CLI (MIT-licensed)
+  - `@openai/codex` — OpenAI Codex CLI (MIT-licensed)
+  - `@xai-official/grok` — Grok Build CLI (MIT-licensed)
+  - `opencode-ai` — OpenCode CLI (MIT-licensed)
+- **Rust crates:** rusqlite (CC0-1.0), keyring, ureq, jiff, zip, base64
+- **Frontend dependencies:** sonner (toast notifications), motion/react (animations), lucide-react (icons)
+- **Whisper.cpp** — on-device speech transcription (MIT-licensed), used by voice dictation
+- **OpenAI Platform** — API references and protocols referenced throughout
+- **Anthropic, Google, xAI, OpenCode, Cursor** — their respective CLIs and protocols are driven natively; Kvistcode never reimplements agent logic

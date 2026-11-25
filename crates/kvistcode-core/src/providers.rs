@@ -26,6 +26,8 @@ pub fn cli_name(provider: Provider) -> &'static str {
     match provider {
         Provider::Gemini => "agy",
         Provider::Cursor => "cursor-agent",
+        Provider::Kilo => "kilo",
+        Provider::Nvidia => "nvidia",
         _ => provider.as_str(),
     }
 }
@@ -374,7 +376,7 @@ pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
         }
         Provider::Gemini => Some(crate::toolchain::agy_binary(data_dir)).filter(|p| p.is_file()),
         // Cursor's installer is its own script; Kvistcode uses the system copy.
-        Provider::Cursor | Provider::Local | Provider::Custom => None,
+        Provider::Cursor | Provider::Local | Provider::Custom | Provider::Kilo | Provider::Nvidia => None,
     }
 }
 
@@ -599,6 +601,7 @@ pub fn launch_spec_for_account(
             Ok((cli, cursor_acp_args()))
         }
         Provider::Local => launch_spec_for_account(Provider::Codex, account, data_dir),
+        Provider::Kilo | Provider::Nvidia => anyhow::bail!("Not implemented; use Tauri command"),
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
     }
 }
@@ -635,6 +638,8 @@ pub fn install_command(provider: Provider, data_dir: &Path) -> String {
         Provider::Gemini => "curl -fsSL https://antigravity.google/cli/install.sh | bash".into(),
         Provider::Opencode => "npm install -g opencode-ai".into(),
         Provider::Cursor => "curl https://cursor.com/install -fsS | bash".into(),
+        Provider::Kilo => "npm install -g kilo-cli".into(),
+        Provider::Nvidia => String::new(),
         Provider::Custom => String::new(),
     }
 }
@@ -648,6 +653,8 @@ pub fn docs_url(provider: Provider) -> &'static str {
         Provider::Gemini => "https://antigravity.google/docs/cli/getting-started",
         Provider::Opencode => "https://opencode.ai/docs/acp/",
         Provider::Cursor => "https://cursor.com/docs/cli/acp",
+        Provider::Kilo => "https://kilocode.com/docs",
+        Provider::Nvidia => "https://docs.nvidia.com/",
         Provider::Custom => "https://agentclientprotocol.com/overview/agents",
     }
 }
