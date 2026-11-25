@@ -202,6 +202,8 @@ macro_rules! handler {
             commands::test_notification,
             commands::test_alert_target,
             commands::open_path,
+            commands::open_chatgpt_webview,
+            commands::open_claude_webview,
             commands::check_for_update,
             commands::install_update,
             commands::switch_account,
