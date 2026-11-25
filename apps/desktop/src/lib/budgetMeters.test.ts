@@ -139,6 +139,8 @@ describe("who reports a cost", () => {
     expect(reportsCost(agent({ provider: "local" }))).toBe(false);
     expect(reportsCost(agent({ provider: "custom", costUsd: 0 }))).toBe(false);
     expect(reportsCost(agent({ provider: "custom", costUsd: 0.2 }))).toBe(true);
+    expect(reportsCost(agent({ provider: "codex", costUsd: 0 }))).toBe(false);
+    expect(reportsCost(agent({ provider: "codex", costUsd: 0.2 }))).toBe(true);
     expect(reportsCost(agent())).toBe(true);
   });
 });
