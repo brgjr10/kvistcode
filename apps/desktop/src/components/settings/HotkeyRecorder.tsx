@@ -56,11 +56,14 @@ export function HotkeyRecorder({
   onRecord,
   disabled,
   hintBelow,
+  label = "Record",
 }: {
   onRecord: (accelerator: string) => void;
   disabled?: boolean;
   /** Float the hint under the button, so the button stays a fixed size beside a field. */
   hintBelow?: boolean;
+  /** The button's words when idle. */
+  label?: string;
 }) {
   const [recording, setRecording] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
@@ -101,7 +104,7 @@ export function HotkeyRecorder({
         onBlur={() => setRecording(false)}
       >
         <Keyboard />
-        {recording ? "Press keys…" : "Record"}
+        {recording ? "Press keys…" : label}
       </Button>
       <span
         role="status"

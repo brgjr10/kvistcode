@@ -1447,6 +1447,10 @@ pub struct Settings {
     #[serde(default)]
     pub project_auto_review:
         std::collections::BTreeMap<String, crate::auto_review::AutoReviewConfig>,
+    /// In-app keyboard shortcuts the user changed, by action id. An empty value means "none".
+    /// Anything not listed keeps its default.
+    #[serde(default)]
+    pub shortcuts: std::collections::BTreeMap<String, String>,
     /// The order of the sidebar's projects and the named sections they are filed under.
     pub project_layout: ProjectLayout,
     /// Slack, Discord and generic webhook targets for alerts (ntfy has its own field).
@@ -1891,6 +1895,16 @@ impl Settings {
         if self.local_mcp.sanitize() {
             reset.push("localMcp.port");
         }
+        let before = self.shortcuts.len();
+        self.shortcuts.retain(|id, keys| {
+            id.chars().count() <= MAX_HOTKEY_LEN && keys.chars().count() <= MAX_HOTKEY_LEN
+        });
+        if self.shortcuts.len() > 64 || self.shortcuts.len() != before {
+            if self.shortcuts.len() > 64 {
+                self.shortcuts.clear();
+            }
+            reset.push("shortcuts");
+        }
         if self.remote.lan && self.remote.tailscale {
             self.remote.lan = false;
             reset.push("remote.lan");
@@ -2103,6 +2117,7 @@ impl Default for Settings {
             trusted_worktree_hooks: Default::default(),
             project_sandboxes: Default::default(),
             project_auto_review: Default::default(),
+            shortcuts: Default::default(),
             project_layout: ProjectLayout::default(),
             alert_targets: Vec::new(),
             // On by default: measured as the biggest saver (see docs/TOKEN-SAVING.md). Anyone who
@@ -2669,5 +2684,23 @@ mod project_layout_tests {
         assert_eq!(s.project_layout.order.len(), MAX_LAYOUT_PROJECTS - 1);
         assert_eq!(s.project_layout.sections[0].projects, vec![tail[0].clone()]);
         assert!(s.validate().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod shortcut_settings_tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_load_without_shortcuts_and_bad_ones_are_dropped() {
+        let mut s: Settings = serde_json::from_str("{}").unwrap();
+        assert!(s.shortcuts.is_empty());
+        s.shortcuts.insert("palette".into(), "CmdOrCtrl+P".into());
+        s.shortcuts.insert("help".into(), String::new());
+        s.shortcuts
+            .insert("x".into(), "A".repeat(MAX_HOTKEY_LEN + 1));
+        assert_eq!(s.sanitize(), vec!["shortcuts"]);
+        assert_eq!(s.shortcuts.len(), 2);
+        assert_eq!(s.shortcuts["help"], "");
     }
 }

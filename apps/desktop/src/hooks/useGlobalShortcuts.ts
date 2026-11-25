@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import "./useShortcutMap";
+import { shortcutFor, type ShortcutId } from "@/lib/shortcuts";
 import { shortcutOrder } from "@/store/shortcutOrder";
 import { onVaHotkey, onVaWake } from "@/lib/api";
 import { selectNextTriage, triageQueueNow } from "@/components/triage/useTriage";
@@ -20,13 +22,14 @@ export function useGlobalShortcuts(enabled: boolean) {
     const onKey = (e: KeyboardEvent) => {
       // ⌘ on macOS, Ctrl elsewhere (Ctrl+K on a Mac is a text-editing shortcut).
       const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      const action: ShortcutId | null = shortcutFor(e);
       // "?" (not while typing) opens the shortcut cheat sheet.
       if (!mod && e.key === "?" && !e.altKey && !e.repeat && !isEditableTarget(e.target) && !dialogOpen()) {
         e.preventDefault();
         openShortcutHelp();
         return;
       }
-      const nav = navKey(e);
+      const nav = action === "back" || action === "forward" ? action : null;
       if (nav && !e.repeat && !dialogOpen() && !inTerminal(e.target)) {
         e.preventDefault();
         if (nav === "back") goBack();
@@ -55,34 +58,36 @@ export function useGlobalShortcuts(enabled: boolean) {
         useUi.getState().openAgent(list[next].id);
         return;
       }
-      if (!mod || e.altKey) return;
+      // Dictation has its own listener (it must work while a message box has focus).
+      // ⌘1–9 (jump to an agent) and the old ⌘I stay fixed.
+      if (action === "dictate" || (!action && !(mod && !e.altKey && !e.shiftKey))) return;
       const ui = useUi.getState();
       const key = e.key.toLowerCase();
 
-      if (e.key === "/" && !e.shiftKey) {
+      if (action === "help") {
         e.preventDefault();
         toggleShortcutHelp();
         return;
       }
 
       // Interface zoom works anywhere, even over a dialog.
-      if (e.key === "=" || e.key === "+") {
+      if (action === "zoomIn") {
         e.preventDefault();
         stepInterfaceScale(1);
         return;
       }
-      if (e.key === "-" && !e.shiftKey) {
+      if (action === "zoomOut") {
         e.preventDefault();
         stepInterfaceScale(-1);
         return;
       }
-      if (e.key === "0" && !e.shiftKey) {
+      if (action === "zoomReset") {
         e.preventDefault();
         stepInterfaceScale(0);
         return;
       }
 
-      if (key === "k" && !e.shiftKey) {
+      if (action === "palette") {
         // The palette toggles itself; any other open dialog blocks it.
         if (!ui.paletteOpen && dialogOpen()) return;
         e.preventDefault();
@@ -91,7 +96,7 @@ export function useGlobalShortcuts(enabled: boolean) {
       }
       // The welcome tour teaches these two shortcuts, so they step it aside instead of being blocked by it.
       const tourOpen = useTour.getState().open;
-      if (key === "f" && e.shiftKey) {
+      if (action === "search") {
         // Search every conversation (the palette's "?" mode); pressed again, it closes.
         if (!ui.paletteOpen && dialogOpen() && !tourOpen) return;
         if (tourOpen) closeTour();
@@ -100,38 +105,38 @@ export function useGlobalShortcuts(enabled: boolean) {
         else ui.openSearch();
         return;
       }
-      const newOverTour = key === "n" && !e.shiftKey && tourOpen;
+      const newOverTour = action === "newAgent" && tourOpen;
       if (newOverTour) closeTour();
       // Ctrl+Shift+R is the webview's hard reload on Windows: it must never get through, dialog or not.
-      if (key === "r" && e.shiftKey) e.preventDefault();
+      if (action === "review") e.preventDefault();
       // Never navigate out from under an open dialog, sheet or menu.
       if (dialogOpen() && !newOverTour) return;
-      if (key === "n" && !e.shiftKey) {
+      if (action === "newAgent") {
         e.preventDefault();
         ui.setPaletteOpen(false);
         ui.openNewAgent();
         return;
       }
-      if (key === "b" && !e.shiftKey) {
+      if (action === "agentList") {
         e.preventDefault();
         showOrHideAgentList();
         return;
       }
-      if (e.key === "`" && !e.shiftKey) {
+      if (action === "workspace") {
         // Workspace panel (terminals, scripts) of the open agent.
         if (ui.view !== "agents" || !ui.selectedAgentId) return;
         e.preventDefault();
         ui.setWorkspaceOpen(!ui.workspaceOpen);
         return;
       }
-      if (key === "p" && e.shiftKey) {
+      if (action === "preview") {
         // Preview pane (right of the conversation) of the open agent.
         if (ui.view !== "agents" || !ui.selectedAgentId) return;
         e.preventDefault();
         togglePreview(ui.selectedAgentId);
         return;
       }
-      if (key === "r" && e.shiftKey) {
+      if (action === "review") {
         // Review the open agent's diff (agents with their own worktree).
         // Always handled: Ctrl+Shift+R is the webview's hard reload on Windows.
         e.preventDefault();
@@ -141,35 +146,35 @@ export function useGlobalShortcuts(enabled: boolean) {
         ui.setReviewAgent(open.id);
         return;
       }
-      if (key === "j" && !e.shiftKey) {
+      if (action === "needs") {
         e.preventDefault();
         // Opens Mission Control's "Needs you" tab; pressed again there, moves to the next waiting agent.
         if (ui.view === "mission" && ui.missionTab === "needs") selectNextTriage(triageQueueNow());
         else ui.openMission("needs");
         return;
       }
-      if (key === "i" && !e.shiftKey) {
+      if (!action && key === "i") {
         // The old Inbox's key: pending approvals are the first thing in "Needs you".
         e.preventDefault();
         ui.openMission("needs");
         return;
       }
-      if (key === "a" && e.shiftKey) {
+      if (action === "voice") {
         e.preventDefault();
         toggleVoiceAssistant();
         return;
       }
-      if (key === "m" && e.shiftKey) {
+      if (action === "mission") {
         e.preventDefault();
         ui.openMission("all");
         return;
       }
-      if (e.key === "," && !e.shiftKey) {
+      if (action === "settings") {
         e.preventDefault();
         ui.openSettings();
         return;
       }
-      if (/^[1-9]$/.test(e.key) && !e.shiftKey) {
+      if (!action && /^[1-9]$/.test(e.key)) {
         const list = shortcutOrder();
         const target = list[Number(e.key) - 1];
         if (target) {
@@ -214,17 +219,6 @@ export function useGlobalShortcuts(enabled: boolean) {
       for (const off of offs) off();
     };
   }, [enabled]);
-}
-
-/** Back / Forward: ⌘[ and ⌘] on macOS, Alt+← and Alt+→ elsewhere (as in browsers). */
-export function navKey(e: KeyboardEvent): "back" | "forward" | null {
-  if (e.shiftKey) return null;
-  if (isMac) {
-    if (!e.metaKey || e.ctrlKey || e.altKey) return null;
-    return e.key === "[" ? "back" : e.key === "]" ? "forward" : null;
-  }
-  if (!e.altKey || e.ctrlKey || e.metaKey) return null;
-  return e.key === "ArrowLeft" ? "back" : e.key === "ArrowRight" ? "forward" : null;
 }
 
 /** A shell uses Alt+arrows itself (word moves). */

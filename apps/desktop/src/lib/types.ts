@@ -643,6 +643,8 @@ export interface Settings {
   defaultWorktree: boolean;
   launchAtLogin: boolean;
   globalHotkey: string; // e.g. "CmdOrCtrl+Shift+Space"
+  /** In-app shortcuts the user changed, by action id ("" = none). Missing ones keep their default. */
+  shortcuts: Record<string, string>;
   escalateAfterMins: number; // re-ping pending approvals; 0 = off
   ntfyUrl: string | null; // optional phone push, e.g. https://ntfy.sh/my-topic
   ntfyDetail: "minimal" | "full"; // what a phone push says: generic text, or the agent's own (scrubbed) text

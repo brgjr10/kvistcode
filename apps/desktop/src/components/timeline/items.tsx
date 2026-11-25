@@ -15,6 +15,7 @@ import {
   MessageSquareX,
   Pencil,
   Repeat,
+  Quote,
   RotateCcw,
   Search,
   ShieldAlert,
@@ -61,6 +62,7 @@ import { AttachmentImg } from "../AttachmentImg";
 import { AttachmentStrip } from "../AttachmentStrip";
 import { CopyButton } from "../CopyButton";
 import { insertAttachments, insertIntoDraft } from "../agent/drafts";
+import { quoteBlock } from "@/lib/composerExtras";
 import { DiffStat, FileDiffView } from "../DiffView";
 import { Markdown } from "../Markdown";
 import { PlanChecklist } from "./PlanChecklist";
@@ -181,6 +183,8 @@ function MessageAction({
       title={label}
       aria-label={label}
       disabled={disabled}
+      // Keeps the text you selected selected, so "Quote" can read it.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className="inline-flex h-5 items-center rounded-md px-1.5 text-steel transition-colors hover:bg-raised hover:text-fg disabled:opacity-50"
     >
@@ -202,6 +206,13 @@ export const TurnHeader = memo(function TurnHeader({ agent, ts }: { agent: Agent
     </div>
   );
 });
+
+/** The text selected inside `root`, or "" when nothing (or something elsewhere) is selected. */
+function selectedWithin(root: HTMLElement | null): string {
+  const sel = window.getSelection();
+  if (!root || !sel || sel.isCollapsed || !sel.anchorNode || !root.contains(sel.anchorNode)) return "";
+  return sel.toString();
+}
 
 export const AgentMessage = memo(function AgentMessage({
   item,
@@ -226,6 +237,7 @@ export const AgentMessage = memo(function AgentMessage({
   retryPrompt?: { text: string; attachments?: Attachment[] } | null;
 }) {
   const [retrying, setRetrying] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const retry = async () => {
     if (!retryPrompt || retrying) return;
     setRetrying(true);
@@ -259,6 +271,7 @@ export const AgentMessage = memo(function AgentMessage({
       className={cn("tl-msg group relative", text && "-mb-3 pb-5")}
       data-role={role}
       data-find-target={found ? "" : undefined}
+      ref={rootRef}
     >
       {images.length > 0 && <MessageImages images={images} />}
       {text ? (
@@ -287,6 +300,12 @@ export const AgentMessage = memo(function AgentMessage({
       {!streaming && text && (
         <div className="absolute bottom-0 left-0 z-[1] flex opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           <CopyButton text={text} className="-ml-1.5 h-5" label="Copy message" />
+          <MessageAction
+            label="Quote in your reply (select text first to quote only that)"
+            onClick={() => insertIntoDraft(agent.id, quoteBlock(selectedWithin(rootRef.current) || text))}
+          >
+            <Quote className="h-3.5 w-3.5" />
+          </MessageAction>
           {retryPrompt && !turnOpen && agent.running && (
             <MessageAction label="Retry: send your last message again" disabled={retrying} onClick={() => void retry()}>
               {retrying ? <Spinner className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
