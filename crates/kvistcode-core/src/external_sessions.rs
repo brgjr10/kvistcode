@@ -441,12 +441,18 @@ mod tests {
         fs::write(dir.join(format!("{id}.jsonl")), body).unwrap();
     }
 
+    fn json_str(s: &str) -> String {
+        let q = serde_json::to_string(s).unwrap();
+        q[1..q.len() - 1].to_string()
+    }
+
     #[test]
     fn claude_sessions_are_listed_with_title_and_count() {
         let home = scratch("c1");
         let project = home.join("work/app");
         fs::create_dir_all(&project).unwrap();
-        let cwd = project.to_string_lossy();
+        // JSON-escaped, so Windows backslashes survive.
+        let cwd = json_str(&project.to_string_lossy());
         let body = format!(
             "{{\"type\":\"summary\",\"summary\":\"x\"}}\n\
              not json at all\n\
@@ -482,7 +488,8 @@ mod tests {
         let home = scratch("x1");
         let project = home.join("proj");
         fs::create_dir_all(&project).unwrap();
-        let cwd = project.to_string_lossy();
+        // JSON-escaped, so Windows backslashes survive.
+        let cwd = json_str(&project.to_string_lossy());
         let dir = home.join(".codex/sessions/2026/03/02");
         fs::create_dir_all(&dir).unwrap();
         let mk = |id: &str, ts: &str, cwd: &str, first: &str| {

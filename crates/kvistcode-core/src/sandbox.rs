@@ -952,6 +952,8 @@ mod tests {
         assert!(err.contains("Docker"), "{err}");
     }
 
+    // The paths are Linux mount paths (Bubblewrap/Docker); `/opt/sdk` is not absolute on Windows.
+    #[cfg(unix)]
     #[test]
     fn config_validation_and_sanitization() {
         let mut cfg = ProjectSandboxConfig {
