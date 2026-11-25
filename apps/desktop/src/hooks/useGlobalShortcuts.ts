@@ -20,6 +20,18 @@ export function useGlobalShortcuts(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
+      // Typing through an input method, or AltGr (reported as Ctrl+Alt) producing a character in
+      // a text field: that is text, never a shortcut.
+      if (e.isComposing || e.keyCode === 229) return;
+      if (
+        !isMac &&
+        e.ctrlKey &&
+        e.altKey &&
+        e.key.length === 1 &&
+        !/[a-z0-9]/i.test(e.key) &&
+        isEditableTarget(e.target)
+      )
+        return;
       // ⌘ on macOS, Ctrl elsewhere (Ctrl+K on a Mac is a text-editing shortcut).
       const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
       const action: ShortcutId | null = shortcutFor(e);

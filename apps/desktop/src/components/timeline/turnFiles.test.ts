@@ -36,6 +36,9 @@ describe("splitOwnFiles", () => {
     expect(r.own).toEqual(["C:\\proj\\wt\\a.ts"]);
     expect(r.outside).toEqual(["C:\\other\\b.ts"]);
   });
+  it("ignores case in Windows paths", () => {
+    expect(splitOwnFiles(["c:\\repo\\a.ts"], ["C:\\Repo"]).own).toEqual(["c:\\repo\\a.ts"]);
+  });
   it("treats everything as own when the folders are unknown", () => {
     expect(splitOwnFiles(["/x/a"], []).own).toEqual(["/x/a"]);
   });

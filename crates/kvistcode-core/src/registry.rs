@@ -144,12 +144,30 @@ fn risky_env(name: &str) -> bool {
     let up = name.to_ascii_uppercase();
     matches!(
         up.as_str(),
-        "PATH" | "PATHEXT" | "HOME" | "USERPROFILE" | "SHELL" | "COMSPEC" | "TMPDIR" | "TEMP"
+        "PATH"
+            | "PATHEXT"
+            | "HOME"
+            | "USERPROFILE"
+            | "SHELL"
+            | "COMSPEC"
+            | "TMPDIR"
+            | "TEMP"
+            | "TMP"
+            | "APPDATA"
+            | "LOCALAPPDATA"
+            | "SSL_CERT_FILE"
+            | "SSL_CERT_DIR"
+            | "CURL_CA_BUNDLE"
+            | "REQUESTS_CA_BUNDLE"
+            | "ELECTRON_RUN_AS_NODE"
+            | "LANG"
     ) || [
-        "LD_", "DYLD_", "NODE_", "NPM_", "PYTHON", "UV_", "BASH_", "GIT_",
+        "LD_", "DYLD_", "NODE_", "NPM_", "PYTHON", "UV_", "BASH_", "GIT_", "XDG_", "LC_",
     ]
     .iter()
     .any(|p| up.starts_with(p))
+        // Would route the agent's traffic somewhere else.
+        || up.ends_with("_PROXY")
 }
 
 fn safe_env(v: Option<&Value>) -> Option<Vec<(String, String)>> {
@@ -412,7 +430,7 @@ pub fn parse_index(json: &str, platform: Option<&str>, has_uvx: bool) -> Result<
 
 /// Downloads the index. Blocking; call from `spawn_blocking`.
 fn fetch_index() -> Result<String> {
-    let mut body = toolchain::http()
+    let mut body = toolchain::https_only()
         .get(REGISTRY_URL)
         .call()
         .map_err(|_| {
@@ -729,5 +747,26 @@ mod tests {
             .iter()
             .any(|e| e.info.id == "qwen-code" && e.info.kind == "npx"));
         assert!(v.iter().any(|e| e.info.unsupported.is_some()));
+    }
+}
+
+#[cfg(test)]
+mod env_tests {
+    use super::risky_env;
+
+    #[test]
+    fn proxies_certificates_and_locations_are_refused() {
+        for name in [
+            "HTTPS_PROXY",
+            "all_proxy",
+            "SSL_CERT_FILE",
+            "XDG_CONFIG_HOME",
+            "APPDATA",
+            "LC_ALL",
+            "ELECTRON_RUN_AS_NODE",
+        ] {
+            assert!(risky_env(name), "{name}");
+        }
+        assert!(!risky_env("AGENT_LOG_LEVEL"));
     }
 }

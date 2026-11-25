@@ -24,6 +24,7 @@ import {
   caretOnFirstLine,
   caretOnLastLine,
   isBigPaste,
+  nextPasteId,
   lineCount,
   sentHistory,
   sizeLabel,
@@ -475,7 +476,7 @@ function ComposerImpl({
       await api.sendPrompt(agent.id, value, images, deliver);
     } catch (e) {
       update(restoreDraft(textRef.current, typed));
-      setPastes(held);
+      setPastes([...held, ...pastesRef.current]);
       attach.setAttachments(images);
       toast.error("Couldn't send prompt", { description: errorMessage(e) });
     } finally {
@@ -503,7 +504,7 @@ function ComposerImpl({
       });
     } catch (e) {
       update(restoreDraft(textRef.current, typed));
-      setPastes(held);
+      setPastes([...held, ...pastesRef.current]);
       attach.setAttachments(images);
       toast.error("Couldn't start a helper", { description: errorMessage(e) });
     } finally {
@@ -621,10 +622,11 @@ function ComposerImpl({
     if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return false;
     const up = e.key === "ArrowUp";
     const el = e.currentTarget;
+    const list = sentHistory(useApp.getState().items[agent.id]);
+    // The history can shrink while browsing (older items unloaded): start over then.
+    if (histIdx.current !== null && histIdx.current >= list.length) histIdx.current = null;
     const at = histIdx.current;
     if (at === null && !(up && text === "" && attach.attachments.length === 0 && pastes.length === 0)) return false;
-    const list = sentHistory(useApp.getState().items[agent.id]);
-    if (at !== null && at >= list.length) histIdx.current = null;
     if (list.length === 0) return false;
     const s = el.selectionStart ?? 0;
     const end = el.selectionEnd ?? s;
@@ -871,7 +873,12 @@ function ComposerImpl({
                   const big = e.clipboardData.getData("text/plain");
                   if (isBigPaste(big)) {
                     e.preventDefault();
-                    setPastes([...pastes, { id: Date.now(), text: big }]);
+                    // A paste replaces the selection; the chip takes the text, so the selection just goes.
+                    const el = e.currentTarget;
+                    const a = el.selectionStart ?? 0;
+                    const b = el.selectionEnd ?? a;
+                    if (b > a) update(text.slice(0, a) + text.slice(b), a);
+                    setPastes([...pastesRef.current, { id: nextPasteId(), text: big }]);
                     return;
                   }
                   attach.onPaste(e);

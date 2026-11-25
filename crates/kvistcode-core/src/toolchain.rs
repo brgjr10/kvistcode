@@ -246,10 +246,21 @@ pub fn platform_tls() -> ureq::tls::TlsConfig {
 }
 
 pub(crate) fn http() -> ureq::Agent {
+    http_with(false)
+}
+
+/// Like `http`, but never follows a redirect down to plain `http://` (the ACP Registry's
+/// index carries the checksums, so it must not be swappable on the way).
+pub(crate) fn https_only() -> ureq::Agent {
+    http_with(true)
+}
+
+fn http_with(https_only: bool) -> ureq::Agent {
     // Proxy settings come from HTTP(S)_PROXY / ALL_PROXY / NO_PROXY (and the
     // Windows system proxy) by default.
     ureq::Agent::new_with_config(
         ureq::Agent::config_builder()
+            .https_only(https_only)
             .tls_config(platform_tls())
             .timeout_connect(Some(std::time::Duration::from_secs(20)))
             .timeout_recv_response(Some(std::time::Duration::from_secs(60)))
@@ -896,7 +907,7 @@ fn install_registry_binary_blocking(
     let staging = TempDir::create(root.join(format!(".s{}", short_id())))?;
     let archive = staging.path().join("download");
     log(&format!("▸ Downloading {url}…"));
-    let resp = http()
+    let resp = https_only()
         .get(url)
         .call()
         .with_context(|| "couldn't download the agent".to_string())?;
@@ -930,10 +941,37 @@ fn install_registry_binary_blocking(
     let unpacked = staging.path().join("unpacked");
     std::fs::create_dir(&unpacked)?;
     let f = std::fs::File::open(&archive)?;
+    let too_big = || anyhow!("the agent unpacks to more than 4 GB; stopped");
     if url.ends_with(".zip") {
-        zip::ZipArchive::new(f)?.extract(&unpacked)?;
+        let mut zip = zip::ZipArchive::new(f)?;
+        let mut size = 0u64;
+        for i in 0..zip.len() {
+            size = size.saturating_add(zip.by_index_raw(i)?.size());
+        }
+        if size > MAX_REGISTRY_UNPACKED {
+            return Err(too_big());
+        }
+        zip.extract(&unpacked)?;
     } else {
-        tar::Archive::new(flate2::read::GzDecoder::new(f)).unpack(&unpacked)?;
+        let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(f));
+        let mut size = 0u64;
+        for entry in tar.entries()? {
+            let mut entry = entry?;
+            size = size.saturating_add(entry.size());
+            if size > MAX_REGISTRY_UNPACKED {
+                return Err(too_big());
+            }
+            entry.unpack_in(&unpacked)?;
+        }
+    }
+    // No link in the archive may point outside it (an agent could otherwise read or replace
+    // files elsewhere through its own folder).
+    let root_real = unpacked.canonicalize()?;
+    for link in symlinks_in(&unpacked)? {
+        let ok = link.canonicalize().is_ok_and(|t| t.starts_with(&root_real));
+        if !ok {
+            bail!("the download contains a link that points outside it; nothing was installed");
+        }
     }
     let exe = unpacked.join(cmd);
     // A symlink in the archive must not lead the command outside it.
@@ -949,17 +987,49 @@ fn install_registry_binary_blocking(
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755))?;
     }
+    // The previous copy is set aside, not deleted, until the new one is in place.
     let dest = root.join(id);
-    if dest.exists() {
-        std::fs::remove_dir_all(&dest).with_context(|| {
+    let aside = root.join(format!(".o{}", short_id()));
+    let had_old = dest.exists();
+    if had_old {
+        std::fs::rename(&dest, &aside).with_context(|| {
             format!(
                 "couldn't replace the previous copy at {}. If the agent is running, stop it and try again",
                 dest.display()
             )
         })?;
     }
-    std::fs::rename(&unpacked, &dest).with_context(|| format!("moving into {}", dest.display()))?;
+    if let Err(e) = std::fs::rename(&unpacked, &dest) {
+        if had_old {
+            let _ = std::fs::rename(&aside, &dest);
+        }
+        return Err(e).with_context(|| format!("moving into {}", dest.display()));
+    }
+    if had_old {
+        let _ = std::fs::remove_dir_all(&aside);
+    }
     Ok(dest.join(cmd))
+}
+
+/// Largest size an ACP Registry binary agent may unpack to.
+const MAX_REGISTRY_UNPACKED: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Every symlink under `dir` (not followed).
+fn symlinks_in(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            if ty.is_symlink() {
+                found.push(entry.path());
+            } else if ty.is_dir() {
+                stack.push(entry.path());
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// Installs one provider, taking Node.js from `setup` (set up once for a run of installs).
@@ -1813,5 +1883,23 @@ mod install_set_tests {
             "✗ Claude: something went wrong"
         );
         assert_eq!(Provider::Codex.display_name(), "ChatGPT (Codex)");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod registry_link_tests {
+    use super::symlinks_in;
+
+    #[test]
+    fn finds_links_at_any_depth_without_following_them() {
+        let dir = crate::testutil::scratch("links");
+        std::fs::create_dir_all(dir.join("a/b")).unwrap();
+        std::fs::write(dir.join("a/file"), "x").unwrap();
+        std::os::unix::fs::symlink("/etc", dir.join("a/b/out")).unwrap();
+        std::os::unix::fs::symlink("../file", dir.join("a/b/in")).unwrap();
+        let mut found = symlinks_in(&dir).unwrap();
+        found.sort();
+        assert_eq!(found, vec![dir.join("a/b/in"), dir.join("a/b/out")]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

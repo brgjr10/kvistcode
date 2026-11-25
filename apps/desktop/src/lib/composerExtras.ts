@@ -12,6 +12,12 @@ export interface BigPaste {
   text: string;
 }
 
+let pasteSeq = 0;
+/** A unique id for a pasted-text chip (two pastes in the same millisecond must not collide). */
+export function nextPasteId(): number {
+  return ++pasteSeq;
+}
+
 export function isBigPaste(text: string): boolean {
   if (text.length > BIG_PASTE_CHARS) return true;
   let lines = 1;

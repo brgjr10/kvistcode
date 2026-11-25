@@ -50,8 +50,26 @@ const FIXED: { keys: string; label: string }[] = [
   { keys: "CmdOrCtrl+F", label: "Find in this conversation" },
   { keys: "Alt+Up", label: "Previous agent" },
   { keys: "Alt+Down", label: "Next agent" },
-  ...["A", "C", "V", "X", "Z", "Y"].map((k) => ({ keys: `CmdOrCtrl+${k}`, label: "a text editing key" })),
+  ...["A", "C", "V", "X", "Z", "Y", "Enter", "Backspace", "Delete", "Left", "Right", "Up", "Down", "Home", "End"].map(
+    (k) => ({ keys: `CmdOrCtrl+${k}`, label: "a text editing key" }),
+  ),
+  ...["Z", "V", "Left", "Right", "Up", "Down", "Home", "End"].map((k) => ({
+    keys: `CmdOrCtrl+Shift+${k}`,
+    label: "a text editing key",
+  })),
 ];
+
+/**
+ * A shortcut works while you type, so it needs Ctrl or ⌘ (Alt alone types characters on a Mac and
+ * some layouts). Function keys, and Alt with a key that types nothing (Alt+←), are fine on their own.
+ */
+function stealsTyping(accelerator: string): boolean {
+  const parts = accelerator.split("+");
+  const key = parts.pop() ?? "";
+  if (/^F\d{1,2}$/.test(key)) return false;
+  if (parts.some((m) => m === "CmdOrCtrl" || m === "Ctrl" || m === "Super" || m === "Cmd")) return false;
+  return !(parts.includes("Alt") && key.length > 1);
+}
 
 let overrides: Record<string, string> = {};
 
@@ -107,6 +125,7 @@ export function shortcutConflict(
   map: Record<string, string>,
   taken: { keys: string; label: string }[] = [],
 ): string | null {
+  if (stealsTyping(accelerator)) return "Add Ctrl or ⌘ to this shortcut, or it would stop you typing that key.";
   const same = (a: string, b: string) => sameAccelerator(a, b, isMac);
   const other = SHORTCUTS.find((s) => s.id !== id && same(bindingFor(s.id, map), accelerator));
   if (other) return `Already used for "${other.label}". Change or unassign that one first.`;

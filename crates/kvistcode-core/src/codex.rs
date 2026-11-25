@@ -528,8 +528,13 @@ impl CodexDriver {
         }
         self.peer.mark_turn();
         let mark = self.peer.stderr_mark();
-        let preamble = self.ctx.take_preamble();
         let compact = is_compact(&prompt.text);
+        // `/compact` sends no text, so a pending briefing waits for the next real turn.
+        let preamble = if compact {
+            None
+        } else {
+            self.ctx.take_preamble()
+        };
         let skill = if compact {
             None
         } else {
@@ -1594,8 +1599,6 @@ async fn event_loop(
     }
 }
 
-/// Config overrides for a Codex thread: Kvistcode's MCP servers under `mcp_servers`.
-/// "30.5B · Q4_K_M · 256k context" for the model picker.
 /// `/compact`, alone or with trailing words (Codex's compaction takes no arguments).
 fn is_compact(text: &str) -> bool {
     text.split_whitespace().next() == Some("/compact")
@@ -1646,6 +1649,7 @@ fn skills_from_list(v: Option<&Value>) -> (Vec<SlashCommand>, HashMap<String, St
     (commands, paths)
 }
 
+/// "30.5B · Q4_K_M · 256k context" for the model picker.
 fn local_model_blurb(m: &LocalModel) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
     parts.extend(m.parameters.clone());

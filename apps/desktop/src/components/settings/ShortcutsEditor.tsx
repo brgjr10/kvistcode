@@ -20,11 +20,11 @@ export function ShortcutsEditor({ settings }: { settings: Settings }) {
   const map = settings.shortcuts ?? {};
   const [warning, setWarning] = useState<{ id: ShortcutId; text: string } | null>(null);
 
-  const save = async (next: Record<string, string>) => {
+  const save = async (id: ShortcutId, next: Record<string, string>) => {
     try {
       await useApp.getState().patchSettings({ shortcuts: next });
     } catch (e) {
-      setWarning({ id: "palette", text: `Couldn't save: ${errorMessage(e)}` });
+      setWarning({ id, text: `Couldn't save: ${errorMessage(e)}` });
     }
   };
   const set = (id: ShortcutId, accelerator: string) => {
@@ -32,7 +32,7 @@ export function ShortcutsEditor({ settings }: { settings: Settings }) {
     const next = { ...map };
     if (accelerator === def) delete next[id];
     else next[id] = accelerator;
-    void save(next);
+    void save(id, next);
   };
   const change = (id: ShortcutId, accelerator: string) => {
     const taken = [

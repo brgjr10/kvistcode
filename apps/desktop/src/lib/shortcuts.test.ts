@@ -48,3 +48,17 @@ describe("shortcut bindings", () => {
     expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(SHORTCUTS.length);
   });
 });
+
+describe("shortcuts that would stop typing", () => {
+  it("refuses Shift-only and Alt+letter, allows F-keys and Alt+arrows", () => {
+    expect(shortcutConflict("agentList", "Shift+B", {})).toMatch(/Ctrl or ⌘/);
+    expect(shortcutConflict("agentList", "Alt+J", {})).toMatch(/Ctrl or ⌘/);
+    expect(shortcutConflict("agentList", "F7", {})).toBeNull();
+    expect(shortcutConflict("agentList", "Alt+PageUp", {})).toBeNull();
+  });
+  it("refuses text editing keys", () => {
+    expect(shortcutConflict("agentList", "CmdOrCtrl+Shift+Z", {})).toMatch(/text editing/);
+    expect(shortcutConflict("agentList", "CmdOrCtrl+Enter", {})).toMatch(/text editing/);
+    expect(shortcutConflict("agentList", "CmdOrCtrl+Backspace", {})).toMatch(/text editing/);
+  });
+});

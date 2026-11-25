@@ -52,7 +52,11 @@ export function turnFileStats(
 }
 
 const isAbsolute = (p: string) => p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("\\\\");
-const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+// Windows paths (a drive letter or \\server) ignore case: C:\Repo and c:\repo are one folder.
+const norm = (p: string) => {
+  const n = p.replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:\//.test(n) || n.startsWith("//") ? n.toLowerCase() : n;
+};
 
 /**
  * A turn's changed files split into the agent's own (inside its folder or project; a relative path
