@@ -15,6 +15,7 @@ import type {
   Settings,
   SlashCommand,
   TimelineItem,
+  RegistryAgent,
 } from "./types";
 import { INVEST_NARRATION, PRIOR_ANSWER, REPORT_FINAL, SUMMARY_FINAL } from "./mock-demo-replies";
 import { DEFAULT_WAKE_PHRASE } from "./wakePhrase";
@@ -2769,4 +2770,97 @@ export function mockScreenshot(name: string, seed = name): Attachment {
 <rect x="628" y="292" width="90" height="12" rx="4" fill="#6b7280"/><rect x="820" y="292" width="64" height="12" rx="4" fill="#111827"/>
 </svg>`;
   return { name, mimeType: "image/svg+xml", data: btoa(svg) };
+}
+
+/** Sample of the official ACP Registry (https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json). */
+export function mockRegistry(): RegistryAgent[] {
+  const e = (a: Partial<RegistryAgent> & Pick<RegistryAgent, "id" | "name" | "version" | "kind" | "runs" | "source">) =>
+    ({
+      description: "",
+      icon: null,
+      website: null,
+      repository: null,
+      license: null,
+      unsupported: null,
+      ...a,
+    }) satisfies RegistryAgent;
+  return [
+    e({
+      id: "qwen-code",
+      name: "Qwen Code",
+      version: "0.28.4",
+      description: "Alibaba's Qwen coding agent for the terminal.",
+      license: "Apache-2.0",
+      website: "https://qwenlm.github.io/qwen-code-docs/",
+      repository: "https://github.com/QwenLM/qwen-code",
+      kind: "npx",
+      runs: "npx -y @qwen-code/qwen-code@0.28.4 --acp --experimental-skills",
+      source: "npm package @qwen-code/qwen-code@0.28.4",
+    }),
+    e({
+      id: "github-copilot-cli",
+      name: "GitHub Copilot CLI",
+      version: "1.0.115",
+      description: "GitHub's AI pair programmer in your terminal.",
+      license: "Proprietary",
+      repository: "https://github.com/github/copilot-cli",
+      kind: "npx",
+      runs: "npx -y @github/copilot@1.0.115 --acp",
+      source: "npm package @github/copilot@1.0.115",
+    }),
+    e({
+      id: "cline",
+      name: "Cline",
+      version: "3.0.75",
+      description: "Autonomous coding agent that edits files and runs commands with your approval.",
+      license: "Apache-2.0",
+      repository: "https://github.com/cline/cline",
+      kind: "npx",
+      runs: "npx -y cline@3.0.75 --acp",
+      source: "npm package cline@3.0.75",
+    }),
+    e({
+      id: "kilo",
+      name: "Kilo",
+      version: "7.8.32",
+      description: "Open-source coding agent with many model providers.",
+      license: "MIT",
+      website: "https://kilo.ai/",
+      kind: "binary",
+      runs: "Downloads https://github.com/Kilo-Org/kilocode/releases/download/v7.8.32/kilo-linux-x64.tar.gz, checks its checksum, then runs kilo acp",
+      source: "download from github.com",
+    }),
+    e({
+      id: "kiro",
+      name: "Kiro CLI",
+      version: "3.0.0",
+      description: "AWS's spec-driven coding agent.",
+      website: "https://kiro.dev/docs/cli/acp/",
+      kind: "binary",
+      runs: "Downloads https://prod.download.cli.kiro.dev/stable/3.0.0/kirocli-x86_64-linux.tar.gz, checks its checksum, then runs kirocli/bin/kiro-cli acp --agent-engine=v3",
+      source: "download from prod.download.cli.kiro.dev",
+    }),
+    e({
+      id: "fast-agent",
+      name: "fast-agent",
+      version: "0.10.66",
+      description: "Build and run agents and workflows with MCP, in Python.",
+      license: "Apache-2.0",
+      kind: "",
+      runs: "",
+      source: "",
+      unsupported: "It needs uv (uvx), which isn't installed on this computer.",
+    }),
+    e({
+      id: "junie",
+      name: "Junie",
+      version: "4171.4.0",
+      description: "JetBrains' coding agent.",
+      website: "https://junie.jetbrains.com",
+      kind: "",
+      runs: "",
+      source: "",
+      unsupported: "Its download has no checksum, so Kvistcode can't verify it.",
+    }),
+  ];
 }

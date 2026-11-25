@@ -1832,6 +1832,25 @@ pub async fn test_custom_agent(core: State<'_, Core>, agent: CustomAgent) -> Cmd
     core.test_custom_agent(agent).await.map_err(err)
 }
 
+/// The agents listed in the official ACP Registry (fetched now, never cached).
+#[tauri::command]
+pub async fn acp_registry_list() -> CmdResult<Vec<kvistcode_core::registry::RegistryAgent>> {
+    kvistcode_core::registry::list().await.map_err(err)
+}
+
+/// Sets up one registry agent (Node.js, or a checksum-verified download) and returns the
+/// custom agent to save. `version` is the one the person saw.
+#[tauri::command]
+pub async fn acp_registry_prepare(
+    core: State<'_, Core>,
+    id: String,
+    version: String,
+) -> CmdResult<CustomAgent> {
+    kvistcode_core::registry::prepare(core.data_dir(), &id, &version)
+        .await
+        .map_err(err)
+}
+
 /// Project files for @-mentions, fuzzy-matched against `query`.
 #[tauri::command]
 pub async fn list_files(

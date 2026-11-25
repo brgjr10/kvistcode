@@ -44,6 +44,7 @@ import {
   seedProviders,
   seedSchedules,
   MOCK_PROJECTS,
+  mockRegistry,
   seedSettings,
 } from "./mock-data";
 import type {
@@ -3717,6 +3718,23 @@ export const mockApi: KvistcodeApi = {
       throw new Error("gemini exited before the ACP handshake (code 1):\nUnknown mode. Did you mean --acp?");
     }
     return v;
+  },
+
+  async acpRegistryList() {
+    await sleep(700);
+    return mockRegistry();
+  },
+
+  async acpRegistryPrepare(id, version) {
+    await sleep(900);
+    const entry = mockRegistry().find((a) => a.id === id);
+    if (!entry) throw new Error("That agent is no longer in the ACP Registry.");
+    if (entry.version !== version)
+      throw new Error(`The registry has a newer version of ${entry.name}. Close this and open it again.`);
+    if (entry.unsupported) throw new Error(`${entry.name} can't be added: ${entry.unsupported}`);
+    const run = entry.runs.split(" ");
+    const [command, ...args] = entry.kind === "npx" ? run : [entry.id, "acp"];
+    return { id: "", name: entry.name, command, args, env: [], color: "#B39DDB", enabled: true };
   },
 
   async remoteStatus() {

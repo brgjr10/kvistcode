@@ -245,7 +245,7 @@ pub fn platform_tls() -> ureq::tls::TlsConfig {
         .build()
 }
 
-fn http() -> ureq::Agent {
+pub(crate) fn http() -> ureq::Agent {
     // Proxy settings come from HTTP(S)_PROXY / ALL_PROXY / NO_PROXY (and the
     // Windows system proxy) by default.
     ureq::Agent::new_with_config(
@@ -844,6 +844,122 @@ fn install_agy(data_dir: &Path, log: &Log) -> anyhow::Result<()> {
     })();
     let _ = std::fs::remove_dir_all(stage);
     result
+}
+
+/// Makes sure `npx` will work for an ACP Registry agent: uses the person's Node.js when it is
+/// new enough, else downloads Kvistcode's own private copy.
+pub async fn ensure_node(data_dir: &Path, log: Log) -> anyhow::Result<()> {
+    let _guard = lock_installs(&log).await;
+    sweep_scratch(data_dir);
+    ensure_npm(data_dir, &log).await.map(|_| ())
+}
+
+/// Largest archive an ACP Registry binary agent may be.
+const MAX_REGISTRY_ARCHIVE: u64 = 1024 * 1024 * 1024;
+
+/// Downloads an ACP Registry binary agent, checks its SHA-256 against the registry's, unpacks
+/// it into `<data>/tools/acp/<id>` and returns the path of its executable. `cmd` is the
+/// executable's path inside the archive and has already been checked to stay inside it.
+pub async fn install_registry_binary(
+    data_dir: &Path,
+    id: &str,
+    archive_url: &str,
+    sha256: &str,
+    cmd: &Path,
+    log: Log,
+) -> anyhow::Result<PathBuf> {
+    let _guard = lock_installs(&log).await;
+    let (dir, id, url, sha, cmd) = (
+        data_dir.to_path_buf(),
+        id.to_string(),
+        archive_url.to_string(),
+        sha256.to_ascii_lowercase(),
+        cmd.to_path_buf(),
+    );
+    tokio::task::spawn_blocking(move || {
+        install_registry_binary_blocking(&dir, &id, &url, &sha, &cmd, &log)
+    })
+    .await
+    .context("download task")?
+}
+
+fn install_registry_binary_blocking(
+    data_dir: &Path,
+    id: &str,
+    url: &str,
+    expected: &str,
+    cmd: &Path,
+    log: &Log,
+) -> anyhow::Result<PathBuf> {
+    let root = tools_dir(data_dir).join("acp");
+    std::fs::create_dir_all(&root)?;
+    let staging = TempDir::create(root.join(format!(".s{}", short_id())))?;
+    let archive = staging.path().join("download");
+    log(&format!("▸ Downloading {url}…"));
+    let resp = http()
+        .get(url)
+        .call()
+        .with_context(|| "couldn't download the agent".to_string())?;
+    let mut reader = resp
+        .into_body()
+        .into_reader()
+        .take(MAX_REGISTRY_ARCHIVE + 1);
+    let mut out = std::fs::File::create(&archive)?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 256 * 1024];
+    let mut total = 0u64;
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        total += n as u64;
+        if total > MAX_REGISTRY_ARCHIVE {
+            bail!("the download is larger than 1 GB; stopped");
+        }
+        hasher.update(&buf[..n]);
+        out.write_all(&buf[..n])?;
+    }
+    out.flush()?;
+    drop(out);
+    if hex_lower(&hasher.finalize()) != expected {
+        bail!("the download doesn't match the checksum the registry lists; nothing was installed");
+    }
+    log("✓ Checksum verified (SHA-256)");
+
+    let unpacked = staging.path().join("unpacked");
+    std::fs::create_dir(&unpacked)?;
+    let f = std::fs::File::open(&archive)?;
+    if url.ends_with(".zip") {
+        zip::ZipArchive::new(f)?.extract(&unpacked)?;
+    } else {
+        tar::Archive::new(flate2::read::GzDecoder::new(f)).unpack(&unpacked)?;
+    }
+    let exe = unpacked.join(cmd);
+    // A symlink in the archive must not lead the command outside it.
+    let inside = exe
+        .canonicalize()
+        .ok()
+        .filter(|p| p.is_file() && p.starts_with(unpacked.canonicalize().unwrap_or_default()));
+    if inside.is_none() {
+        bail!("the download doesn't contain {}", cmd.display());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755))?;
+    }
+    let dest = root.join(id);
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest).with_context(|| {
+            format!(
+                "couldn't replace the previous copy at {}. If the agent is running, stop it and try again",
+                dest.display()
+            )
+        })?;
+    }
+    std::fs::rename(&unpacked, &dest).with_context(|| format!("moving into {}", dest.display()))?;
+    Ok(dest.join(cmd))
 }
 
 /// Installs one provider, taking Node.js from `setup` (set up once for a run of installs).

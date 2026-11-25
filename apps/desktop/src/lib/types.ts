@@ -850,6 +850,26 @@ export interface CustomAgent {
   enabled: boolean;
 }
 
+/** One agent in the official ACP Registry (https://github.com/agentclientprotocol/registry). */
+export interface RegistryAgent {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  icon: string | null;
+  website: string | null;
+  repository: string | null;
+  license: string | null;
+  /** "npx", "uvx" or "binary"; empty when it can't be added. */
+  kind: string;
+  /** What will run on the computer, in plain text. */
+  runs: string;
+  /** Where the code comes from (npm package, PyPI package or download host). */
+  source: string;
+  /** Why it can't be added here, when it can't. */
+  unsupported: string | null;
+}
+
 /**
  * Image attachment. Inline, `data` is base64 without the "data:" prefix. A picture stored in the
  * timeline has no `data`, only `path` (its file name in Kvistcode's pictures folder); load it
