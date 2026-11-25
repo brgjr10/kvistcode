@@ -222,6 +222,8 @@ macro_rules! handler {
             triggers::trigger_webhook_info,
             triggers::regenerate_trigger_webhook,
             commands::test_custom_agent,
+            commands::acp_registry_list,
+            commands::acp_registry_prepare,
             commands::list_files,
             project_settings::project_config,
             project_settings::project_save_rules,

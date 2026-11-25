@@ -19,3 +19,27 @@ describe("fileFor (which changed file an edit belongs to)", () => {
     expect(fileFor(files, "/repo/xsrc/index.ts")).toBeUndefined();
   });
 });
+
+import { splitOwnFiles } from "./turnFiles";
+
+describe("splitOwnFiles", () => {
+  it("keeps relative and in-project files, sets aside other checkouts", () => {
+    const r = splitOwnFiles(
+      ["src/a.ts", "/repo/b.ts", "/home/u/.cache/kv-wt/x/registry.rs", "/repo-other/c.ts"],
+      ["/repo/", null],
+    );
+    expect(r.own).toEqual(["src/a.ts", "/repo/b.ts"]);
+    expect(r.outside).toEqual(["/home/u/.cache/kv-wt/x/registry.rs", "/repo-other/c.ts"]);
+  });
+  it("handles Windows paths and the worktree folder", () => {
+    const r = splitOwnFiles(["C:\\proj\\wt\\a.ts", "C:\\other\\b.ts"], ["C:\\proj\\wt", "C:\\proj"]);
+    expect(r.own).toEqual(["C:\\proj\\wt\\a.ts"]);
+    expect(r.outside).toEqual(["C:\\other\\b.ts"]);
+  });
+  it("ignores case in Windows paths", () => {
+    expect(splitOwnFiles(["c:\\repo\\a.ts"], ["C:\\Repo"]).own).toEqual(["c:\\repo\\a.ts"]);
+  });
+  it("treats everything as own when the folders are unknown", () => {
+    expect(splitOwnFiles(["/x/a"], []).own).toEqual(["/x/a"]);
+  });
+});

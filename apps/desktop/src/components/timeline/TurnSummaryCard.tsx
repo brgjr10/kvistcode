@@ -34,7 +34,7 @@ import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "../ui/pop
 import { Tooltip } from "../ui/tooltip";
 import { formatElapsed } from "./thinking";
 import { afterTurnCheckpointId } from "./turnCheckpoint";
-import { turnFileStats } from "./turnFiles";
+import { splitOwnFiles, turnFileStats } from "./turnFiles";
 
 type Summary = Extract<TimelineItem, { kind: "turn_summary" }>;
 
@@ -71,7 +71,8 @@ export const TurnSummaryLine = memo(function TurnSummaryLine({
     <div className="flex flex-wrap items-center gap-2 px-1 text-meta text-steel minimal:px-0">
       <CircleCheckBig className="h-3.5 w-3.5 text-ok/70 minimal:text-steel" />
       <span>
-        Done in {formatDuration(item.durationMs)} · {pluralize(item.files.length, "file")} ·{" "}
+        Done in {formatDuration(item.durationMs)} ·{" "}
+        {pluralize(agent ? splitOwnFiles(item.files, [agent.cwd, agent.projectPath]).own.length : item.files.length, "file")} ·{" "}
         {pluralize(item.toolCalls, "tool call")} · {formatCost(item.costUsd)}
       </span>
       {available && checkpoint && (
@@ -159,9 +160,20 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
   const [shipState, setShipState] = useState<ShipState | null>(() => shipStates.get(item.id) ?? null);
   const shipped = shipState?.kind === "shipped";
   const [revertFile, setRevertFile] = useState<string | null>(null);
-  const hasFiles = item.files.length > 0;
+  // Only the agent's own files get actions; edits a sub-agent made in another checkout are named apart.
+  const { own: ownFiles, outside: outsideFiles } = useMemo(
+    () => splitOwnFiles(item.files, [agent.cwd, agent.projectPath]),
+    [item.files, agent.cwd, agent.projectPath],
+  );
+  const hasFiles = ownFiles.length > 0;
+  const outsideNote =
+    outsideFiles.length > 0 ? (
+      <p className="mt-1.5 truncate text-meta text-steel" title={outsideFiles.join("\n")}>
+        Also changed {pluralize(outsideFiles.length, "file")} outside this project
+      </p>
+    ) : null;
   const [allFiles, setAllFiles] = useState(() => expandedFiles.has(item.id));
-  const { shown: files, hidden: hiddenFiles } = visibleFiles(item.files, allFiles);
+  const { shown: files, hidden: hiddenFiles } = visibleFiles(ownFiles, allFiles);
   const showAllFiles = (on: boolean) => {
     if (on) expandedFiles.add(item.id);
     else expandedFiles.delete(item.id);
@@ -232,9 +244,9 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
   // only when older history loads (the oldest loaded item changes), not on every streamed word.
   const oldestId = useApp((s) => (minimal ? s.items[agent.id]?.[0]?.id : undefined));
   const stats = useMemo(
-    () => (minimal ? turnFileStats(useApp.getState().items[agent.id] ?? [], item.id, item.files) : null),
+    () => (minimal ? turnFileStats(useApp.getState().items[agent.id] ?? [], item.id, ownFiles) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- oldestId stands for the loaded history
-    [minimal, agent.id, item.id, item.files, oldestId],
+    [minimal, agent.id, item.id, ownFiles, oldestId],
   );
   if (minimal && stats) {
     let additions = 0;
@@ -278,7 +290,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
         {hasFiles ? (
           <div className="tl-well overflow-hidden rounded-[11px] border border-line">
             <header className="flex h-10 items-center gap-2 pl-3.5 pr-2 text-small font-medium text-fg/90">
-              {title(state ?? pluralize(item.files.length, "changed file"))}
+              {title(state ?? pluralize(ownFiles.length, "changed file"))}
               {stats.size > 0 && (
                 <span className="shrink-0 font-mono text-caption font-normal tabular-nums">
                   <span className="text-ok">+{additions}</span> <span className="text-err">−{deletions}</span>
@@ -351,7 +363,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
                   </li>
                 );
               })}
-              {(hiddenFiles > 0 || (allFiles && item.files.length > FILES_SHOWN)) && (
+              {(hiddenFiles > 0 || (allFiles && ownFiles.length > FILES_SHOWN)) && (
                 <li className="flex h-[30px] items-center border-t border-line">
                   <button
                     type="button"
@@ -403,6 +415,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
             )}
           </div>
         )}
+        {outsideNote}
         {hasFiles && (
           <footer className="-ml-2 mt-1.5 flex flex-wrap items-center gap-0.5">
             <MessagePopover
@@ -432,9 +445,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
                 defaultMessage={agent.title}
                 onConfirm={(m) => run("ship", m)}
               />
-            ) : (
-              <span className="px-2 text-meta text-steel">Not in a worktree</span>
-            )}
+            ) : null}
             {agent.branch && (
               <Button size="xs" variant="ghost" className={quiet} onClick={() => setReviewAgent(agent.id, null, "pr")}>
                 <GitPullRequest /> Open PR
@@ -488,7 +499,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
                   ? `Done in ${formatDuration(item.durationMs)}`
                   : "Done"}
             {hasFiles && !shipped && (
-              <span className="font-normal text-steel">· {pluralize(item.files.length, "file")} changed</span>
+              <span className="font-normal text-steel">· {pluralize(ownFiles.length, "file")} changed</span>
             )}
           </span>
         </Tooltip>
@@ -537,7 +548,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
               )}
             </li>
           ))}
-          {(hiddenFiles > 0 || (allFiles && item.files.length > FILES_SHOWN)) && (
+          {(hiddenFiles > 0 || (allFiles && ownFiles.length > FILES_SHOWN)) && (
             <li className="inline-flex">
               <button
                 type="button"
@@ -552,6 +563,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
           )}
         </ul>
       )}
+      {outsideNote}
 
       {shipState?.kind === "shipped" && (
         <div className="mt-2.5">
@@ -630,9 +642,7 @@ export const TurnSummaryCard = memo(function TurnSummaryCard({
               defaultMessage={agent.title}
               onConfirm={(m) => run("ship", m)}
             />
-          ) : (
-            <span className="px-1.5 text-meta text-steel">Not in a worktree</span>
-          ))}
+          ) : null)}
         {hasFiles && agent.branch && (
           <Button size="sm" variant="ghost" onClick={() => setReviewAgent(agent.id, null, "pr")}>
             <GitPullRequest /> Open PR

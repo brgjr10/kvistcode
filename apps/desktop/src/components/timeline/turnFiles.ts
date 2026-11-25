@@ -50,3 +50,29 @@ export function turnFileStats(
   }
   return stats;
 }
+
+const isAbsolute = (p: string) => p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith("\\\\");
+// Windows paths (a drive letter or \\server) ignore case: C:\Repo and c:\repo are one folder.
+const norm = (p: string) => {
+  const n = p.replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:\//.test(n) || n.startsWith("//") ? n.toLowerCase() : n;
+};
+
+/**
+ * A turn's changed files split into the agent's own (inside its folder or project; a relative path
+ * is inside) and the rest. A sub-agent working in another checkout reports its edits here too, and
+ * those must not get Revert or Commit buttons, or count as this agent's change.
+ */
+export function splitOwnFiles(
+  files: readonly string[],
+  roots: readonly (string | null | undefined)[],
+): { own: string[]; outside: string[] } {
+  const dirs = roots.filter((r): r is string => !!r).map((r) => `${norm(r)}/`);
+  const own: string[] = [];
+  const outside: string[] = [];
+  for (const f of files) {
+    if (!isAbsolute(f) || dirs.length === 0) own.push(f);
+    else (dirs.some((d) => `${norm(f)}/`.startsWith(d)) ? own : outside).push(f);
+  }
+  return { own, outside };
+}

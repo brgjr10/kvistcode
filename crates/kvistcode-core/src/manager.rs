@@ -1016,8 +1016,14 @@ impl Core {
         let mut current = self.inner.settings.lock();
         self.inner.db.put_settings(&settings)?;
         let helpers_changed = helper_settings_differ(&current, &settings);
+        let orphans = orphaned_registry_dirs(
+            &self.inner.data_dir,
+            &current.custom_agents,
+            &settings.custom_agents,
+        );
         *current = settings.clone();
         drop(current);
+        remove_dirs_later(orphans);
         if helpers_changed {
             self.refresh_live_subagents();
         }
@@ -1034,8 +1040,14 @@ impl Core {
         next.validate().map_err(|e| anyhow!(e))?;
         self.inner.db.put_settings(&next)?;
         let helpers_changed = helper_settings_differ(&current, &next);
+        let orphans = orphaned_registry_dirs(
+            &self.inner.data_dir,
+            &current.custom_agents,
+            &next.custom_agents,
+        );
         *current = next.clone();
         drop(current);
+        remove_dirs_later(orphans);
         if helpers_changed {
             self.refresh_live_subagents();
         }
@@ -1585,10 +1597,7 @@ impl Core {
             &agent.id[..8.min(agent.id.len())]
         );
         let resume = agent.session_id.as_deref();
-        let auto_mode = match agent.permission_mode.as_deref() {
-            Some(mode) => mode == "auto",
-            None => self.inner.settings.lock().default_permission_mode == "auto",
-        };
+        let auto_mode = self.runs_without_asking(&agent);
 
         // Skills switched off in Skills settings reach Claude when it starts (a running
         // agent keeps the skills it started with).
@@ -1953,6 +1962,14 @@ impl Core {
             }
         })?;
         Ok(s.config_defaults)
+    }
+
+    /// Whether the agent was started with "Run without asking".
+    pub(crate) fn runs_without_asking(&self, agent: &Agent) -> bool {
+        match agent.permission_mode.as_deref() {
+            Some(mode) => mode == "auto",
+            None => self.inner.settings.lock().default_permission_mode == "auto",
+        }
     }
 
     /// Switches the agent's permission mode to its "Auto" choice, if it has one.
@@ -4307,10 +4324,12 @@ impl Core {
     }
 
     /// Loads an image an agent referenced (e.g. a screenshot it saved) so the UI can
-    /// show the picture. Readable: image files inside the agent's folders, and images
-    /// in the system temp dir that the agent's own timeline mentions (by path or file
-    /// name), not anything else that happens to be in temp. Paths are canonicalized
-    /// so `..`/symlinks can't escape. Accepts plain paths and `file://` URIs.
+    /// show the picture. Readable: image files inside the agent's folders, images in the
+    /// system temp dir that the agent's own timeline mentions (by path or file name), and
+    /// images elsewhere on this computer whose full path the timeline mentions (agents
+    /// often keep scratch files in a private temp folder such as `~/.cache/...`). Never
+    /// anything else, so the phone or UI can't ask for arbitrary files. Paths are
+    /// canonicalized so `..`/symlinks can't escape. Accepts plain paths and `file://` URIs.
     pub fn read_image(&self, agent_id: &str, path: &str) -> Result<Attachment> {
         let agent = self.agent(agent_id)?;
         let input = path.trim();
@@ -4319,7 +4338,8 @@ impl Core {
         if crate::files::is_network_path(&requested.to_string_lossy()) {
             bail!("Kvistcode doesn't load images from other computers: {input}");
         }
-        let full = if requested.is_absolute() {
+        let absolute = requested.is_absolute();
+        let full = if absolute {
             requested
         } else {
             PathBuf::from(&agent.cwd).join(requested)
@@ -4335,32 +4355,26 @@ impl Core {
             let in_temp = std::env::temp_dir()
                 .canonicalize()
                 .is_ok_and(|t| real.starts_with(t));
-            if !in_temp || !self.timeline_mentions(agent_id, input, &real) {
-                bail!("Kvistcode only shows images from the agent's project, or temporary images the agent referred to");
+            let allowed = outside_image_allowed(in_temp, absolute, input, &real, |needle| {
+                self.timeline_contains(agent_id, needle)
+            });
+            if !allowed {
+                bail!("Kvistcode only shows images from the agent's project, or images the agent referred to by their full path");
             }
         }
         crate::files::read_image_file(&real)
     }
 
-    /// Whether the agent's stored timeline mentions `input` or the file's name.
-    fn timeline_mentions(&self, agent_id: &str, input: &str, real: &Path) -> bool {
+    /// Whether the agent's stored timeline contains `needle` (as written; items are JSON,
+    /// so it is matched in its JSON-escaped spelling).
+    fn timeline_contains(&self, agent_id: &str, needle: &str) -> bool {
         self.flush_ctx(agent_id);
-        // Items are stored as JSON, so look for the JSON-escaped spelling.
-        let escaped = |s: &str| {
-            let quoted = serde_json::to_string(s).unwrap_or_default();
-            quoted[1..quoted.len().saturating_sub(1).max(1)].to_string()
-        };
-        let mut needles = vec![escaped(input)];
-        if let Some(name) = real.file_name().map(|n| n.to_string_lossy().into_owned()) {
-            needles.push(escaped(&name));
-            needles.push(escaped(&crate::files::percent_encode(&name)));
-        }
-        needles.iter().any(|needle| {
-            self.inner
-                .db
-                .items_contain(agent_id, needle)
-                .unwrap_or(false)
-        })
+        let quoted = serde_json::to_string(needle).unwrap_or_default();
+        let escaped = &quoted[1..quoted.len().saturating_sub(1).max(1)];
+        self.inner
+            .db
+            .items_contain(agent_id, escaped)
+            .unwrap_or(false)
     }
 
     /// Records a provider-reported usage snapshot on `account_id`.
@@ -4688,6 +4702,108 @@ fn same_folder_text(a: &str, b: &str, windows: bool) -> bool {
     clean(a) == clean(b)
 }
 
+/// Whether an image outside the agent's folders may be shown. In the temp dir the agent
+/// only has to have mentioned the path or the file name; anywhere else it must have written
+/// the image's full path (as given, or the resolved one), and a relative path never counts.
+fn outside_image_allowed(
+    in_temp: bool,
+    absolute: bool,
+    input: &str,
+    real: &Path,
+    mentions: impl Fn(&str) -> bool,
+) -> bool {
+    let real_text = real.to_string_lossy();
+    let full_path = (absolute && mentions(input)) || mentions(&real_text);
+    if !in_temp {
+        return full_path;
+    }
+    full_path
+        || mentions(input)
+        || real.file_name().is_some_and(|n| {
+            let name = n.to_string_lossy();
+            mentions(&name) || mentions(&crate::files::percent_encode(&name))
+        })
+}
+
+#[cfg(test)]
+mod outside_image_tests {
+    use super::outside_image_allowed;
+    use std::path::Path;
+
+    fn said(text: &'static str) -> impl Fn(&str) -> bool {
+        move |needle: &str| text.contains(needle)
+    }
+
+    #[test]
+    fn outside_temp_needs_the_full_path() {
+        let real = Path::new("/home/u/.cache/scratch/shot.png");
+        let reply = "![Shot](/home/u/.cache/scratch/shot.png)";
+        assert!(outside_image_allowed(
+            false,
+            true,
+            "/home/u/.cache/scratch/shot.png",
+            real,
+            said(reply)
+        ));
+        // Only the file name was mentioned: not enough outside temp.
+        assert!(!outside_image_allowed(
+            false,
+            true,
+            "/home/u/.cache/scratch/shot.png",
+            real,
+            said("see shot.png")
+        ));
+        // Asked for by a path the agent never wrote.
+        assert!(!outside_image_allowed(
+            false,
+            true,
+            "/home/u/Pictures/me.png",
+            Path::new("/home/u/Pictures/me.png"),
+            said(reply)
+        ));
+        // A relative path that walked out of the project, even if the agent wrote it.
+        assert!(!outside_image_allowed(
+            false,
+            false,
+            "../x.png",
+            Path::new("/home/u/x.png"),
+            said("../x.png")
+        ));
+    }
+
+    #[test]
+    fn resolved_path_counts_too() {
+        // The agent wrote the real path; the UI asked through a symlinked spelling.
+        let real = Path::new("/home/u/.cache/a.png");
+        assert!(outside_image_allowed(
+            false,
+            true,
+            "/home/link/a.png",
+            real,
+            said("/home/u/.cache/a.png")
+        ));
+    }
+
+    #[test]
+    fn temp_still_accepts_a_mentioned_file_name() {
+        let real = Path::new("/tmp/chart.png");
+        assert!(outside_image_allowed(
+            true,
+            true,
+            "/tmp/chart.png",
+            real,
+            said("saved chart.png")
+        ));
+        assert!(!outside_image_allowed(
+            true,
+            true,
+            "/tmp/other.png",
+            Path::new("/tmp/other.png"),
+            said("saved chart.png")
+        ));
+    }
+}
+
 #[cfg(test)]
 mod same_folder_tests {
     use super::same_folder_text;
@@ -4698,5 +4814,76 @@ mod same_folder_tests {
         assert!(!same_folder_text("/work/App", "/work/app", false));
         assert!(same_folder_text("C:/Work/App\\", "c:\\work\\app", true));
         assert!(!same_folder_text("/work/app", "/work/other", true));
+    }
+}
+
+/// Folders of ACP Registry downloads (`<data>/tools/acp/<id>`) that a removed custom agent ran
+/// from and no remaining one does.
+fn orphaned_registry_dirs(
+    data_dir: &Path,
+    old: &[crate::model::CustomAgent],
+    new: &[crate::model::CustomAgent],
+) -> Vec<PathBuf> {
+    let root = crate::toolchain::tools_dir(data_dir).join("acp");
+    let dir_of = |a: &crate::model::CustomAgent| {
+        let rest = Path::new(&a.command).strip_prefix(&root).ok()?;
+        match rest.components().next()? {
+            std::path::Component::Normal(name) => Some(root.join(name)),
+            _ => None,
+        }
+    };
+    let kept: HashSet<PathBuf> = new.iter().filter_map(dir_of).collect();
+    let mut gone: Vec<PathBuf> = old
+        .iter()
+        .filter_map(dir_of)
+        .filter(|d| !kept.contains(d))
+        .collect();
+    gone.sort();
+    gone.dedup();
+    gone
+}
+
+/// Deletes the folders off the caller's thread (best effort: a running copy on Windows stays).
+fn remove_dirs_later(dirs: Vec<PathBuf>) {
+    if dirs.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for d in dirs {
+            if let Err(e) = std::fs::remove_dir_all(&d) {
+                tracing::warn!("couldn't delete {}: {e}", d.display());
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod registry_cleanup_tests {
+    use super::orphaned_registry_dirs;
+    use crate::model::CustomAgent;
+
+    fn agent(command: String) -> CustomAgent {
+        serde_json::from_value(serde_json::json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "name": "x",
+            "command": command,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn only_downloads_no_agent_uses_any_more() {
+        let data = std::path::PathBuf::from("/data");
+        let acp = crate::toolchain::tools_dir(&data).join("acp");
+        let a = agent(acp.join("kiro/bin/kiro").to_string_lossy().into_owned());
+        let b = agent(acp.join("junie/junie").to_string_lossy().into_owned());
+        let b2 = agent(acp.join("junie/junie").to_string_lossy().into_owned());
+        let npx = agent("npx".into());
+        let old = vec![a, b, b2.clone(), npx.clone()];
+        assert_eq!(
+            orphaned_registry_dirs(&data, &old, &[b2, npx]),
+            vec![acp.join("kiro")]
+        );
+        assert!(orphaned_registry_dirs(&data, &old, &old).is_empty());
     }
 }

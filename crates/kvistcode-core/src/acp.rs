@@ -1138,8 +1138,11 @@ impl AcpDriver {
             return Some(json!({ "outcome": { "outcome": "cancelled" } }));
         }
         let plan = crate::plan_approval::plan_from_tool_call(tc);
-        // A plan to approve always waits for the user.
-        if plan.is_none() && self.ctx.answers_permissions_itself() {
+        // A plan to approve always waits for the user, even one that came without its text.
+        if plan.is_none()
+            && !crate::plan_approval::is_plan_approval_call(tc)
+            && self.ctx.answers_permissions_itself()
+        {
             if let Some(allow) = crate::session::auto_allow_option(&options) {
                 return Some(json!({ "outcome": { "outcome": "selected", "optionId": allow } }));
             }

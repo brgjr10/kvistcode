@@ -55,12 +55,12 @@ export function costIsEquivalent(agent: Agent, accounts: readonly Account[]): bo
 }
 
 /**
- * Whether this agent reports a cost at all. Local models never do; a custom agent may or may not,
+ * Whether this agent reports a cost at all. Local models never do and Codex sends none; a custom agent may or may not,
  * and until it has shown one there is nothing to measure a cost limit against.
  */
 export function reportsCost(agent: Agent): boolean {
   if (agent.provider === "local") return false;
-  if (agent.provider === "custom") return agent.costUsd > 0;
+  if (agent.provider === "custom" || agent.provider === "codex") return agent.costUsd > 0;
   return true;
 }
 

@@ -597,7 +597,7 @@ async fn custom_agents_attachments_and_files() {
         model: None,
         group_id: None,
         custom_agent_id: custom.map(str::to_string),
-        permission_mode: None,
+        permission_mode: Some("ask".into()),
         attachments,
         config_choices: Default::default(),
     };
@@ -1130,7 +1130,7 @@ async fn agents_are_told_how_to_write_their_replies() {
                 model: None,
                 group_id: None,
                 custom_agent_id: Some("mock".into()),
-                permission_mode: None,
+                permission_mode: Some("ask".into()),
                 attachments: vec![],
                 config_choices: Default::default(),
             })
@@ -1238,7 +1238,7 @@ async fn agents_are_told_they_can_show_pictures() {
                 model: None,
                 group_id: None,
                 custom_agent_id: Some("mock".into()),
-                permission_mode: None,
+                permission_mode: Some("ask".into()),
                 attachments: vec![],
                 config_choices: Default::default(),
             })

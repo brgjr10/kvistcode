@@ -323,12 +323,35 @@ impl AgentCtx {
     /// The agent is in a mode the user picked as "Run without asking" but whose agent still
     /// asks for some actions (Antigravity's "auto"), so Kvistcode answers those for the user.
     pub fn answers_permissions_itself(&self) -> bool {
-        self.agent_snapshot().is_some_and(|a| {
-            a.provider == crate::model::Provider::Gemini
-                && a.config_options
-                    .iter()
-                    .any(|o| o.id == "mode" && matches!(o.current_value.as_str(), "auto" | "yolo"))
-        })
+        use crate::model::Provider;
+        let Some(core) = self.core.upgrade() else {
+            return false;
+        };
+        let Ok(a) = core.agent(&self.agent_id) else {
+            return false;
+        };
+        match a.provider {
+            Provider::Gemini => a
+                .config_options
+                .iter()
+                .any(|o| o.id == "mode" && matches!(o.current_value.as_str(), "auto" | "yolo")),
+            // These CLIs have no mode of their own for this (or only an optional "auto"), so
+            // Kvistcode answers for the user. Leaving a native "auto" mode means they want asking.
+            Provider::Opencode | Provider::Cursor | Provider::Custom => {
+                core.runs_without_asking(&a)
+                    && a.config_options
+                        .iter()
+                        .filter(|o| o.id == "mode" || o.category.as_deref() == Some("mode"))
+                        .all(|o| {
+                            o.current_value.eq_ignore_ascii_case("auto")
+                                || !o
+                                    .options
+                                    .iter()
+                                    .any(|c| c.value.eq_ignore_ascii_case("auto"))
+                        })
+            }
+            _ => false,
+        }
     }
 
     fn agent_snapshot(&self) -> Option<Agent> {

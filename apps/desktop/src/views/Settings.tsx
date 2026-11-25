@@ -76,6 +76,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { checkForUpdates, copyDiagnostics, saveDiagnosticsFile } from "@/lib/actions";
 import { useGuardedInstall } from "@/components/settings/useGuardedInstall";
+import { ShortcutsEditor } from "@/components/settings/ShortcutsEditor";
 import { HotkeyRecorder } from "@/components/settings/HotkeyRecorder";
 import { acceleratorCaps } from "@/components/settings/acceleratorLabels";
 import { useCommitOnUnmount } from "@/components/settings/useCommitOnUnmount";
@@ -1207,16 +1208,7 @@ function KeyboardPage({ settings }: { settings: Settings }) {
               </Button>
             }
           >
-            {SHORTCUTS.map((s) => (
-              <div key={s.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                <span className="min-w-0 text-body text-muted">{s.label}</span>
-                <span className="flex shrink-0 gap-1">
-                  {s.keys.map((k) => (
-                    <Kbd key={k}>{k}</Kbd>
-                  ))}
-                </span>
-              </div>
-            ))}
+            <ShortcutsEditor settings={settings} />
           </SettingGroup>
         </Spot>
       </div>
@@ -1404,19 +1396,6 @@ function Providers() {
 }
 
 // ---------------------------------------------------------------- About
-
-const SHORTCUTS: { keys: string[]; label: string }[] = [
-  { keys: [modKey, "K"], label: "Command palette" },
-  { keys: [modKey, "N"], label: "New agent" },
-  { keys: [modKey, "⇧", "F"], label: "Search every conversation" },
-  { keys: [modKey, "F"], label: "Find in this conversation" },
-  { keys: [modKey, "1–9"], label: "Jump to agent" },
-  { keys: [modKey, "J"], label: "Needs you" },
-  { keys: [modKey, "⇧", "M"], label: "Mission Control: All agents" },
-  { keys: [modKey, ","], label: "Settings" },
-  { keys: [modKey, "/"], label: "All shortcuts" },
-  { keys: ["Esc"], label: "Close / cancel turn" },
-];
 
 /** Kvistcode's own updates: what's available, a manual check, and the automatic one. */
 function UpdatesGroup({ settings }: { settings: Settings }) {

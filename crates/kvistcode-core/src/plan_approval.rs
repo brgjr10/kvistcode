@@ -26,9 +26,11 @@ const PLAN_APPROVAL_TOOLS: &[&str] = &[
     "approveplan",
     "request_plan_approval",
     "plan_approval",
+    // OpenCode's switch from its plan agent to its build agent.
+    "plan_exit",
 ];
 
-fn is_plan_approval_call(tool_call: &Value) -> bool {
+pub fn is_plan_approval_call(tool_call: &Value) -> bool {
     let kind = tool_call["kind"].as_str();
     if kind == Some("switch_mode") {
         return true;

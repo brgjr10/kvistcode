@@ -5,6 +5,21 @@ and the notes shown by the in-app updater, so write for people using the app.
 `scripts/release_notes.py` refuses to cut a release whose section is missing or empty (see
 docs/RELEASING.md).
 
+## v0.8.1 — 2026-11-25
+
+Add agents from the ACP Registry, more presets, a smarter message box, keyboard shortcuts you can change, and Codex, OpenCode and Cursor catching up with Claude.
+
+- ACP Registry: Settings → Providers → Add agent can now browse the official ACP Registry and add an agent in one click, after a clear warning that it runs on your computer. Downloads are checksum-verified.
+- New presets for Kiro CLI, Qwen Code, GitHub Copilot CLI, Kilo, Cline, Auggie and Amp. OpenCode is no longer a preset because it is built in.
+- Message box: press Up in an empty box to bring back what you sent before, like a shell. Huge pastes become a chip you can remove or turn back into text. Quote any agent reply into your message.
+- Keyboard shortcuts can be changed or unassigned in Settings → Keyboard. Kvistcode refuses a key that would clash with another action or stop you typing.
+- Codex and Local agents now have a slash menu with /compact and your skills, and auto-compact works for them too. Cost limits no longer pretend to measure Codex when it reports no cost.
+- "Run without asking" now works for OpenCode, Cursor and custom agents: Kvistcode approves their permission requests itself and still waits for plans and questions.
+- Auto-review can pick OpenCode or Cursor as the reviewer, and the Local MCP server lists them too. The Add account dialog now says that OpenCode and Cursor share one login per computer (a Cursor API key stays separate).
+- Pictures an agent saved outside its project now show when the agent gives their full path.
+- The turn card no longer lists files a sub-agent changed in another checkout as this agent's changes, with Revert and Commit buttons; they get a quiet note instead.
+- "Waiting on sub-agents" and the sub-agent strip now show the same elapsed time, and the stray "Not in a worktree" label next to the buttons is gone.
+
 ## v0.8.0 — 2026-11-24
 
 A big one: two new agents, a project board, event triggers, automatic cross-agent review, sandboxing, and a lot more control over each turn.

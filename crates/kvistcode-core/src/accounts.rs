@@ -95,6 +95,9 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
             Provider::Codex | Provider::Local => Some("CODEX_HOME"),
             Provider::Grok => Some("GROK_HOME"),
             Provider::Gemini => Some("KVISTCODE_GEMINI_PROFILE"),
+            // No login directory of their own: OpenCode keeps auth.json under XDG_DATA_HOME and
+            // Cursor under XDG_CONFIG_HOME (or ~/.cursor, %APPDATA%), and moving those would also
+            // move every other tool the agent runs. A Cursor API key is isolated (below).
             Provider::Custom | Provider::Opencode | Provider::Cursor => None,
             Provider::Kilo => None,
             Provider::Nvidia => Some("CODEX_HOME"),

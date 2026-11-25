@@ -114,6 +114,8 @@ pub struct CodexDriver {
     /// re-parented once the collaborator call naming that thread shows up.
     orphans: Mutex<HashMap<String, Vec<String>>>,
     approval_policy: Mutex<String>,
+    /// Skill name → path, from `skills/list`; typing `/name` in the composer runs it.
+    skills: Mutex<HashMap<String, String>>,
     attachments_dir: std::path::PathBuf,
     model: Mutex<Option<String>>,
     local_models: Option<Vec<LocalModel>>,
@@ -308,6 +310,7 @@ impl CodexDriver {
                     .unwrap_or(opts.approval_policy)
                     .to_string(),
             ),
+            skills: Mutex::default(),
             attachments_dir: opts.attachments_dir.to_path_buf(),
             model: Mutex::new(resp["model"].as_str().map(str::to_string)),
             local_models: opts.local_models.map(<[LocalModel]>::to_vec),
@@ -324,6 +327,7 @@ impl CodexDriver {
             generation,
         ));
         driver.publish_config().await;
+        driver.publish_commands(opts.cwd.to_path_buf());
         ctx.set_steerable(true);
         // Fetch current account rate-limit windows right away (best effort, non-blocking) so
         // Codex accounts show their limits as soon as an agent starts.
@@ -451,6 +455,36 @@ impl CodexDriver {
         self.ctx.set_config_options(options);
     }
 
+    /// The slash menu: `/compact` plus the skills Codex lists for this project. Other
+    /// Codex commands are terminal-only and have no app-server method.
+    fn publish_commands(self: &Arc<Self>, cwd: std::path::PathBuf) {
+        let mut commands = vec![SlashCommand {
+            name: "compact".into(),
+            description: Some("Summarize the conversation to free up context".into()),
+            hint: None,
+        }];
+        self.ctx.set_commands(commands.clone());
+        // Skills arrive when Codex answers; an old Codex may never.
+        let d = self.clone();
+        tokio::spawn(async move {
+            let Ok(listed) = d
+                .peer
+                .request_timeout(
+                    "skills/list",
+                    json!({ "cwds": [cwd.to_string_lossy()] }),
+                    Some(Duration::from_secs(20)),
+                )
+                .await
+            else {
+                return;
+            };
+            let (skill_commands, paths) = skills_from_list(Some(&listed));
+            commands.extend(skill_commands);
+            *d.skills.lock() = paths;
+            d.ctx.set_commands(commands);
+        });
+    }
+
     /// Starts a turn. The turn ends with a `turn/completed` notification.
     pub fn prompt(self: &Arc<Self>, prompt: Prompt) {
         let me = self.clone();
@@ -494,12 +528,30 @@ impl CodexDriver {
         }
         self.peer.mark_turn();
         let mark = self.peer.stderr_mark();
-        let preamble = self.ctx.take_preamble();
-        let body = match &preamble {
-            Some(pre) => format!("{pre}\n\n---\n\n{}", prompt.text),
-            None => prompt.text.clone(),
+        let compact = is_compact(&prompt.text);
+        // `/compact` sends no text, so a pending briefing waits for the next real turn.
+        let preamble = if compact {
+            None
+        } else {
+            self.ctx.take_preamble()
         };
-        let input = self.input(body, &prompt.attachments).await;
+        let skill = if compact {
+            None
+        } else {
+            skill_call(&prompt.text, &self.skills.lock())
+        };
+        let text = skill.as_ref().map_or(&prompt.text, |s| &s.text);
+        let body = match &preamble {
+            Some(pre) => format!("{pre}\n\n---\n\n{text}"),
+            None => text.clone(),
+        };
+        let mut input = self.input(body, &prompt.attachments).await;
+        if let Some(s) = &skill {
+            input.insert(
+                1,
+                json!({ "type": "skill", "name": s.name, "path": s.path }),
+            );
+        }
         let mut params = json!({
             "threadId": self.thread_id,
             "input": input,
@@ -511,7 +563,18 @@ impl CodexDriver {
         if let Some(e) = self.effort.lock().clone() {
             params["effort"] = json!(e);
         }
-        match self.peer.request("turn/start", params).await {
+        // `/compact` is its own call; Codex then runs it as a turn of its own.
+        let started = if compact {
+            self.peer
+                .request(
+                    "thread/compact/start",
+                    json!({ "threadId": self.thread_id }),
+                )
+                .await
+        } else {
+            self.peer.request("turn/start", params).await
+        };
+        match started {
             Ok(v) => {
                 let id = v["turn"]["id"].as_str().map(str::to_string);
                 let finished = id.is_some() && *self.completed_turn.lock() == id;
@@ -1536,7 +1599,56 @@ async fn event_loop(
     }
 }
 
-/// Config overrides for a Codex thread: Kvistcode's MCP servers under `mcp_servers`.
+/// `/compact`, alone or with trailing words (Codex's compaction takes no arguments).
+fn is_compact(text: &str) -> bool {
+    text.split_whitespace().next() == Some("/compact")
+}
+
+/// A turn that names a skill: the skill's name and path, and the text with `/name` turned
+/// into the `$name` Codex reads.
+struct SkillCall {
+    name: String,
+    path: String,
+    text: String,
+}
+
+fn skill_call(text: &str, skills: &HashMap<String, String>) -> Option<SkillCall> {
+    let t = text.trim_start();
+    let word = t.strip_prefix('/')?.split_whitespace().next()?;
+    let path = skills.get(word)?;
+    Some(SkillCall {
+        name: word.to_string(),
+        path: path.clone(),
+        text: format!("${word}{}", &t[1 + word.len()..]),
+    })
+}
+
+/// The enabled skills in a `skills/list` reply, as slash commands and name → path.
+fn skills_from_list(v: Option<&Value>) -> (Vec<SlashCommand>, HashMap<String, String>) {
+    let mut commands = Vec::new();
+    let mut paths = HashMap::new();
+    let entries = v.and_then(|v| v["data"].as_array()).into_iter().flatten();
+    for skill in entries.flat_map(|e| e["skills"].as_array().into_iter().flatten()) {
+        let (Some(name), Some(path)) = (skill["name"].as_str(), skill["path"].as_str()) else {
+            continue;
+        };
+        if !skill["enabled"].as_bool().unwrap_or(true) || name == "compact" {
+            continue;
+        }
+        if paths.insert(name.to_string(), path.to_string()).is_none() {
+            commands.push(SlashCommand {
+                name: name.to_string(),
+                description: skill["shortDescription"]
+                    .as_str()
+                    .or_else(|| skill["description"].as_str())
+                    .map(str::to_string),
+                hint: None,
+            });
+        }
+    }
+    (commands, paths)
+}
+
 /// "30.5B · Q4_K_M · 256k context" for the model picker.
 fn local_model_blurb(m: &LocalModel) -> Option<String> {
     let mut parts: Vec<String> = Vec::new();
@@ -2039,6 +2151,30 @@ mod subagent_state_tests {
         assert_eq!(known_turn(known.clone(), None), known);
         assert_eq!(known_turn(known, Some("t2")), Some("t2".to_string()));
         assert_eq!(known_turn(None, None), None);
+    }
+
+    #[test]
+    fn compact_and_skill_commands() {
+        assert!(is_compact("/compact"));
+        assert!(is_compact("  /compact  now"));
+        assert!(!is_compact("/compactor"));
+        assert!(!is_compact("please /compact"));
+        let listed = json!({ "data": [
+            { "cwd": "/p", "errors": [], "skills": [
+                { "name": "deploy", "path": "/s/deploy/SKILL.md", "enabled": true, "description": "long", "shortDescription": "Ship it" },
+                { "name": "off", "path": "/s/off/SKILL.md", "enabled": false, "description": "x" },
+                { "name": "compact", "path": "/s/c/SKILL.md", "enabled": true, "description": "x" } ] } ] });
+        let (commands, paths) = skills_from_list(Some(&listed));
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].description.as_deref(), Some("Ship it"));
+        let c = skill_call("/deploy to prod", &paths).unwrap();
+        assert_eq!(
+            (c.name.as_str(), c.text.as_str()),
+            ("deploy", "$deploy to prod")
+        );
+        assert!(skill_call("/nope", &paths).is_none());
+        assert!(skill_call("deploy", &paths).is_none());
+        assert!(skills_from_list(None).0.is_empty());
     }
 
     #[test]

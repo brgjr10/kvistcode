@@ -37,6 +37,7 @@ import type {
   MergeMethod,
   CreateAgentRequest,
   CustomAgent,
+  RegistryAgent,
   LocalKind,
   LocalProbe,
   McpServer,
@@ -507,6 +508,10 @@ const tauriApi = {
   // custom agents
   /** Spawns the agent and runs the ACP handshake; resolves to e.g. "Gemini CLI 0.52.0 (ACP v1)". */
   testCustomAgent: (agent: CustomAgent) => invoke<string>("test_custom_agent", { agent }),
+  /** The agents in the official ACP Registry, fetched now (rejects with a short reason when offline). */
+  acpRegistryList: () => invoke<RegistryAgent[]>("acp_registry_list"),
+  /** Sets up one registry agent (Node.js or a checksum-verified download); resolves to the agent to save. */
+  acpRegistryPrepare: (id: string, version: string) => invoke<CustomAgent>("acp_registry_prepare", { id, version }),
   /** Starts the MCP server and lists its tools; resolves to e.g. "filesystem 1.2.0 · 12 tools". */
   testMcpServer: (server: McpServer) => invoke<string>("test_mcp_server", { server }),
   /** Git repositories under the home folder, newest first. */

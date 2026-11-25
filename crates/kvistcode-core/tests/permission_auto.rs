@@ -147,3 +147,22 @@ async fn codex_auto_answers_approvals_itself() {
     );
     assert!(text.contains(r#""scope": "turn""#), "{text}");
 }
+
+/// OpenCode and Cursor (and Custom agents) have no "auto" mode here: Kvistcode answers.
+#[tokio::test]
+async fn opencode_and_cursor_without_an_auto_mode_answer_approvals_itself() {
+    let mock = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/mock_acp.py");
+    for (var, provider, name) in [
+        ("KVISTCODE_OPENCODE_COMMAND", Provider::Opencode, "opencode"),
+        ("KVISTCODE_CURSOR_COMMAND", Provider::Cursor, "cursor"),
+    ] {
+        std::env::set_var(var, format!("env MOCK_ACP_NO_AUTO=1 python3 {mock}"));
+        let (cards, items) = run_auto(provider, name).await;
+        assert!(cards.is_empty(), "{name}: approval shown: {cards:?}");
+        let ran = items.iter().any(|i| {
+            matches!(&i.body, ItemBody::ToolCall { title, status, .. }
+                if title == "Run ls" && matches!(status, ToolStatus::Completed))
+        });
+        assert!(ran, "{name}: the allowed command didn't complete");
+    }
+}

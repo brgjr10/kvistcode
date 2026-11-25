@@ -643,6 +643,8 @@ export interface Settings {
   defaultWorktree: boolean;
   launchAtLogin: boolean;
   globalHotkey: string; // e.g. "CmdOrCtrl+Shift+Space"
+  /** In-app shortcuts the user changed, by action id ("" = none). Missing ones keep their default. */
+  shortcuts: Record<string, string>;
   escalateAfterMins: number; // re-ping pending approvals; 0 = off
   ntfyUrl: string | null; // optional phone push, e.g. https://ntfy.sh/my-topic
   ntfyDetail: "minimal" | "full"; // what a phone push says: generic text, or the agent's own (scrubbed) text
@@ -848,6 +850,26 @@ export interface CustomAgent {
   env: KeyValue[];
   color: string;
   enabled: boolean;
+}
+
+/** One agent in the official ACP Registry (https://github.com/agentclientprotocol/registry). */
+export interface RegistryAgent {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  icon: string | null;
+  website: string | null;
+  repository: string | null;
+  license: string | null;
+  /** "npx", "uvx" or "binary"; empty when it can't be added. */
+  kind: string;
+  /** What will run on the computer, in plain text. */
+  runs: string;
+  /** Where the code comes from (npm package, PyPI package or download host). */
+  source: string;
+  /** Why it can't be added here, when it can't. */
+  unsupported: string | null;
 }
 
 /**
