@@ -65,7 +65,10 @@ fn pick_store() -> Box<dyn SecretStore> {
     {
         // Integration tests link the library without `cfg(test)`: this switch keeps
         // them off the real keychain (it would pop up "create a new keyring").
-        if std::env::var_os("KVISTCODE_SECRETS").is_some_and(|v| v == "memory") {
+        // The desktop crate's tests turn on `memory-secrets` for the same reason.
+        if cfg!(feature = "memory-secrets")
+            || std::env::var_os("KVISTCODE_SECRETS").is_some_and(|v| v == "memory")
+        {
             Box::new(Memory::default())
         } else {
             Box::new(Keyring)

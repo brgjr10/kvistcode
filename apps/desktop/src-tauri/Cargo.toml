@@ -86,3 +86,5 @@ notify-rust = "4"
 [dev-dependencies]
 # `tauri::test` (mock runtime) for the IPC smoke test in src/lib.rs.
 tauri = { version = "2", features = ["test"] }
+# Desktop tests link the core without `cfg(test)`: keep them off the real OS keychain.
+kvistcode-core = { workspace = true, features = ["memory-secrets"] }

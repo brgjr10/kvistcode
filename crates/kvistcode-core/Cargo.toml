@@ -35,3 +35,8 @@ libc = "0.2"
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+[features]
+# Tests of crates that depend on this one (the desktop shell) keep secrets in memory, never in
+# the real OS keychain. Enabled only through dev-dependencies, so app builds never have it.
+memory-secrets = []
