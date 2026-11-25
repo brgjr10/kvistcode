@@ -308,7 +308,21 @@ fn binary_launch(dist: &Value, platform: Option<&str>) -> std::result::Result<La
     })
 }
 
+/// What the confirm step shows, with any variables the entry sets written before the command
+/// (`KEY=value npx -y …`), so nothing about the launch is hidden.
 fn describe(launch: &Launch) -> (String, String, String) {
+    let (kind, runs, source) = describe_command(launch);
+    let env = match launch {
+        Launch::Npx { env, .. } | Launch::Uvx { env, .. } | Launch::Binary { env, .. } => env,
+    };
+    if env.is_empty() {
+        return (kind, runs, source);
+    }
+    let vars: Vec<String> = env.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    (kind, format!("{} {runs}", vars.join(" ")), source)
+}
+
+fn describe_command(launch: &Launch) -> (String, String, String) {
     let join = |args: &[String]| {
         args.iter()
             .map(String::as_str)
@@ -561,7 +575,10 @@ mod tests {
             false,
         );
         assert_eq!(e.info.kind, "npx");
-        assert_eq!(e.info.runs, "npx -y @qwen-code/qwen-code@0.28.4 --acp");
+        assert_eq!(
+            e.info.runs,
+            "AUTO_UPDATE=0 npx -y @qwen-code/qwen-code@0.28.4 --acp"
+        );
         assert_eq!(
             e.info.icon.as_deref(),
             Some("https://cdn.example.com/q.svg")
@@ -768,5 +785,20 @@ mod env_tests {
             assert!(risky_env(name), "{name}");
         }
         assert!(!risky_env("AGENT_LOG_LEVEL"));
+    }
+}
+
+#[cfg(test)]
+mod describe_tests {
+    use super::{describe, Launch};
+
+    #[test]
+    fn variables_the_entry_sets_are_shown_before_the_command() {
+        let l = Launch::Npx {
+            package: "a@1.0.0".into(),
+            args: vec!["--acp".into()],
+            env: vec![("AGENT_MODE".into(), "acp".into())],
+        };
+        assert_eq!(describe(&l).1, "AGENT_MODE=acp npx -y a@1.0.0 --acp");
     }
 }

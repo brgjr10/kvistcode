@@ -1014,8 +1014,14 @@ impl Core {
         let mut current = self.inner.settings.lock();
         self.inner.db.put_settings(&settings)?;
         let helpers_changed = helper_settings_differ(&current, &settings);
+        let orphans = orphaned_registry_dirs(
+            &self.inner.data_dir,
+            &current.custom_agents,
+            &settings.custom_agents,
+        );
         *current = settings.clone();
         drop(current);
+        remove_dirs_later(orphans);
         if helpers_changed {
             self.refresh_live_subagents();
         }
@@ -1032,8 +1038,14 @@ impl Core {
         next.validate().map_err(|e| anyhow!(e))?;
         self.inner.db.put_settings(&next)?;
         let helpers_changed = helper_settings_differ(&current, &next);
+        let orphans = orphaned_registry_dirs(
+            &self.inner.data_dir,
+            &current.custom_agents,
+            &next.custom_agents,
+        );
         *current = next.clone();
         drop(current);
+        remove_dirs_later(orphans);
         if helpers_changed {
             self.refresh_live_subagents();
         }
@@ -4799,5 +4811,76 @@ mod same_folder_tests {
         assert!(!same_folder_text("/work/App", "/work/app", false));
         assert!(same_folder_text("C:/Work/App\\", "c:\\work\\app", true));
         assert!(!same_folder_text("/work/app", "/work/other", true));
+    }
+}
+
+/// Folders of ACP Registry downloads (`<data>/tools/acp/<id>`) that a removed custom agent ran
+/// from and no remaining one does.
+fn orphaned_registry_dirs(
+    data_dir: &Path,
+    old: &[crate::model::CustomAgent],
+    new: &[crate::model::CustomAgent],
+) -> Vec<PathBuf> {
+    let root = crate::toolchain::tools_dir(data_dir).join("acp");
+    let dir_of = |a: &crate::model::CustomAgent| {
+        let rest = Path::new(&a.command).strip_prefix(&root).ok()?;
+        match rest.components().next()? {
+            std::path::Component::Normal(name) => Some(root.join(name)),
+            _ => None,
+        }
+    };
+    let kept: HashSet<PathBuf> = new.iter().filter_map(dir_of).collect();
+    let mut gone: Vec<PathBuf> = old
+        .iter()
+        .filter_map(dir_of)
+        .filter(|d| !kept.contains(d))
+        .collect();
+    gone.sort();
+    gone.dedup();
+    gone
+}
+
+/// Deletes the folders off the caller's thread (best effort: a running copy on Windows stays).
+fn remove_dirs_later(dirs: Vec<PathBuf>) {
+    if dirs.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for d in dirs {
+            if let Err(e) = std::fs::remove_dir_all(&d) {
+                tracing::warn!("couldn't delete {}: {e}", d.display());
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod registry_cleanup_tests {
+    use super::orphaned_registry_dirs;
+    use crate::model::CustomAgent;
+
+    fn agent(command: String) -> CustomAgent {
+        serde_json::from_value(serde_json::json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "name": "x",
+            "command": command,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn only_downloads_no_agent_uses_any_more() {
+        let data = std::path::PathBuf::from("/data");
+        let acp = crate::toolchain::tools_dir(&data).join("acp");
+        let a = agent(acp.join("kiro/bin/kiro").to_string_lossy().into_owned());
+        let b = agent(acp.join("junie/junie").to_string_lossy().into_owned());
+        let b2 = agent(acp.join("junie/junie").to_string_lossy().into_owned());
+        let npx = agent("npx".into());
+        let old = vec![a, b, b2.clone(), npx.clone()];
+        assert_eq!(
+            orphaned_registry_dirs(&data, &old, &[b2, npx]),
+            vec![acp.join("kiro")]
+        );
+        assert!(orphaned_registry_dirs(&data, &old, &old).is_empty());
     }
 }
