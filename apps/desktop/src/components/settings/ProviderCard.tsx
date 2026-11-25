@@ -1,9 +1,10 @@
-import { CircleAlert, CircleCheck, Download, ExternalLink, RefreshCw } from "lucide-react";
+import { CircleAlert, CircleCheck, Download, ExternalLink, RefreshCw, Globe } from "lucide-react";
 import { CopyButton } from "@/components/CopyButton";
 import { ProviderGlyph } from "@/components/ProviderGlyph";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/misc";
 import { startInstall } from "@/lib/actions";
+import { api } from "@/lib/api";
 import { PROVIDERS } from "@/lib/providers";
 import type { ProviderInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -107,6 +108,19 @@ export function ProviderCard({
             >
               Docs <ExternalLink className="h-3 w-3" />
             </a>
+          )}
+          {!compact && (info.provider === "codex" || info.provider === "claude") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                void (info.provider === "codex"
+                  ? api.openChatgptWebview()
+                  : api.openClaudeWebview())
+              }
+            >
+              <Globe className="h-3.5 w-3.5" /> Open web UI
+            </Button>
           )}
         </div>
       </div>

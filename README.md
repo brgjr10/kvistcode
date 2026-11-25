@@ -311,18 +311,127 @@ The same addresses are listed, with QR codes, at [kvistcode.com/support](https:/
 
 ## Credits
 
-Kvistcode incorporates and adapts the following open-source projects and technologies:
+Kvistcode is built on the shoulders of many excellent open-source projects. Each piece below is listed with its license and a link to its source.
 
-- **Tauri** — desktop application framework for embedding webviews and native system features (MIT-licensed)
-- **React** + **Vite** — the frontend UI framework and build tool (MIT-licensed)
-- **Agent Client Protocol (ACP)** — the agent communication protocol standard, enabling cross-provider agent support (MIT-licensed, https://agentclientprotocol.com)
-- **npm packages:**
-  - `@anthropic-ai/claude-code` — Claude Code CLI (MIT-licensed)
-  - `@openai/codex` — OpenAI Codex CLI (MIT-licensed)
-  - `@xai-official/grok` — Grok Build CLI (MIT-licensed)
-  - `opencode-ai` — OpenCode CLI (MIT-licensed)
-- **Rust crates:** rusqlite (CC0-1.0), keyring, ureq, jiff, zip, base64
-- **Frontend dependencies:** sonner (toast notifications), motion/react (animations), lucide-react (icons)
-- **Whisper.cpp** — on-device speech transcription (MIT-licensed), used by voice dictation
-- **OpenAI Platform** — API references and protocols referenced throughout
-- **Anthropic, Google, xAI, OpenCode, Cursor** — their respective CLIs and protocols are driven natively; Kvistcode never reimplements agent logic
+### Core framework
+
+| Project | License | Link |
+|---------|---------|------|
+| Tauri 2 | MIT / Apache-2.0 | https://tauri.app |
+| React 19 | MIT | https://react.dev |
+| Vite 5 | MIT | https://vite.dev |
+| TypeScript | Apache-2.0 | https://www.typescriptlang.org |
+
+### Agent communication
+
+| Project | License | Link |
+|---------|---------|------|
+| Agent Client Protocol (ACP) | MIT | https://agentclientprotocol.com |
+| @agentclientprotocol/claude-agent-acp | MIT | https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp |
+
+### Provider CLIs (driven natively; Kvistcode never reimplements agent logic)
+
+| Provider | CLI package | License | Link |
+|----------|-------------|---------|------|
+| Anthropic Claude Code | `@anthropic-ai/claude-code` | MIT | https://www.npmjs.com/package/@anthropic-ai/claude-code |
+| OpenAI Codex | `@openai/codex` | MIT | https://www.npmjs.com/package/@openai/codex |
+| xAI Grok Build | `@xai-official/grok` | MIT | https://www.npmjs.com/package/@xai-official/grok |
+| OpenCode | `opencode-ai` | MIT | https://www.npmjs.com/package/opencode-ai |
+| Kilo Code | `kilo` | MIT | https://github.com/Kilo-Org/kilocode |
+| NVIDIA | `nvidia` | MIT | https://github.com/NVIDIA |
+
+### Rust crates (selected key dependencies)
+
+| Crate | License | Link |
+|-------|---------|------|
+| rusqlite | MIT | https://github.com/rusqlite/rusqlite |
+| sqlx | MIT / Apache-2.0 | https://github.com/launchbadge/sqlx |
+| serde | MIT / Apache-2.0 | https://github.com/serde-rs/serde |
+| tokio | MIT | https://github.com/tokio-rs/tokio |
+| tauri (Rust side) | MIT / Apache-2.0 | https://github.com/tauri-apps/tauri |
+| keyring | MIT | https://github.com/hwchen/keyring |
+| ureq | MIT / Apache-2.0 | https://github.com/ureq/ureq |
+| jiff | MIT | https://github.com/tc39/jiff |
+| zip | MIT | https://github.com/zip-rs/zip |
+| base64 | MIT / Apache-2.0 | https://github.com/marshallpierce/rust-base64 |
+| anyhow | MIT / Apache-2.0 | https://github.com/dtolnay/anyhow |
+| thiserror | MIT / Apache-2.0 | https://github.com/dtolnay/thiserror |
+| clap | MIT / Apache-2.0 | https://github.com/clap-rs/clap |
+| dirs | MIT / Apache-2.0 | https://github.com/dirs-dev/dirs-rs |
+| notify | MIT / Apache-2.0 | https://github.com/notify-rs/notify |
+| glob | MIT | https://github.com/rust-lang/glob |
+| walkdir | MIT / Apache-2.0 | https://github.com/BurntSushi/walkdir |
+| regex | MIT / Apache-2.0 | https://github.com/rust-lang/regex |
+| toml | MIT / Apache-2.0 | https://github.com/toml-rs/toml |
+| schemars | MIT / Apache-2.0 | https://github.com/schemars/schemars |
+| uuid | MIT / Apache-2.0 | https://github.com/uuid-rs/uuid |
+| chrono | MIT / Apache-2.0 | https://github.com/chronotope/chrono |
+| once_cell | MIT / Apache-2.0 | https://github.com/matthunz/once_cell |
+| parking_lot | MIT / Apache-2.0 | https://github.com/Amanieu/parking_lot |
+| crossbeam | MIT / Apache-2.0 | https://github.com/crossbeam-rs/crossbeam |
+| dashmap | MIT / Apache-2.0 | https://github.com/xacrimon/dashmap |
+| smallvec | MIT / Apache-2.0 | https://github.com/servo/smallvec |
+| bitflags | MIT / Apache-2.0 | https://github.com/bitflags/bitflags |
+| strum | MIT / Apache-2.0 | https://github.com/Peternator7/strum |
+| indexmap | MIT / Apache-2.0 | https://github.com/indexmap-rs/indexmap |
+| hashbrown | MIT / Apache-2.0 | https://github.com/Amanieu/hashbrown |
+| ahash | MIT / Apache-2.0 | https://github.com/tkaitchuck/ahash |
+| rustls | MIT / Apache-2.0 | https://github.com/rustls/rustls |
+| webpki | MIT / Apache-2.0 | https://github.com/rustls/webpki |
+| p256 | MIT / Apache-2.0 | https://github.com/RustCrypto/elliptic-curves |
+| ed25519-dalek | MIT / Apache-2.0 | https://github.com/dalek-cryptography/ed25519-dalek |
+| x25519-dalek | MIT / Apache-2.0 | https://github.com/dalek-cryptography/x25519-dalek |
+| ring | MIT / Apache-2.0 / BSD-3-Clause | https://github.com/briansmith/ring |
+| zeroize | MIT / Apache-2.0 | https://github.com/RustCrypto/traits |
+
+### Frontend dependencies (selected key dependencies)
+
+| Package | License | Link |
+|---------|---------|------|
+| Zustand | MIT | https://github.com/pmndrs/zustand |
+| Sonner (toasts) | MIT | https://sonner.emilkowal.ski |
+| Motion / Framer Motion | MIT | https://motion.dev |
+| Lucide React (icons) | ISC | https://lucide.dev |
+| Tailwind CSS | MIT | https://tailwindcss.com |
+| @radix-ui/* (primitives) | MIT | https://www.radix-ui.com |
+| class-variance-authority | MIT | https://cva.style |
+| clsx | MIT | https://github.com/lukeed/clsx |
+| date-fns | MIT | https://date-fns.org |
+| immer | MIT | https://github.com/immerjs/immer |
+| jotai | MIT | https://jotai.org |
+| react-hook-form | MIT | https://react-hook-form.com |
+| @dnd-kit/* | MIT | https://dndkit.com |
+| zod | MIT | https://zod.dev |
+| @tanstack/react-query | MIT | https://tanstack.com/query |
+
+### Voice & speech
+
+| Project | License | Link |
+|---------|---------|------|
+| whisper.cpp | MIT | https://github.com/ggerganov/whisper.cpp |
+| whisper-rs | MIT | https://github.com/Statamic/whisper-rs |
+
+### Build & tooling
+
+| Project | License | Link |
+|---------|---------|------|
+| cargo | MIT / Apache-2.0 | https://github.com/rust-lang/cargo |
+| npm | Artistic-2.0 | https://github.com/npm/cli |
+| pnpm | MIT | https://pnpm.io |
+| ESLint | MIT | https://eslint.org |
+| Prettier | MIT | https://prettier.io |
+| vitest | MIT | https://vitest.dev |
+| playwright | Apache-2.0 | https://playwright.dev |
+
+### Other technologies referenced
+
+- **OpenAI Platform** — API references and protocols (https://platform.openai.com)
+- **Anthropic API** — API references (https://docs.anthropic.com)
+- **Google AI / Gemini** — API references (https://ai.google.dev)
+- **xAI** — API references (https://x.ai)
+- **Ollama** — local model server (MIT, https://ollama.com)
+- **LM Studio** — local model server (https://lmstudio.ai)
+
+---
+
+If you notice a missing attribution or an incorrect license, please open an issue or PR. All licenses are reproduced in the source trees of their respective projects.

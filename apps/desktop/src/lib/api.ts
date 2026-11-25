@@ -478,6 +478,10 @@ const tauriApi = {
     invoke<void>("test_alert_target", { kind, url: opts.url ?? null, targetId: opts.targetId ?? null }),
   openPath: (path: string) => invoke<void>("open_path", { path }),
 
+  // webview windows
+  openChatgptWebview: () => invoke<void>("open_chatgpt_webview"),
+  openClaudeWebview: () => invoke<void>("open_claude_webview"),
+
   // schedules
   listSchedules: () => invoke<Schedule[]>("list_schedules"),
   /** Validates and saves; returns the saved schedule (with id). */

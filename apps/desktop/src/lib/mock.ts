@@ -3305,6 +3305,14 @@ export const mockApi: KvistcodeApi = {
     }
   },
 
+  async openChatgptWebview() {
+    console.info("[mock] open ChatGPT webview");
+  },
+
+  async openClaudeWebview() {
+    console.info("[mock] open Claude webview");
+  },
+
   async openPath(path) {
     // The same refusals as the Rust command: web links, mail links and absolute paths only.
     const target = path.trim();
