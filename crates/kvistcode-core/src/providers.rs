@@ -21,6 +21,8 @@ pub const GROK_PKG: &str = "@xai-official/grok";
 pub const GROK_VERSION: &str = "1.0.70";
 pub const OPENCODE_PKG: &str = "opencode-ai";
 pub const OPENCODE_VERSION: &str = "1.19.6";
+pub const KILO_PKG: &str = "@kilocode/cli";
+pub const KILO_VERSION: &str = "7.8.32";
 
 pub fn cli_name(provider: Provider) -> &'static str {
     match provider {
@@ -370,17 +372,13 @@ pub fn set_data_dir(dir: &Path) {
 pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
     match provider {
         Provider::Claude => bundled_claude(data_dir),
-        Provider::Codex | Provider::Grok | Provider::Opencode => {
+        Provider::Codex | Provider::Grok | Provider::Opencode | Provider::Kilo => {
             let bin = crate::toolchain::tools_bin_dir(data_dir);
             which::which_in(cli_name(provider), Some(&bin), data_dir).ok()
         }
         Provider::Gemini => Some(crate::toolchain::agy_binary(data_dir)).filter(|p| p.is_file()),
         // Cursor's installer is its own script; Kvistcode uses the system copy.
-        Provider::Cursor
-        | Provider::Local
-        | Provider::Custom
-        | Provider::Kilo
-        | Provider::Nvidia => None,
+        Provider::Cursor | Provider::Local | Provider::Custom | Provider::Nvidia => None,
     }
 }
 
@@ -605,7 +603,27 @@ pub fn launch_spec_for_account(
             Ok((cli, cursor_acp_args()))
         }
         Provider::Local => launch_spec_for_account(Provider::Codex, account, data_dir),
-        Provider::Kilo | Provider::Nvidia => anyhow::bail!("Not implemented; use Tauri command"),
+        Provider::Kilo => {
+            let cli = find_cli(Provider::Kilo).ok_or_else(|| {
+                anyhow::anyhow!("Kilo CLI is not installed. Install it from Settings → Providers.")
+            })?;
+            Ok((cli, vec!["acp".into()]))
+        }
+        Provider::Nvidia => {
+            // NVIDIA NIM uses OpenAI-compatible API, so we use Codex CLI with NVIDIA base URL
+            let cli = find_cli(Provider::Codex).ok_or_else(|| {
+                anyhow::anyhow!("Codex CLI is required for NVIDIA provider. Install it from Settings → Providers.")
+            })?;
+            let base_url = account
+                .and_then(|a| a.local.as_ref())
+                .map(|l| l.base_url.clone())
+                .or_else(|| std::env::var("KVISTCODE_NVIDIA_BASE_URL").ok())
+                .unwrap_or_else(|| "https://integrate.api.nvidia.com/v1".to_string());
+            Ok((
+                cli,
+                vec!["app-server".into(), "--base-url".into(), base_url],
+            ))
+        }
         Provider::Custom => anyhow::bail!("Custom agents are launched from their own definition"),
     }
 }
@@ -642,8 +660,8 @@ pub fn install_command(provider: Provider, data_dir: &Path) -> String {
         Provider::Gemini => "curl -fsSL https://antigravity.google/cli/install.sh | bash".into(),
         Provider::Opencode => "npm install -g opencode-ai".into(),
         Provider::Cursor => "curl https://cursor.com/install -fsS | bash".into(),
-        Provider::Kilo => "npm install -g kilo-cli".into(),
-        Provider::Nvidia => String::new(),
+        Provider::Kilo => "npm install -g @kilocode/cli".into(),
+        Provider::Nvidia => "npm install -g @openai/codex".into(),
         Provider::Custom => String::new(),
     }
 }
@@ -658,7 +676,7 @@ pub fn docs_url(provider: Provider) -> &'static str {
         Provider::Opencode => "https://opencode.ai/docs/acp/",
         Provider::Cursor => "https://cursor.com/docs/cli/acp",
         Provider::Kilo => "https://kilocode.com/docs",
-        Provider::Nvidia => "https://docs.nvidia.com/",
+        Provider::Nvidia => "https://docs.nvidia.com/nim/",
         Provider::Custom => "https://agentclientprotocol.com/overview/agents",
     }
 }

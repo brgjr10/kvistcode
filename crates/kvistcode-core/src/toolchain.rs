@@ -985,7 +985,8 @@ pub fn tool_package(provider: Provider) -> Option<(&'static str, &'static str)> 
         Provider::Opencode => Some((providers::OPENCODE_PKG, providers::OPENCODE_VERSION)),
         Provider::Gemini | Provider::Cursor => None,
         Provider::Local | Provider::Custom => None,
-        Provider::Kilo | Provider::Nvidia => None,
+        Provider::Kilo => Some((providers::KILO_PKG, providers::KILO_VERSION)),
+        Provider::Nvidia => None,
     }
 }
 

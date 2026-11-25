@@ -62,7 +62,8 @@ fn provider_env_vars(provider: Provider) -> &'static [&'static str] {
         Provider::Opencode => &[],
         Provider::Cursor => &["CURSOR_API_KEY", "CURSOR_AUTH_TOKEN"],
         Provider::Custom => &[],
-        Provider::Kilo | Provider::Nvidia => &[],
+        Provider::Kilo => &[],
+        Provider::Nvidia => &["NVIDIA_API_KEY", "CODEX_HOME"],
     }
 }
 
@@ -95,7 +96,8 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
             Provider::Grok => Some("GROK_HOME"),
             Provider::Gemini => Some("KVISTCODE_GEMINI_PROFILE"),
             Provider::Custom | Provider::Opencode | Provider::Cursor => None,
-            Provider::Kilo | Provider::Nvidia => None,
+            Provider::Kilo => None,
+            Provider::Nvidia => Some("CODEX_HOME"),
         };
         if let Some(var) = var {
             let value = if account.provider == Provider::Gemini {
@@ -126,8 +128,9 @@ pub fn account_env(account: &Account) -> Vec<(String, String)> {
                 // Codex reads the key stored by `codex login --with-api-key` in CODEX_HOME.
                 Provider::Codex => env.push(("OPENAI_API_KEY".into(), key)),
                 Provider::Cursor => env.push(("CURSOR_API_KEY".into(), key)),
+                Provider::Nvidia => env.push(("NVIDIA_API_KEY".into(), key)),
                 Provider::Custom | Provider::Local | Provider::Opencode => {}
-                Provider::Kilo | Provider::Nvidia => {}
+                Provider::Kilo => {}
             }
         }
     }
