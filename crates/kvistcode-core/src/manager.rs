@@ -1583,10 +1583,7 @@ impl Core {
             &agent.id[..8.min(agent.id.len())]
         );
         let resume = agent.session_id.as_deref();
-        let auto_mode = match agent.permission_mode.as_deref() {
-            Some(mode) => mode == "auto",
-            None => self.inner.settings.lock().default_permission_mode == "auto",
-        };
+        let auto_mode = self.runs_without_asking(&agent);
 
         // Skills switched off in Skills settings reach Claude when it starts (a running
         // agent keeps the skills it started with).
@@ -1950,6 +1947,14 @@ impl Core {
             }
         })?;
         Ok(s.config_defaults)
+    }
+
+    /// Whether the agent was started with "Run without asking".
+    pub(crate) fn runs_without_asking(&self, agent: &Agent) -> bool {
+        match agent.permission_mode.as_deref() {
+            Some(mode) => mode == "auto",
+            None => self.inner.settings.lock().default_permission_mode == "auto",
+        }
     }
 
     /// Switches the agent's permission mode to its "Auto" choice, if it has one.

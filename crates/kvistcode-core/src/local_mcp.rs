@@ -344,7 +344,7 @@ fn tool_definitions(settings: &LocalMcpSettings) -> Vec<Value> {
                     },
                     "provider": {
                         "type": "string",
-                        "description": "Optional provider filter (claude, codex, grok, gemini, local, custom)."
+                        "description": "Optional provider filter (claude, codex, grok, gemini, opencode, cursor, local, custom)."
                     },
                     "include_archived": {
                         "type": "boolean",
@@ -435,13 +435,13 @@ fn tool_definitions(settings: &LocalMcpSettings) -> Vec<Value> {
     if settings.allow_write_tools {
         tools.push(json!({
             "name": "spawn_agent",
-            "description": "Spawn a new Kvistcode agent on a chosen provider (e.g. claude, codex, gemini, grok) using that provider's active/default account, optionally in its own git worktree.",
+            "description": "Spawn a new Kvistcode agent on a chosen provider (e.g. claude, codex, gemini, grok, opencode, cursor) using that provider's active/default account, optionally in its own git worktree.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "provider": {
                         "type": "string",
-                        "description": "Provider name: claude, codex, grok, gemini, local, or custom."
+                        "description": "Provider name: claude, codex, grok, gemini, opencode, cursor, local, or custom."
                     },
                     "project_path": {
                         "type": "string",
@@ -1044,7 +1044,7 @@ async fn tool_spawn_agent(
     let raw_provider = required_str(args, "provider")?;
     let provider = Provider::parse(&raw_provider.to_ascii_lowercase()).ok_or_else(|| {
         anyhow!(
-            "Unknown provider `{raw_provider}` (use claude, codex, grok, gemini, local, or custom)"
+            "Unknown provider `{raw_provider}` (use claude, codex, grok, gemini, opencode, cursor, local, or custom)"
         )
     })?;
     let project_path = required_str(args, "project_path")?.to_string();

@@ -546,20 +546,65 @@ impl Core {
         }
 
         // Auto-select: pick a DIFFERENT provider than the agent's own provider.
+        // OpenCode and Cursor come last, and only when signed in (a logged-out CLI would fail).
         let preference: &[Provider] = match agent.provider {
-            Provider::Claude => &[Provider::Codex, Provider::Gemini, Provider::Grok],
-            Provider::Codex => &[Provider::Claude, Provider::Gemini, Provider::Grok],
-            Provider::Gemini => &[Provider::Claude, Provider::Codex, Provider::Grok],
-            Provider::Grok => &[Provider::Claude, Provider::Codex, Provider::Gemini],
-            Provider::Local | Provider::Custom | Provider::Opencode | Provider::Cursor => &[
+            Provider::Claude => &[
+                Provider::Codex,
+                Provider::Gemini,
+                Provider::Grok,
+                Provider::Opencode,
+                Provider::Cursor,
+            ],
+            Provider::Codex => &[
+                Provider::Claude,
+                Provider::Gemini,
+                Provider::Grok,
+                Provider::Opencode,
+                Provider::Cursor,
+            ],
+            Provider::Gemini => &[
+                Provider::Claude,
+                Provider::Codex,
+                Provider::Grok,
+                Provider::Opencode,
+                Provider::Cursor,
+            ],
+            Provider::Grok => &[
+                Provider::Claude,
+                Provider::Codex,
+                Provider::Gemini,
+                Provider::Opencode,
+                Provider::Cursor,
+            ],
+            Provider::Opencode => &[
                 Provider::Claude,
                 Provider::Codex,
                 Provider::Gemini,
                 Provider::Grok,
+                Provider::Cursor,
+            ],
+            Provider::Cursor => &[
+                Provider::Claude,
+                Provider::Codex,
+                Provider::Gemini,
+                Provider::Grok,
+                Provider::Opencode,
+            ],
+            Provider::Local | Provider::Custom => &[
+                Provider::Claude,
+                Provider::Codex,
+                Provider::Gemini,
+                Provider::Grok,
+                Provider::Opencode,
+                Provider::Cursor,
             ],
         };
         for &p in preference {
             if let Some(acc) = self.best_account_for(p) {
+                let signed_in = acc.status.as_ref().is_some_and(|s| s.logged_in);
+                if matches!(p, Provider::Opencode | Provider::Cursor) && !signed_in {
+                    continue;
+                }
                 let installed =
                     providers::launch_spec_for_account(p, Some(&acc), &self.inner.data_dir).is_ok();
                 if installed {

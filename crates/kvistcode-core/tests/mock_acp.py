@@ -55,8 +55,11 @@ while True:
         sid = msg["params"].get("sessionId", "mock-session-1")
         send({"jsonrpc": "2.0", "id": mid, "result": {
             "sessionId": sid,
-            "modes": {"currentModeId": "ask", "availableModes": [
-                {"id": "ask", "name": "Ask"}, {"id": "auto", "name": "Auto"}]}}})
+            "modes": ({"currentModeId": "build", "availableModes": [
+                {"id": "build", "name": "Build"}, {"id": "plan", "name": "Plan"}]}
+                if os.environ.get("MOCK_ACP_NO_AUTO") else
+                {"currentModeId": "ask", "availableModes": [
+                {"id": "ask", "name": "Ask"}, {"id": "auto", "name": "Auto"}]})}})
     elif method == "session/set_mode":
         send({"jsonrpc": "2.0", "id": mid, "result": {}})
     elif method == "session/prompt":
