@@ -38,6 +38,13 @@ const KEY_HINT: Record<Exclude<CloudProvider, "opencode">, { env: string; placeh
 };
 type KeyProvider = keyof typeof KEY_HINT;
 
+// These CLIs keep one login per computer (or per user), so a subscription account here can't
+// have its own. A Cursor API key does stay with the account.
+const SHARED_LOGIN: Partial<Record<BuiltinProvider, string>> = {
+  opencode: "OpenCode keeps a single login on this computer",
+  cursor: "Cursor keeps a single login on this computer",
+};
+
 export function AddAccountDialog({
   open,
   onOpenChange,
@@ -244,6 +251,10 @@ export function AddAccountDialog({
                   <p className="rounded-lg border border-line bg-base/50 px-3 py-2.5 text-caption leading-relaxed text-muted">
                     After you click <span className="text-fg">Add & sign in</span>, {PROVIDERS[provider].tagline}'s own
                     login runs in a terminal and opens your browser. Kvistcode never sees your password or tokens.
+                    {SHARED_LOGIN[provider] &&
+                      ` ${SHARED_LOGIN[provider]}, so every ${PROVIDERS[provider].short} subscription account shares it.${
+                        provider === "cursor" ? " Use an API key for a separate one." : ""
+                      }`}
                     {provider === "gemini" &&
                       " Antigravity stores Google sign-in in your OS keychain and may share it with other local Antigravity apps."}
                   </p>

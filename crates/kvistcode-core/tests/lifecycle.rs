@@ -106,7 +106,7 @@ fn request(env: &Env, prompt: &str) -> CreateAgentRequest {
         model: None,
         group_id: None,
         custom_agent_id: Some("mock".into()),
-        permission_mode: None,
+        permission_mode: Some("ask".into()),
         attachments: vec![],
         config_choices: Default::default(),
     }
@@ -339,7 +339,7 @@ async fn codex_crash_after_failed_start_is_reported() {
             model: None,
             group_id: None,
             custom_agent_id: None,
-            permission_mode: None,
+            permission_mode: Some("ask".into()),
             attachments: vec![],
             config_choices: Default::default(),
         })
