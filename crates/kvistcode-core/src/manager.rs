@@ -4304,10 +4304,12 @@ impl Core {
     }
 
     /// Loads an image an agent referenced (e.g. a screenshot it saved) so the UI can
-    /// show the picture. Readable: image files inside the agent's folders, and images
-    /// in the system temp dir that the agent's own timeline mentions (by path or file
-    /// name), not anything else that happens to be in temp. Paths are canonicalized
-    /// so `..`/symlinks can't escape. Accepts plain paths and `file://` URIs.
+    /// show the picture. Readable: image files inside the agent's folders, images in the
+    /// system temp dir that the agent's own timeline mentions (by path or file name), and
+    /// images elsewhere on this computer whose full path the timeline mentions (agents
+    /// often keep scratch files in a private temp folder such as `~/.cache/...`). Never
+    /// anything else, so the phone or UI can't ask for arbitrary files. Paths are
+    /// canonicalized so `..`/symlinks can't escape. Accepts plain paths and `file://` URIs.
     pub fn read_image(&self, agent_id: &str, path: &str) -> Result<Attachment> {
         let agent = self.agent(agent_id)?;
         let input = path.trim();
@@ -4316,7 +4318,8 @@ impl Core {
         if crate::files::is_network_path(&requested.to_string_lossy()) {
             bail!("Kvistcode doesn't load images from other computers: {input}");
         }
-        let full = if requested.is_absolute() {
+        let absolute = requested.is_absolute();
+        let full = if absolute {
             requested
         } else {
             PathBuf::from(&agent.cwd).join(requested)
@@ -4332,32 +4335,26 @@ impl Core {
             let in_temp = std::env::temp_dir()
                 .canonicalize()
                 .is_ok_and(|t| real.starts_with(t));
-            if !in_temp || !self.timeline_mentions(agent_id, input, &real) {
-                bail!("Kvistcode only shows images from the agent's project, or temporary images the agent referred to");
+            let allowed = outside_image_allowed(in_temp, absolute, input, &real, |needle| {
+                self.timeline_contains(agent_id, needle)
+            });
+            if !allowed {
+                bail!("Kvistcode only shows images from the agent's project, or images the agent referred to by their full path");
             }
         }
         crate::files::read_image_file(&real)
     }
 
-    /// Whether the agent's stored timeline mentions `input` or the file's name.
-    fn timeline_mentions(&self, agent_id: &str, input: &str, real: &Path) -> bool {
+    /// Whether the agent's stored timeline contains `needle` (as written; items are JSON,
+    /// so it is matched in its JSON-escaped spelling).
+    fn timeline_contains(&self, agent_id: &str, needle: &str) -> bool {
         self.flush_ctx(agent_id);
-        // Items are stored as JSON, so look for the JSON-escaped spelling.
-        let escaped = |s: &str| {
-            let quoted = serde_json::to_string(s).unwrap_or_default();
-            quoted[1..quoted.len().saturating_sub(1).max(1)].to_string()
-        };
-        let mut needles = vec![escaped(input)];
-        if let Some(name) = real.file_name().map(|n| n.to_string_lossy().into_owned()) {
-            needles.push(escaped(&name));
-            needles.push(escaped(&crate::files::percent_encode(&name)));
-        }
-        needles.iter().any(|needle| {
-            self.inner
-                .db
-                .items_contain(agent_id, needle)
-                .unwrap_or(false)
-        })
+        let quoted = serde_json::to_string(needle).unwrap_or_default();
+        let escaped = &quoted[1..quoted.len().saturating_sub(1).max(1)];
+        self.inner
+            .db
+            .items_contain(agent_id, escaped)
+            .unwrap_or(false)
     }
 
     /// Records a provider-reported usage snapshot on `account_id`.
@@ -4683,6 +4680,108 @@ fn same_folder_text(a: &str, b: &str, windows: bool) -> bool {
         }
     };
     clean(a) == clean(b)
+}
+
+/// Whether an image outside the agent's folders may be shown. In the temp dir the agent
+/// only has to have mentioned the path or the file name; anywhere else it must have written
+/// the image's full path (as given, or the resolved one), and a relative path never counts.
+fn outside_image_allowed(
+    in_temp: bool,
+    absolute: bool,
+    input: &str,
+    real: &Path,
+    mentions: impl Fn(&str) -> bool,
+) -> bool {
+    let real_text = real.to_string_lossy();
+    let full_path = (absolute && mentions(input)) || mentions(&real_text);
+    if !in_temp {
+        return full_path;
+    }
+    full_path
+        || mentions(input)
+        || real.file_name().is_some_and(|n| {
+            let name = n.to_string_lossy();
+            mentions(&name) || mentions(&crate::files::percent_encode(&name))
+        })
+}
+
+#[cfg(test)]
+mod outside_image_tests {
+    use super::outside_image_allowed;
+    use std::path::Path;
+
+    fn said(text: &'static str) -> impl Fn(&str) -> bool {
+        move |needle: &str| text.contains(needle)
+    }
+
+    #[test]
+    fn outside_temp_needs_the_full_path() {
+        let real = Path::new("/home/u/.cache/scratch/shot.png");
+        let reply = "![Shot](/home/u/.cache/scratch/shot.png)";
+        assert!(outside_image_allowed(
+            false,
+            true,
+            "/home/u/.cache/scratch/shot.png",
+            real,
+            said(reply)
+        ));
+        // Only the file name was mentioned: not enough outside temp.
+        assert!(!outside_image_allowed(
+            false,
+            true,
+            "/home/u/.cache/scratch/shot.png",
+            real,
+            said("see shot.png")
+        ));
+        // Asked for by a path the agent never wrote.
+        assert!(!outside_image_allowed(
+            false,
+            true,
+            "/home/u/Pictures/me.png",
+            Path::new("/home/u/Pictures/me.png"),
+            said(reply)
+        ));
+        // A relative path that walked out of the project, even if the agent wrote it.
+        assert!(!outside_image_allowed(
+            false,
+            false,
+            "../x.png",
+            Path::new("/home/u/x.png"),
+            said("../x.png")
+        ));
+    }
+
+    #[test]
+    fn resolved_path_counts_too() {
+        // The agent wrote the real path; the UI asked through a symlinked spelling.
+        let real = Path::new("/home/u/.cache/a.png");
+        assert!(outside_image_allowed(
+            false,
+            true,
+            "/home/link/a.png",
+            real,
+            said("/home/u/.cache/a.png")
+        ));
+    }
+
+    #[test]
+    fn temp_still_accepts_a_mentioned_file_name() {
+        let real = Path::new("/tmp/chart.png");
+        assert!(outside_image_allowed(
+            true,
+            true,
+            "/tmp/chart.png",
+            real,
+            said("saved chart.png")
+        ));
+        assert!(!outside_image_allowed(
+            true,
+            true,
+            "/tmp/other.png",
+            Path::new("/tmp/other.png"),
+            said("saved chart.png")
+        ));
+    }
 }
 
 #[cfg(test)]

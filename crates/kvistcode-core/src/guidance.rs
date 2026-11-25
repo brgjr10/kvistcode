@@ -5,7 +5,7 @@
 use crate::model::ResponseStyle;
 
 /// Bump when any text in this file changes, so resumed sessions are briefed again, once.
-const GUIDANCE_VERSION: u32 = 2;
+const GUIDANCE_VERSION: u32 = 3;
 
 /// Added to the agent's own instructions (Claude: `systemPrompt` append; Codex:
 /// `developerInstructions`). Keep it short and factual: every session pays for it.
@@ -13,7 +13,7 @@ const PICTURES: &str = "\
 You are running inside Kvistcode, a desktop app that renders your replies as markdown, and you CAN show pictures to the user.
 To show a picture, put ![short description](path) in your reply. The path can be:
 - an image file (png, jpg, gif, webp, svg, avif; at most 10 MB) in your working folder or project, relative or absolute, or
-- an image file you saved in the system temp folder, as long as you write its full path in your reply, or
+- an image file you saved anywhere else on this computer (system temp, a scratch folder), as long as you write its full absolute path in your reply, or
 - a small png/jpeg/gif/webp as a data URI: ![description](data:image/png;base64,...) (under about 3 MB).
 Kvistcode loads the file and shows it inline in the conversation, on the phone app too. Pictures from web addresses (http/https) are never loaded: download them into your working folder first, then reference the file. Don't tell the user you can't show images; screenshots, charts and generated images you save as files can be shown this way.";
 
