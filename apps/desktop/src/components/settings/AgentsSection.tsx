@@ -1,6 +1,6 @@
 import { openExternal } from "@/lib/external";
 import { ACCOUNT_COLORS } from "@/lib/providers";
-import { Bot, CircleCheck, CircleX, ExternalLink, Pencil, Plug, Plus, Trash2 } from "lucide-react";
+import { Bot, CircleCheck, CircleX, ExternalLink, Globe, Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ColorSwatches } from "@/components/accounts/ColorSwatches";
@@ -27,6 +27,7 @@ import { cn, errorMessage, scrollBehavior, uuid } from "@/lib/utils";
 import { useShallow } from "zustand/react/shallow";
 import { useApp } from "@/store/app";
 import { cleanKeyValues, KeyValueEditor, validateKeyValues, type KeyValueRow } from "./KeyValueEditor";
+import { RegistryDialog } from "./RegistryDialog";
 import { SectionHeader } from "./SettingRow";
 import { FieldError } from "./TemplatesSection";
 
@@ -42,6 +43,8 @@ interface Preset {
   blurb: string;
 }
 
+// Commands as the agents' own docs or the ACP Registry give them (the registry checks that
+// each one answers the ACP handshake).
 const PRESETS: Preset[] = [
   {
     id: "goose",
@@ -52,12 +55,60 @@ const PRESETS: Preset[] = [
     blurb: "Open-source agent by Block",
   },
   {
-    id: "opencode",
-    name: "OpenCode",
-    command: "opencode",
+    id: "kiro",
+    name: "Kiro CLI",
+    command: "kiro-cli",
     args: ["acp"],
+    color: ACCOUNT_COLORS[1],
+    blurb: "Spec-driven agent by AWS",
+  },
+  {
+    id: "qwen",
+    name: "Qwen Code",
+    command: "qwen",
+    args: ["--acp"],
     color: ACCOUNT_COLORS[6],
-    blurb: "Terminal-native agent",
+    blurb: "Qwen's coding agent",
+  },
+  {
+    id: "copilot",
+    name: "GitHub Copilot CLI",
+    command: "copilot",
+    args: ["--acp"],
+    color: ACCOUNT_COLORS[2],
+    blurb: "GitHub's agent in the terminal",
+  },
+  {
+    id: "kilo",
+    name: "Kilo",
+    command: "kilo",
+    args: ["acp"],
+    color: ACCOUNT_COLORS[5],
+    blurb: "Open-source, many model providers",
+  },
+  {
+    id: "cline",
+    name: "Cline",
+    command: "cline",
+    args: ["--acp"],
+    color: ACCOUNT_COLORS[0],
+    blurb: "Edits files and runs commands with approval",
+  },
+  {
+    id: "auggie",
+    name: "Auggie",
+    command: "auggie",
+    args: ["--acp"],
+    color: ACCOUNT_COLORS[7],
+    blurb: "Augment Code's agent",
+  },
+  {
+    id: "amp",
+    name: "Amp",
+    command: "amp-acp",
+    args: [],
+    color: ACCOUNT_COLORS[1],
+    blurb: "Amp through the amp-acp adapter",
   },
   { id: "other", name: "", command: "", args: [], color: ACCOUNT_COLORS[3], blurb: "Anything that speaks ACP" },
 ];
@@ -105,6 +156,7 @@ function AgentMonogram({ name, color, size = 32 }: { name: string; color: string
 export function AgentsSection({ agents }: { agents: CustomAgent[] }) {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [deleting, setDeleting] = useState<CustomAgent | null>(null);
+  const [browsing, setBrowsing] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
   // Only the custom-agent ids of active agents: streaming updates to other fields don't re-render.
   const activeCustomIds = useApp(
@@ -144,7 +196,7 @@ export function AgentsSection({ agents }: { agents: CustomAgent[] }) {
       <SectionHeader
         title="Custom agents"
         description="Kvistcode can run any agent that speaks the Agent Client Protocol, side by side with Claude, Codex, Grok and Gemini."
-        right={<AddMenu onPick={(p) => setEditing(fromPreset(p))} />}
+        right={<AddMenu onPick={(p) => setEditing(fromPreset(p))} onBrowse={() => setBrowsing(true)} />}
       />
 
       {agents.length === 0 ? (
@@ -156,6 +208,11 @@ export function AgentsSection({ agents }: { agents: CustomAgent[] }) {
             className="pb-6"
           />
           <PresetGrid onPick={(p) => setEditing(fromPreset(p))} />
+          <div className="mt-3 flex justify-center">
+            <Button variant="secondary" onClick={() => setBrowsing(true)}>
+              <Globe /> Add from ACP Registry
+            </Button>
+          </div>
         </div>
       ) : (
         <>
@@ -195,6 +252,22 @@ export function AgentsSection({ agents }: { agents: CustomAgent[] }) {
         onClose={() => setEditing(null)}
       />
 
+      <RegistryDialog
+        open={browsing}
+        agents={agents}
+        onClose={() => setBrowsing(false)}
+        onAdd={async (agent) => {
+          const color = ACCOUNT_COLORS[agents.length % ACCOUNT_COLORS.length];
+          const added = { ...agent, id: uuid(), color };
+          const ok = await saveAgents([...agents, added], `Couldn't add ${agent.name}`);
+          if (ok)
+            toast.success(`${agent.name} added`, {
+              description: "Pick it as the provider when you start a new agent.",
+            });
+          return ok;
+        }}
+      />
+
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -212,7 +285,7 @@ export function AgentsSection({ agents }: { agents: CustomAgent[] }) {
   );
 }
 
-function AddMenu({ onPick }: { onPick: (p: Preset) => void }) {
+function AddMenu({ onPick, onBrowse }: { onPick: (p: Preset) => void; onBrowse: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -234,6 +307,9 @@ function AddMenu({ onPick }: { onPick: (p: Preset) => void }) {
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onBrowse}>
+          <Globe /> Add from ACP Registry…
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void openExternal(ACP_AGENTS_URL)}>
           <ExternalLink /> Browse ACP agents
         </DropdownMenuItem>

@@ -1,0 +1,291 @@
+{
+ "version": "1.0.0",
+ "agents": [
+  {
+   "id": "amp-acp",
+   "name": "Amp",
+   "version": "0.13.0",
+   "description": "ACP wrapper for Amp - the frontier coding agent",
+   "repository": "https://github.com/tao12345666333/amp-acp",
+   "authors": [
+    "tao12345666333"
+   ],
+   "license": "Apache-2.0",
+   "license_url": "https://github.com/tao12345666333/amp-acp/blob/main/LICENSE",
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/amp-acp.svg",
+   "distribution": {
+    "binary": {
+     "darwin-aarch64": {
+      "archive": "https://github.com/tao12345666333/amp-acp/releases/download/v0.13.0/amp-acp-darwin-aarch64.tar.gz",
+      "cmd": "./amp-acp",
+      "sha256": "ca3315e3e54ea85c7e5db09d19a1908cd2ea149c8e83a728cefb814c7a490edf"
+     },
+     "linux-x86_64": {
+      "archive": "https://github.com/tao12345666333/amp-acp/releases/download/v0.13.0/amp-acp-linux-x86_64.tar.gz",
+      "cmd": "./amp-acp",
+      "sha256": "205c819383b6fd389b408120ebea9cdde5c2957530b5ce4ebc912998d4118f8b"
+     }
+    }
+   }
+  },
+  {
+   "id": "auggie",
+   "name": "Auggie CLI",
+   "version": "0.37.0",
+   "description": "Augment Code's powerful software agent, backed by industry-leading context engine",
+   "repository": "https://github.com/augmentcode/auggie",
+   "website": "https://www.augmentcode.com/",
+   "authors": [
+    "Augment Code <support@augmentcode.com>"
+   ],
+   "license": "proprietary",
+   "license_url": "https://github.com/augmentcode/auggie/blob/main/LICENSE.md",
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/auggie.svg",
+   "distribution": {
+    "npx": {
+     "package": "@augmentcode/auggie@0.37.0",
+     "args": [
+      "--acp"
+     ],
+     "env": {
+      "AUGMENT_DISABLE_AUTO_UPDATE": "1"
+     }
+    }
+   }
+  },
+  {
+   "id": "cline",
+   "name": "Cline",
+   "version": "3.0.75",
+   "description": "Autonomous coding agent CLI - capable of creating/editing files, running commands, using the browser, and more",
+   "repository": "https://github.com/cline/cline",
+   "website": "https://cline.bot/cli",
+   "authors": [
+    "Cline Bot Inc."
+   ],
+   "license": "Apache-2.0",
+   "license_url": "https://github.com/cline/cline/blob/main/LICENSE",
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/cline.svg",
+   "distribution": {
+    "npx": {
+     "package": "cline@3.0.75",
+     "args": [
+      "--acp"
+     ]
+    }
+   }
+  },
+  {
+   "id": "fast-agent",
+   "name": "fast-agent",
+   "version": "0.10.66",
+   "description": "Code and build agents with comprehensive multi-provider support",
+   "repository": "https://github.com/evalstate/fast-agent",
+   "website": "https://fast-agent.ai",
+   "authors": [
+    "enquiries@fast-agent.ai"
+   ],
+   "license": "Apache 2.0",
+   "license_url": "https://github.com/evalstate/fast-agent/blob/main/LICENSE",
+   "distribution": {
+    "uvx": {
+     "package": "fast-agent-acp==0.10.66",
+     "args": [
+      "-x"
+     ],
+     "env": {
+      "FAST_AGENT_MODEL": "codexplan"
+     }
+    }
+   },
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/fast-agent.svg"
+  },
+  {
+   "id": "github-copilot-cli",
+   "name": "GitHub Copilot",
+   "version": "1.0.115",
+   "description": "GitHub's AI pair programmer",
+   "repository": "https://github.com/github/copilot-cli",
+   "website": "https://github.com/features/copilot/cli/",
+   "authors": [
+    "GitHub"
+   ],
+   "license": "proprietary",
+   "license_url": "https://github.com/github/copilot-cli/blob/main/LICENSE.md",
+   "distribution": {
+    "npx": {
+     "package": "@github/copilot@1.0.115",
+     "args": [
+      "--acp"
+     ]
+    }
+   },
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/github-copilot-cli.svg"
+  },
+  {
+   "id": "goose",
+   "name": "goose",
+   "version": "1.61.0",
+   "description": "A local, extensible, open source AI agent that automates engineering tasks",
+   "repository": "https://github.com/block/goose",
+   "website": "https://block.github.io/goose/",
+   "authors": [
+    "Block"
+   ],
+   "license": "Apache-2.0",
+   "license_url": "https://github.com/block/goose/blob/main/LICENSE",
+   "distribution": {
+    "binary": {
+     "darwin-aarch64": {
+      "archive": "https://github.com/block/goose/releases/download/v1.61.0/goose-aarch64-apple-darwin.tar.bz2",
+      "cmd": "./goose",
+      "args": [
+       "acp"
+      ],
+      "sha256": "f225bdd7d4b86dc6b83c392e99265e14ca92ba671e263aa29c5c75a2a1c5aa5d"
+     },
+     "linux-x86_64": {
+      "archive": "https://github.com/block/goose/releases/download/v1.61.0/goose-x86_64-unknown-linux-gnu.tar.bz2",
+      "cmd": "./goose",
+      "args": [
+       "acp"
+      ],
+      "sha256": "493c41b6544817b4c2669c3ba465d9d7161185cacfb9088e83dc26566d36f36d"
+     }
+    }
+   },
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/goose.svg"
+  },
+  {
+   "id": "junie",
+   "name": "Junie",
+   "version": "4171.4.0",
+   "description": "AI Coding Agent by JetBrains",
+   "repository": "https://github.com/JetBrains/junie-acp-release",
+   "website": "https://junie.jetbrains.com",
+   "authors": [
+    "JetBrains"
+   ],
+   "license": "proprietary",
+   "license_url": "https://www.jetbrains.com/legal/docs/terms/jetbrains-ai-service/",
+   "distribution": {
+    "binary": {
+     "darwin-aarch64": {
+      "archive": "https://github.com/JetBrains/junie-acp-release/releases/download/4171.4/junie-release-4171.4-macos-aarch64.zip",
+      "cmd": "./Applications/junie.app/Contents/MacOS/junie",
+      "args": [
+       "--acp=true"
+      ]
+     },
+     "linux-x86_64": {
+      "archive": "https://github.com/JetBrains/junie-acp-release/releases/download/4171.4/junie-release-4171.4-linux-amd64.zip",
+      "cmd": "./junie-app/bin/junie",
+      "args": [
+       "--acp=true"
+      ]
+     }
+    }
+   },
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/junie.svg"
+  },
+  {
+   "id": "kilo",
+   "name": "Kilo",
+   "version": "7.8.32",
+   "description": "The open source coding agent",
+   "repository": "https://github.com/Kilo-Org/kilocode",
+   "website": "https://kilo.ai/",
+   "authors": [
+    "Kilo Code"
+   ],
+   "license": "MIT",
+   "license_url": "https://github.com/Kilo-Org/kilocode/blob/main/LICENSE",
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/kilo.svg",
+   "distribution": {
+    "binary": {
+     "darwin-aarch64": {
+      "archive": "https://github.com/Kilo-Org/kilocode/releases/download/v7.8.32/kilo-darwin-arm64.zip",
+      "cmd": "./kilo",
+      "args": [
+       "acp"
+      ],
+      "sha256": "aab60d9e3b9e0e6a67c55e0bc4d044eb4eb14a905991c59f76b64a0a11d44029"
+     },
+     "linux-x86_64": {
+      "archive": "https://github.com/Kilo-Org/kilocode/releases/download/v7.8.32/kilo-linux-x64.tar.gz",
+      "cmd": "./kilo",
+      "args": [
+       "acp"
+      ],
+      "sha256": "88bd622110ec61ae92661b208d495e2d53f72b43c4c6bc9b6fa5380c8d3447a4"
+     }
+    },
+    "npx": {
+     "package": "@kilocode/cli@7.8.32",
+     "args": [
+      "acp"
+     ]
+    }
+   }
+  },
+  {
+   "id": "kiro",
+   "name": "Kiro CLI",
+   "version": "3.0.0",
+   "description": "The Kiro coding agent",
+   "repository": "https://github.com/kirodotdev/Kiro",
+   "website": "https://kiro.dev/docs/cli/acp/",
+   "authors": [
+    "Amazon"
+   ],
+   "license": "proprietary",
+   "license_url": "https://kiro.dev/license/",
+   "distribution": {
+    "binary": {
+     "darwin-aarch64": {
+      "archive": "https://prod.download.cli.kiro.dev/stable/3.0.0/kirocli-universal-darwin.tar.gz",
+      "sha256": "fa32d8f2054d79642922db696683630114b2cea99a2c7f655becd923afe33ccf",
+      "cmd": "./kirocli/bin/kiro-cli",
+      "args": [
+       "acp",
+       "--agent-engine=v3"
+      ]
+     },
+     "linux-x86_64": {
+      "archive": "https://prod.download.cli.kiro.dev/stable/3.0.0/kirocli-x86_64-linux.tar.gz",
+      "sha256": "2ebb8688b84765e4baf46d6e28b3e79780e7724e198591c22d0528d03a88a282",
+      "cmd": "./kirocli/bin/kiro-cli",
+      "args": [
+       "acp",
+       "--agent-engine=v3"
+      ]
+     }
+    }
+   },
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/kiro.svg"
+  },
+  {
+   "id": "qwen-code",
+   "name": "Qwen Code",
+   "version": "0.28.4",
+   "description": "Alibaba's Qwen coding assistant",
+   "repository": "https://github.com/QwenLM/qwen-code",
+   "website": "https://qwenlm.github.io/qwen-code-docs/en/users/overview",
+   "authors": [
+    "Alibaba Qwen Team"
+   ],
+   "license": "Apache-2.0",
+   "license_url": "https://github.com/QwenLM/qwen-code/blob/main/LICENSE",
+   "distribution": {
+    "npx": {
+     "package": "@qwen-code/qwen-code@0.28.4",
+     "args": [
+      "--acp",
+      "--experimental-skills"
+     ]
+    }
+   },
+   "icon": "https://cdn.agentclientprotocol.com/registry/v1/latest/qwen-code.svg"
+  }
+ ]
+}
