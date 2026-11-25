@@ -376,7 +376,11 @@ pub fn managed_cli_in(provider: Provider, data_dir: &Path) -> Option<PathBuf> {
         }
         Provider::Gemini => Some(crate::toolchain::agy_binary(data_dir)).filter(|p| p.is_file()),
         // Cursor's installer is its own script; Kvistcode uses the system copy.
-        Provider::Cursor | Provider::Local | Provider::Custom | Provider::Kilo | Provider::Nvidia => None,
+        Provider::Cursor
+        | Provider::Local
+        | Provider::Custom
+        | Provider::Kilo
+        | Provider::Nvidia => None,
     }
 }
 

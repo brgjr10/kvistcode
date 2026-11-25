@@ -27,7 +27,7 @@ pub enum Provider {
 
 impl Provider {
     /// The built-in providers (custom agents are configured separately).
-        pub const ALL: [Provider; 8] = [
+    pub const ALL: [Provider; 8] = [
         Provider::Claude,
         Provider::Codex,
         Provider::Grok,

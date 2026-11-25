@@ -1550,8 +1550,11 @@ pub async fn test_alert_target(
 #[tauri::command]
 pub async fn open_chatgpt_webview(app: AppHandle) -> CmdResult<()> {
     use tauri::WebviewUrl;
-    let webview =
-        tauri::WebviewWindowBuilder::new(&app, "chatgpt", WebviewUrl::External("https://chatgpt.com".into()))?;
+    let webview = tauri::WebviewWindowBuilder::new(
+        &app,
+        "chatgpt",
+        WebviewUrl::External("https://chatgpt.com".into()),
+    )?;
     webview.show().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -1559,8 +1562,11 @@ pub async fn open_chatgpt_webview(app: AppHandle) -> CmdResult<()> {
 #[tauri::command]
 pub async fn open_claude_webview(app: AppHandle) -> CmdResult<()> {
     use tauri::WebviewUrl;
-    let webview =
-        tauri::WebviewWindowBuilder::new(&app, "claude", WebviewUrl::External("https://claude.ai".into()))?;
+    let webview = tauri::WebviewWindowBuilder::new(
+        &app,
+        "claude",
+        WebviewUrl::External("https://claude.ai".into()),
+    )?;
     webview.show().map_err(|e| e.to_string())?;
     Ok(())
 }
