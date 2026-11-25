@@ -87,7 +87,7 @@ export function ShortcutsEditor({ settings }: { settings: Settings }) {
                     onClick={() => {
                       setWarning(null);
                       const next = { ...map, [s.id]: "" };
-                      void save(next);
+                      void save(s.id, next);
                     }}
                   >
                     <X /> Unassign
