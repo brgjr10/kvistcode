@@ -17,6 +17,8 @@ export const PROVIDERS: Record<Provider, ProviderMeta> = {
   opencode: { name: "OpenCode", short: "OpenCode", color: "#3DDC97" },
   cursor: { name: "Cursor", short: "Cursor", color: "#9AA4B2" },
   local: { name: "Local model", short: "Local", color: "#4FC3F7" },
+  kilo: { name: "Kilo", short: "Kilo", color: "#7C6FF0" },
+  nvidia: { name: "NVIDIA", short: "NVIDIA", color: "#76B900" },
   custom: { name: "Custom agent", short: "Agent", color: CUSTOM_AGENT_COLOR },
 };
 

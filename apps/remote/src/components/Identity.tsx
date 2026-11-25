@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
  * Gemini); never vendor logos.
  * Custom agents get the first letter of their name.
  */
-export function ProviderMark({ provider, size }: { provider: "claude" | "codex" | "grok" | "gemini" | "opencode" | "cursor" | "local"; size: number }) {
+export function ProviderMark({ provider, size }: { provider: "claude" | "codex" | "grok" | "gemini" | "kilo" | "nvidia" | "opencode" | "cursor" | "local"; size: number }) {
   const common = {
     width: size,
     height: size,
