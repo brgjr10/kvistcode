@@ -158,6 +158,8 @@ fn provider_label(p: Provider) -> &'static str {
         Provider::Gemini => "Gemini",
         Provider::Local => "Local",
         Provider::Custom => "Custom",
+        Provider::Kilo => "Kilo",
+        Provider::Nvidia => "NVIDIA",
     }
 }
 
